@@ -107,6 +107,29 @@ if params.get("type") == "recovery" and "token" in params:
             
     st.stop() # Bloqueo total del resto de la app
 
+    # --- DETECTOR DE CONFIRMACIÓN DE REGISTRO (SIGNUP) ---
+if params.get("type") == "signup" and "token" in params:
+    st.markdown("<h1 style='text-align: center;'>🐺 ¡Bienvenido a Howlify!</h1>", unsafe_allow_html=True)
+    st.info("Estamos verificando tu cuenta...")
+    
+    try:
+        # Validamos el token de registro
+        supabase.auth.verify_otp({
+            "token_hash": params.get("token"),
+            "type": "signup"
+        })
+        st.success("¡Cuenta confirmada con éxito! Ya podés iniciar sesión.")
+        st.balloons()
+        time.sleep(3)
+        st.query_params.clear()
+        st.rerun()
+    except Exception as e:
+        st.error(f"Error al confirmar la cuenta: {e}")
+        if st.button("Ir al Login"):
+            st.query_params.clear()
+            st.rerun()
+    st.stop()
+
 # ==========================================================
 # SESSION STATE
 # ==========================================================
