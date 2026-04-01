@@ -43,6 +43,7 @@ from services.business_service import obtener_top_oportunidades
 from services.whatsapp_service import enviar_whatsapp
 from services.telegram_service import enviar_telegram
 from utils.affiliate import get_affiliate_url
+from services.duffel_service import buscar_ofertas_vuelos
 
 # ==========================================================
 # ⚙️ 3. CONSTANTES Y RUTAS
@@ -198,6 +199,9 @@ if "editing_caza" in st.session_state and st.session_state["editing_caza"] is no
                 st.rerun()
 
     show_edit_dialog(caza)
+
+
+
 
 # ==========================================================
 # PLANES / COMPATIBILIDAD
@@ -1771,6 +1775,7 @@ def render_logo(logo_b64: str):
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
+
 # ==========================================================
 # AUTH
 # ==========================================================
@@ -1917,6 +1922,7 @@ if es_admin:
     plan_vista = "admin"
 else:
     plan_vista = plan_real
+
 
 # ==========================================================
 # SIDEBAR
