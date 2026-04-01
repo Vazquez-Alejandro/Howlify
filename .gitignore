@@ -1,0 +1,24 @@
+# Env / secrets
+.env
+*.env
+
+# Browser profiles / caches
+bot_profile/
+chrome_profile/
+ff_profile/
+
+# Local venv
+venv_bots/
+.venv/
+venv/
+
+# Sessions
+sessions/
+howlify/sessions/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Streamlit cache
+.streamlit/cache/
