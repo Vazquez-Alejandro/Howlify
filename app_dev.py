@@ -868,13 +868,12 @@ def render_business_dashboard(plan: str, plan_label_text: str, user_id: str, bus
 # ==========================================================
 # 📊 DATA HELPERS PARA EL DASHBOARD
 # ==========================================================
-
 def get_price_history_series_by_caza(user_id, caza_id):
-    """Trae el historial de precios para graficar con Altair"""
+    """Trae el historial para graficar"""
     try:
+        # La barra invertida tiene que estar al final de cada línea de código real
         res = supabase.table("price_history") \
             .select("checked_at, price") \
-            .eq("user_id", user_id) \
             .eq("caza_id", caza_id) \
             .order("checked_at", desc=False) \
             .execute()
@@ -882,7 +881,7 @@ def get_price_history_series_by_caza(user_id, caza_id):
         df = pd.DataFrame(res.data or [])
         if not df.empty:
             df["checked_at"] = pd.to_datetime(df["checked_at"])
-            df["price"] = pd.to_numeric(df["price"])
+            df["price"] = pd.to_numeric(df["price"], errors='coerce')
         return df
     except Exception as e:
         print(f"Error en history series: {e}")

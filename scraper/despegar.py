@@ -150,7 +150,7 @@ def _scrape_monthly_matrix(url, max_price=0):
             
     return mejores_ofertas
 
-def hunt_despegar_vuelos(url, keyword="", max_price=0, es_pro=False):
+def hunt_despegar_vuelos(url, keyword="", max_price=0, es_pro=False, headless=True, user_agent=None, **kwargs):
     url_l = url.lower()
     kw_l = str(keyword or "").lower().strip()
     

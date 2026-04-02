@@ -14,6 +14,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from scraper.scraper_pro import hunt_offers
 from services.whatsapp_service import enviar_whatsapp
 from services.business_service import guardar_oportunidad_business
+from services.duffel_service import buscar_ofertas_vuelos
 
 from supabase import create_client
 import os
@@ -110,16 +111,42 @@ def _domain_from_url(url: str) -> str:
     except Exception:
         return "unknown"
 
-
 def _run_scraper(link, producto, precio_max):
     domain = _domain_from_url(link)
 
-    if "mercadolibre" in domain or "despegar" in domain:
+    if "despegar" in domain:
+        print(f"✈️ [Howlify-API] Consultando Duffel para: {producto}")
+        
+        # 1. Llamada a la API
+        resultado_raw = buscar_ofertas_vuelos("BUE", "MIA", "2026-05-20")
+        
+        # 2. Protección: Si Duffel no devuelve nada, salimos antes de que explote
+        if not resultado_raw:
+            print("🚨 Duffel no encontró vuelos. Revisá el Token o la fecha.")
+            return []
+
+        # 3. Mapeo seguro (Duffel usa estructuras anidadas)
+        ofertas_limpias = []
+        for r in resultado_raw:
+            try:
+                # Extraemos el precio y el destino con cuidado
+                ofertas_limpias.append({
+                    "title": f"Vuelo a {producto.upper()}", 
+                    "price": float(r.total_amount), # Aseguramos que sea número
+                    "url": link, # Usamos el link original para que puedas clickear
+                    "source": "duffel"
+                })
+            except Exception as e:
+                print(f"⚠️ Error procesando una oferta individual: {e}")
+                continue
+        
+        print(f"✅ Se procesaron {len(ofertas_limpias)} ofertas de Duffel.")
+        return ofertas_limpias
+
+    if "mercadolibre" in domain:
         return hunt_offers(link, producto, precio_max) or []
 
     return []
-
-
 def _freq_to_minutes(freq: str) -> int:
     if not freq:
         return 60
@@ -303,7 +330,7 @@ def calcular_diferencia_vs_minimo(caza_id, precio_actual):
     except Exception:
         return None
 
-def guardar_historial(caza_id, resultados):
+def guardar_historial(caza_id, resultados, user_id): # <-- Agregamos user_id aquí
     if not resultados:
         return
 
@@ -321,11 +348,13 @@ def guardar_historial(caza_id, resultados):
         rows.append(
             {
                 "caza_id": caza_id,
+                "user_id": user_id, # <--- ¡ESTA ES LA LÍNEA MÁGICA!
                 "title": r.get("title"),
                 "price": price,
                 "url": url,
                 "source": source,
                 "product_id": product_id,
+                "checked_at": datetime.now().isoformat() # Aseguramos el timestamp
             }
         )
 
@@ -333,12 +362,12 @@ def guardar_historial(caza_id, resultados):
         return
 
     try:
+        # Usamos execute() al final si _execute_with_retry no lo hace internamente
         _execute_with_retry(
             supabase.table("price_history").insert(rows)
         )
     except Exception as e:
         print("⚠ error guardando historial:", e)
-
 
 # ==========================================================
 # ALERTA MINIMA
