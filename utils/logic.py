@@ -1,44 +1,131 @@
+import re
 import random
 import time
+import requests
+from datetime import datetime, timezone
+
 
 # ==========================================================
-# 1. ESTRATEGIA DE PRECIOS (Lo que ya tenías, mejorado)
+# 3. UTILIDADES DE LIMPIEZA Y FORMATO
 # ==========================================================
-def evaluar_oferta(precio_actual, config):
-    """Determina si el precio encontrado es una 'presa' digna del Lobo."""
-    tipo = config.get('tipo')
-    objetivo = config.get('objetivo')
 
-    if tipo == 'piso':
-        if precio_actual <= objetivo:
-            return True, f"¡Bajó del piso de ${objetivo:,}!".replace(",", ".")
-            
-    elif tipo == 'descuento':
-        ref = config.get('precio_referencia')
-        if not ref: return False, ""
-        ahorro = ((ref - precio_actual) / ref) * 100
-        if ahorro >= objetivo:
-            return True, f"¡Superó el {objetivo}% de descuento! (Ahorro real: {int(ahorro)}%)"
+def _safe_float(val, default=0.0):
+    """Convierte cualquier cosa a float sin romper el motor."""
+    if val is None: return default
+    try:
+        # Si es string, limpiamos símbolos de moneda y comas
+        if isinstance(val, str):
+            val = val.replace("$", "").replace(".", "").replace(",", ".").strip()
+        return float(val)
+    except:
+        return default
 
-    return False, ""
+def parse_price_to_int(val):
+    """Convierte precios de la UI a enteros limpios."""
+    return int(_safe_float(val))
+
+def _parse_dt_utc(dt_str):
+    """Convierte strings de Supabase a objetos datetime con zona horaria."""
+    if not dt_str: return None
+    try:
+        # Reemplazamos Z por +00:00 para que Python lo entienda
+        return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+    except:
+        return None
 
 # ==========================================================
-# 2. ESTRATEGIA NINJA (Anti-Bloqueo para el Punto 5)
+# 4. LÓGICA DE PLANES (El 'Contrato' del Lobo)
 # ==========================================================
+
+PLAN_RULES = {
+    "starter": {"max_cazas_activas": 3, "freq_options": ["12h", "24h"], "plan_key": "starter"},
+    "pro": {"max_cazas_activas": 15, "freq_options": ["1h", "6h", "12h", "24h"], "plan_key": "pro"},
+    "business": {"max_cazas_activas": 100, "freq_options": ["15min", "1h", "6h"], "plan_key": "business"}
+}
+
+def get_effective_plan_rules(plan_name):
+    """Devuelve las reglas según el plan del usuario."""
+    family = normalize_plan_family(plan_name)
+    return PLAN_RULES.get(family, PLAN_RULES["starter"])
+
+def normalize_plan_family(plan: str) -> str:
+    """Mapea alias de planes a las familias principales."""
+    raw = (plan or "starter").strip().lower()
+    # Aquí podés agregar tus alias (omega, trial, etc)
+    if raw in ["business_reseller", "business_monitor", "business"]: return "business"
+    if raw in ["pro", "beta", "alfa"]: return "pro"
+    return "starter"
+
+def _effective_minutes(plan, freq_str):
+    """Traduce '15min' o '1h' a minutos reales para el scheduler."""
+    if freq_str == "15min": return 15
+    if freq_str == "1h": return 60
+    if freq_str == "6h": return 360
+    if freq_str == "12h": return 720
+    return 1440 # 24h por defecto
+
+def contar_cazas_activas(user_id):
+    """Consulta rápida a Supabase para ver cuántas tiene el usuario."""
+    from services.database_service import supabase # Import local para evitar circularidad
+    try:
+        res = supabase.table("cazas").select("id", count="exact").eq("user_id", user_id).eq("estado", "activa").execute()
+        return res.count if res.count is not None else 0
+    except:
+        return 0
+
+def _extract_product_id(url):
+    """Saca el ID de producto de la URL (ML, Amazon, etc)."""
+    if not url: return "unknown"
+    # Lógica simple para ML: MLA-123456
+    match = re.search(r"(MLA|MLU|MLM|MLB)-?(\d+)", url, re.IGNORECASE)
+    return match.group(0) if match else "generic"
+
+def _domain_from_url(url):
+    from urllib.parse import urlparse
+    return urlparse(url).netloc.replace("www.", "")
+
+
+# ==========================================================
+# ESTRATEGIA NINJA (Anti-Bloqueo)
+# ==========================================================
+
 def get_random_user_agent():
-    """Devuelve un disfraz distinto para que ML no nos huela."""
-    disfraces = [
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
+    """Devuelve un User-Agent aleatorio para evitar bloqueos."""
+    agents = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.105 Mobile Safari/537.36"
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1"
     ]
-    return random.choice(disfraces)
+    return random.choice(agents)
 
 def apply_human_jitter():
-    """Pausa aleatoria para que el Lobo no parezca un script de 2 pesos."""
-    # Entre 1.5 y 4 segundos de 'pensamiento'
+    """Pausa aleatoria para simular comportamiento humano."""
     delay = random.uniform(1.5, 4.0)
     time.sleep(delay)
     return delay
+
+def evaluar_oferta(precio_actual, config):
+    """Determina si el precio es una oferta según la configuración."""
+    tipo = config.get('tipo', 'piso')
+    objetivo = config.get('objetivo', 0)
+
+    if tipo == 'piso':
+        if precio_actual <= objetivo:
+            return True, f"¡Bajó del piso de ${objetivo:,.0f}!"
+    return False, ""
+
+
+def obtener_dolar_tarjeta():
+    """Consulta la cotización actualizada del dólar tarjeta"""
+    try:
+        # Usamos la API pública de dolarapi.com
+        url = "https://dolarapi.com/v1/dolares/tarjeta"
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        # Retornamos el valor de venta
+        return float(data['venta']) 
+    except Exception as e:
+        print(f"⚠️ Error obteniendo dólar: {e}")
+        # Valor de respaldo por si la API falla
+        return 1860.0

@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 import streamlit as st
 import streamlit.components.v1 as components
 from dotenv import load_dotenv
+from services.database_service import guardar_caza_supabase, run_manual_hunt
 
 # Forzamos la ruta del navegador por código para que no dependa solo de Render
 #os.environ["PLAYWRIGHT_BROWSERS_PATH"] = os.path.join(os.getcwd(), "pw-browsers")
@@ -1008,72 +1009,6 @@ def save_user_whatsapp(user_id: str, whatsapp_number: str) -> bool:
 # ==========================================================
 # CAZAS
 # ==========================================================
-
-def guardar_caza_supabase(
-    user_id: str,
-    producto: str,
-    url: str,
-    precio_max,
-    frecuencia: str,
-    tipo_alerta: str,
-    plan: str,
-    source: str | None = None,
-):
-    try:
-        if not user_id:
-            return False
-
-        rules = get_effective_plan_rules(plan)
-        max_cazas = int(rules["max_cazas_activas"])
-        source = (source or DEFAULT_SOURCE).strip().lower()
-
-        activas = contar_cazas_activas(user_id)
-        if activas >= max_cazas:
-            return "limite"
-
-        precio_int = parse_price_to_int(precio_max)
-
-        payload = {
-            "user_id": user_id,
-            "producto": (producto or "").strip(),
-            "link": (url or "").strip(),
-            "precio_max": precio_int,
-            "frecuencia": (frecuencia or "").strip(),
-            "tipo_alerta": (tipo_alerta or "piso").strip().lower(),
-            "plan": rules["plan_key"],
-            "estado": "activa",
-            "source": source,
-            "last_check": None,
-        }
-
-        ins = supabase.table("cazas").insert(payload).execute()
-
-        if getattr(ins, "data", None):
-            print("[guardar_caza_supabase] insert ok:", ins.data)
-            return True
-
-        print("[guardar_caza_supabase] insert sin data:", ins)
-        return False
-
-    except Exception as e:
-        print("[guardar_caza_supabase] error:", e)
-        return False
-    
-def run_manual_hunt(b, headless=True):
-    url = b.get("url") or b.get("link") or ""
-    kw = b.get("keyword") or b.get("producto") or ""
-    precio = b.get("precio_max") or 0
-    
-    plan_str = b.get('plan', 'starter').lower()
-    es_pro_real = (plan_str in ["pro", "business"])
-
-    # Pasamos el headless a hunt_offers
-    return hunt_offers(url, kw, precio, es_pro=es_pro_real, headless=headless)
-  
-
-def es_plan_business(plan: str) -> bool:
-    return normalize_plan_family(plan) in {"business_reseller", "business_monitor"}
-
 
 
 def _fmt_money(value):
@@ -2159,53 +2094,64 @@ total_ocupado = cazas_activas
 
 if total_ocupado < limite_plan:
     with st.expander("➕ Configurar nueva cacería"):
-        n_url = st.text_input("URL")
-        n_key = st.text_input("Palabra clave")
+        n_url = st.text_input("URL (Mercado Libre, Amazon, etc.)")
+        n_key = st.text_input("Nombre del producto / Palabra clave")
 
-        tipo_alerta_ui = st.radio("Estrategia:", ["Precio Piso", "Descuento %"], horizontal=True)
+        # --- SELECCIÓN DE ESTRATEGIA Y MONEDA ---
+        col_est, col_mon = st.columns([2, 1])
+        
+        with col_est:
+            tipo_alerta_ui = st.radio("Estrategia:", ["Precio Piso", "Descuento %"], horizontal=True)
+        
+        with col_mon:
+            # Solo mostramos moneda si es Precio Piso
+            moneda = st.selectbox("Moneda", ["ARS", "USD"], index=0) if tipo_alerta_ui == "Precio Piso" else "ARS"
 
         if tipo_alerta_ui == "Precio Piso":
+            # Ajustamos el label y el placeholder según la moneda
+            label_moneda = "Pesos ($)" if moneda == "ARS" else "Dólares (USD)"
+            val_def = 500000 if moneda == "ARS" else 500
+            step_def = 1000 if moneda == "ARS" else 10
+            
             n_price = st.number_input(
-                "Precio Máximo ($)",
+                f"Precio Máximo ({label_moneda})",
                 min_value=0,
-                value=500000,
-                step=1000,
+                value=val_def,
+                step=step_def,
                 key="price_piso",
+                help="El Lobo te avisará cuando el precio sea IGUAL o MENOR a este valor."
             )
-            # --- EL TOQUE DE UX ---
-            st.caption(f"🎯 Alertar si el precio baja de: **{_fmt_money(n_price)}**")
-            # ----------------------
+            
+            # --- UX: Caption dinámico ---
+            simbolo = "$" if moneda == "ARS" else "USD"
+            st.caption(f"🎯 Alertar si el precio baja de: **{simbolo} {n_price:,}**")
             tipo_db = "piso"
             
         else:
             n_price = st.slider("Porcentaje deseado (%)", 5, 90, 35, key="price_desc")
+            st.caption(f"📉 Alertar si detecto un descuento mayor al **{n_price}%**")
             tipo_db = "descuento"
 
-        n_freq = st.selectbox("Frecuencia", rules["freq_options"])
+        n_freq = st.selectbox("Frecuencia de monitoreo", rules["freq_options"])
 
-        if DEBUG:
-            st.caption(f"DEBUG UI | tipo_db={tipo_db} | n_price={n_price} | type={type(n_price)}")
-
-        if st.button("Lanzar", use_container_width=True):
-            if not n_url.strip():
-                st.error("Ingresá una URL.")
+        if st.button("Lanzar Lobo 🐺", use_container_width=True, type="primary"):
+            if not n_url.strip() or not n_key.strip():
+                st.error("Completá la URL y la palabra clave.")
                 st.stop()
 
-            if not n_key.strip():
-                st.error("Ingresá una palabra clave.")
-                st.stop()
-
+            # --- LÓGICA DE CONVERSIÓN ---
+            # Si es USD, podrías guardarlo así o convertirlo a pesos aquí mismo.
+            # Por ahora, parseamos normal pero guardamos la moneda si tu DB lo permite.
             precio_max = parse_price_to_int(n_price)
 
             if tipo_db == "piso" and precio_max <= 0:
-                st.error("El precio máximo debe ser mayor a 0.")
+                st.error("El precio debe ser mayor a 0.")
                 st.stop()
 
             src = infer_source_from_url(n_url)
-            if src == "unknown":
-                src = DEFAULT_SOURCE
-
+            
             # 1. Guardamos en la base de datos
+            # IMPORTANTE: Si agregaste la columna 'currency' a tu tabla 'cazas', pasala acá.
             resultado = guardar_caza_supabase(
                 user_id=user_id,
                 producto=n_key,
@@ -2215,25 +2161,19 @@ if total_ocupado < limite_plan:
                 tipo_alerta=tipo_db,
                 plan=plan,
                 source=src,
+                # moneda=moneda  <-- Si tenés la columna en Supabase
             )
 
             if resultado is True:
-                # 2. Avisamos que se guardó bien
-                st.success("✅ Caza guardada correctamente.")
-                
-                # 3. Actualizamos la lista local para que aparezca abajo
+                st.success(f"✅ ¡Caza de {n_key} lanzada!")
                 st.session_state["busquedas"] = obtener_cazas(user_id, plan_real_raw) or []
-                
-                # 4. Limpiamos la pantalla (opcional) para que el formulario quede listo para otra carga
                 st.rerun() 
-                
             elif resultado == "limite":
-                st.warning("⚠️ Alcanzaste el límite de tu plan.")
+                st.warning("⚠️ Límite de plan alcanzado.")
             else:
-                st.error("❌ Error al guardar la caza.")
+                st.error("❌ Error al guardar.")
 else:
-    st.warning(f"Has alcanzado el límite de {limite_plan} búsquedas de tu plan {rules['label']}.")
-
+    st.warning(f"Límite de {limite_plan} búsquedas alcanzado.")
 # ==========================================================
 # LISTADO / OLFATEAR (VERSIÓN DINÁMICA PRO - SIN GRISADO)
 # ==========================================================
