@@ -781,28 +781,35 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         # ==========================================================
         # 3. SELECCIÓN & ANÁLISIS DINÁMICO
         # ==========================================================
-        state = st.session_state.get("radar_table_clean", {})
-        sel_rows = state.get("selection", {}).get("rows", [])
-        idx = sel_rows[0] if sel_rows else 0
-
-        if idx >= len(df_radar): 
-            idx = 0
-
-        selected_row = df_radar.iloc[idx]
+        # ==========================================================
+        # 3. SELECCIÓN & ANÁLISIS DINÁMICO (RECUPERADO)
+        # ==========================================================
+        st.divider()
+        
+        # 1. Agregamos un selector manual por si el clic en la tabla falla
+        nombres_productos = [row["Producto"] for row in radar_rows]
+        producto_elegido = st.selectbox(
+            "🔍 Seleccionar producto para configurar/analizar:", 
+            nombres_productos,
+            help="Elegí un producto para ver su historial y ajustar los límites de precio."
+        )
+        
+        # 2. Buscamos la fila correspondiente en nuestro DataFrame de radar
+        selected_row = next(item for item in radar_rows if item["Producto"] == producto_elegido)
+        
         cid = selected_row["full_id"]
         current_keyword = selected_row["Producto"]
         curr_price = float(selected_row["Precio"])
+        c_row = selected_row["raw_data"]
             
-        # Usamos el mapa unificado definido arriba en la función
+        # 3. Traemos las reglas actuales de nuestro mapa unificado
         rule = rules_map.get(str(cid)) or {}
         min_p = float(rule.get("min_price_allowed") or 0)
         max_p = float(rule.get("max_price_allowed") or 0)
-        c_row = selected_row["raw_data"]
 
-        st.divider()
-        st.markdown(f"### 🔍 Detalle: {current_keyword}")
+        st.markdown(f"### 📈 Análisis de Detalle: {current_keyword}")
 
-        # Métrica de Compliance e Historial
+        # --- MÉTRICAS DE CUMPLIMIENTO ---
         res_hist = supabase.table("price_history").select("checked_at, price").eq("caza_id", cid).order("checked_at").execute()
         df_hist = pd.DataFrame(res_hist.data or [])
 
@@ -810,60 +817,67 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         if not df_hist.empty and min_p > 0:
             compliance_rate = int((len(df_hist[df_hist["price"] >= min_p]) / len(df_hist)) * 100)
 
-        # Colores de métricas
-        if curr_price <= 0: color, txt = "#808080", "SIN DATOS"
-        elif min_p > 0 and curr_price < min_p: color, txt = "#FF4B4B", "MAP VIOLADO"
-        elif max_p > 0 and curr_price > max_p: color, txt = "#FFA500", "SOBREPRECIO"
-        else: color, txt = "#28A745", "CUMPLIMIENTO OK"
+        # --- LÓGICA DE SEMÁFORO MEJORADA ---
+        if curr_price <= 0: 
+            color, txt = "#808080", "SIN DATOS"
+        elif min_p > 0 and curr_price < min_p: 
+            color, txt = "#FF4B4B", "🔴 MAP VIOLADO"
+        elif max_p > 0 and curr_price > max_p: 
+            color, txt = "#FFA500", "🟠 SOBREPRECIO"
+        elif min_p == 0 and max_p == 0:
+            color, txt = "#555", "⚪ SIN REGLAS"
+        else: 
+            color, txt = "#28A745", "🟢 CUMPLIMIENTO OK"
 
         k1, k2, k3, k4 = st.columns(4)
-        with k1: st.markdown(f"<small>Actual</small><h3>${int(curr_price)}</h3>", unsafe_allow_html=True)
+        with k1: st.markdown(f"<small>Precio Actual</small><h3>${int(curr_price):,}</h3>".replace(",", "."), unsafe_allow_html=True)
         with k2: st.markdown(f"<small>Estado</small><h3 style='color:{color}; font-size:18px;'>{txt}</h3>", unsafe_allow_html=True)
-        with k3: st.markdown(f"<small>Mínimo MAP</small><h3>${int(min_p)}</h3>", unsafe_allow_html=True)
+        with k3: st.markdown(f"<small>MAP (Mínimo)</small><h3>${int(min_p):,}</h3>".replace(",", "."), unsafe_allow_html=True)
         with k4: st.markdown(f"<small>Compliance</small><h3>{compliance_rate}%</h3>", unsafe_allow_html=True)
 
-        with st.form("config_rules"):
-            st.caption(f"⚙️ Configuración para: {current_keyword}")
+        # --- FORMULARIO DE CONFIGURACIÓN ---
+        with st.form("config_rules_v2"):
+            st.caption(f"⚙️ Ajustar límites para: {current_keyword}")
             c1, c2 = st.columns(2)
-            f_min = c1.number_input("MAP (Mínimo)", value=int(min_p), step=1000)
-            f_max = c2.number_input("Techo (Máximo)", value=int(max_p), step=1000)
+            f_min = c1.number_input("MAP (Mínimo permitido)", value=int(min_p), step=1000)
+            f_max = c2.number_input("Techo (Máximo permitido)", value=int(max_p), step=1000)
 
-            if st.form_submit_button("💾 Guardar Reglas", use_container_width=True):
+            if st.form_submit_button("💾 Guardar Reglas de Monitoreo", use_container_width=True):
                 if not cid:
                     st.error("No se detectó un ID válido.")
                 else:
-                    # 1. Limpieza manual garantizada
+                    # Upsert limpio: borramos y creamos
                     supabase.table("monitor_rules").delete().filter("caza_id", "eq", int(cid)).execute()
                 
-                    # 2. Creación de objeto limpio
                     nueva_regla = {
                         "caza_id": int(cid),
                         "user_id": user_id,
-                        "min_price_allowed": float(f_min),
-                        "max_price_allowed": float(f_max),
+                        "min_price_allowed": int(f_min),
+                        "max_price_allowed": int(f_max),
                         "product_name": str(current_keyword),
-                        "product_url": str(c_row.get("link") or "")
+                        "product_url": str(c_row.get("link") or c_row.get("url") or "")
                     }
                 
-                    # 3. Inserción directa
                     res = supabase.table("monitor_rules").insert(nueva_regla).execute()
                     
                     if res.data:
-                        st.success(f"✅ ¡Configuración para {current_keyword} actualizada!")
+                        st.success(f"✅ ¡Reglas para {current_keyword} actualizadas!")
                         st.rerun()
                     else:
-                        st.error("Error: No se pudo insertar en la base de datos.")
+                        st.error("Error al guardar en la base de datos.")
 
+        # --- GRÁFICO HISTÓRICO ---
         if not df_hist.empty:
             df_hist["checked_at"] = pd.to_datetime(df_hist["checked_at"])
-            import altair as alt
             chart = alt.Chart(df_hist).mark_line(point=True, color="#ff4b4b").encode(
-                x=alt.X('checked_at:T', title="Tiempo"),
-                y=alt.Y('price:Q', scale=alt.Scale(zero=False), title="Precio ($)")
-            )
+                x=alt.X('checked_at:T', title="Fecha de chequeo"),
+                y=alt.Y('price:Q', scale=alt.Scale(zero=False), title="Precio ($ ARS)")
+            ).properties(height=300)
+            
             if min_p > 0:
                 rule_line = alt.Chart(pd.DataFrame({'y': [min_p]})).mark_rule(color='red', strokeDash=[5,5]).encode(y='y:Q')
                 chart += rule_line
+            
             st.altair_chart(chart.interactive(), use_container_width=True)
     else:
         st.info("Esperando datos de los rastreadores...")
