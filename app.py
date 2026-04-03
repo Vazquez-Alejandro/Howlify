@@ -867,18 +867,43 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
             st.altair_chart(chart.interactive(), use_container_width=True)
     else:
         st.info("Esperando datos de los rastreadores...")
+
             
 def render_business_dashboard(plan: str, plan_label_text: str, user_id: str, busquedas: list):
-    if plan == "business_monitor":
+    # Debug en pantalla (activar si querés ver qué valor llega)
+    # st.write("DEBUG plan:", plan)
+    # st.write("DEBUG busquedas:", busquedas)
+
+    # 🔧 Creamos datos de ejemplo si busquedas está vacío
+    if not busquedas:
+        busquedas = [
+            {"producto": "Notebook Lenovo", "precio": 1200, "currency": "USD"},
+            {"producto": "Monitor LG", "precio": 300, "currency": "USD"},
+            {"producto": "Mouse Logitech", "precio": 25, "currency": "USD"},
+        ]
+
+    # Normalizamos el plan para evitar problemas de mayúsculas/espacios
+    plan_normalizado = plan.lower().replace(" ", "_")
+
+    if plan_normalizado == "business_monitor":
+        st.subheader("📊 Business Dashboard · Monitor")
         render_business_monitor_dashboard(plan_label_text, user_id, busquedas)
-    else:
+
+    elif plan_normalizado == "reseller":
         st.subheader("📊 Business Dashboard · Reseller")
         if st.button("Buscar Oportunidades 🚀", use_container_width=True):
             with st.spinner("Olfateando mercado..."):
                 ops = obtener_top_oportunidades(user_id)
                 if ops:
-                    for o in ops: st.success(f"🔥 {o['title']} - {o['price_fmt']}")
-                else: st.info("No hay brechas críticas hoy.")
+                    for o in ops:
+                        st.success(f"🔥 {o['title']} - {o['price_fmt']}")
+                else:
+                    st.info("No hay brechas críticas hoy.")
+
+    else:
+        st.info("Tu plan no incluye este dashboard.")
+
+
 
 # ==========================================================
 # SUPABASE HELPERS
@@ -1952,6 +1977,10 @@ with st.sidebar:
     _has_biz = _tmp_rules["features"].get("business_mode", False)
     
     opciones_menu = ["🐺 Mis Rastreadores", "👤 Mi Perfil"]
+
+    # st.write("DEBUG plan_real:", plan_real)
+    # st.write("DEBUG _has_biz:", _has_biz)
+
     
     # Forzamos el botón si sos admin o si tenés el plan business
     if _has_biz or "admin" in plan_real.lower() or "business" in plan_real.lower():
@@ -2052,6 +2081,9 @@ st.session_state["busquedas"] = obtener_cazas(user_id, plan_real_raw)
 # ==========================================================
 # 🎯 RENDER CENTRAL (EL MURO DE BERLÍN)
 # ==========================================================
+#print("DEBUG vista_actual:", vista_actual)   # 👈 esto en la consola
+#st.write("Vista actual:", vista_actual)      # 👈 esto en la interfaz web
+
 if vista_actual == "📊 Dashboard Business":
     
     render_business_dashboard(plan_real_raw, rules['label'], user_id, st.session_state["busquedas"])
