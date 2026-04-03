@@ -64,21 +64,35 @@ def guardar_caza_supabase(
         return False
 
 def run_manual_hunt(b, headless=True):
-    # Traemos los datos del diccionario 'b' (que viene de la UI)
-    url = b.get("url") or b.get("link") or ""
-    kw = b.get("keyword") or b.get("producto") or ""
-    precio = b.get("precio_max") or 0
+    """
+    Ejecuta una búsqueda manual desde la UI, 
+    gestionando la conversión de moneda si es necesario.
+    """
+    # 1. Imports internos para evitar errores de carga
+    from utils.logic import obtener_dolar_tarjeta, _safe_float
+    from scraper.scraper_pro import hunt_offers
+
+    # 2. Extraemos datos (buscamos en ambos nombres por si acaso)
+    url = b.get("link") or b.get("url") or ""
+    kw = b.get("producto") or b.get("keyword") or ""
     
-    # Lógica de planes para habilitar funciones PRO en el scraper
-    plan_str = b.get('plan', 'starter').lower()
+    # 3. Lógica de Moneda: Si es USD, multiplicamos ANTES de mandar al scraper
+    precio_base = _safe_float(b.get("precio_max"), 0)
+    moneda = b.get("currency", "ARS").upper()
+    
+    precio_final_ars = precio_base
+    
+    if moneda == "USD":
+        valor_dolar = obtener_dolar_tarjeta()
+        precio_final_ars = precio_base * valor_dolar
+        print(f"DEBUG Manual: {precio_base} USD -> {precio_final_ars} ARS")
+
+    # 4. Lógica de planes
+    plan_str = str(b.get('plan', 'starter')).lower()
     es_pro_real = (plan_str in ["pro", "business", "business_reseller", "business_monitor"])
 
-    # IMPORTANTE: El import debe estar aquí o al principio del archivo
-    from scraper.scraper_pro import hunt_offers
-    
-    # Ejecutamos el rastreo manual
-    return hunt_offers(url, kw, precio, es_pro=es_pro_real, headless=headless)
-
+    # 5. Ejecución final
+    return hunt_offers(url, kw, precio_final_ars, es_pro=es_pro_real, headless=headless)
 
 def es_plan_business(plan: str) -> bool:
     return normalize_plan_family(plan) in {"business_reseller", "business_monitor"}

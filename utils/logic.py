@@ -129,3 +129,23 @@ def obtener_dolar_tarjeta():
         print(f"⚠️ Error obteniendo dólar: {e}")
         # Valor de respaldo por si la API falla
         return 1860.0
+    
+def _safe_float(val, default=0.0):
+    """Convierte precios sucios o nulos a float sin romper nada."""
+    if val is None: 
+        return default
+    
+    # Si ya es un número, lo devolvemos
+    if isinstance(val, (int, float)):
+        return float(val)
+        
+    try:
+        # Si es string, limpiamos todo lo que no sea número o punto
+        if isinstance(val, str):
+            # Quitamos $, espacios y puntos de miles, cambiamos coma decimal por punto
+            val = val.replace("$", "").replace(" ", "").replace(".", "").replace(",", ".").strip()
+        
+        return float(val)
+    except (ValueError, TypeError):
+        print(f"⚠️ _safe_float: No pude convertir '{val}'")
+        return default
