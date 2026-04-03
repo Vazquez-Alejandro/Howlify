@@ -7,7 +7,8 @@ from utils.logic import (
     _extract_product_id, _domain_from_url, normalize_plan_family
 )
 from scraper.scraper_pro import hunt_offers
-
+from services.telegram_service import enviar_telegram
+from utils.logic import normalize_plan_family
 # Conexión central
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
@@ -207,3 +208,95 @@ def guardar_historial(caza_id, resultados, user_id):
             })
     if rows:
         supabase.table("price_history").insert(rows).execute()
+
+def armar_texto_reporte(user_id, cazas, familia_plan, nombre_usuario=""):
+    """
+    Analiza el rendimiento de las últimas 24hs y construye el mensaje del Lobo.
+    """
+    total = len(cazas)
+    infracciones = 0
+    ok = 0
+    errores = 0
+    
+    # 1. Obtener reglas solo si el plan es Business Monitor
+    rules_map = {}
+    if familia_plan == "business_monitor":
+        res_rules = supabase.table("monitor_rules").select("*").eq("user_id", user_id).execute()
+        rules_map = {str(r["caza_id"]): r for r in (res_rules.data or [])}
+
+    # 2. Procesar cada caza para determinar su estado actual
+    for c in cazas:
+        cid = str(c["id"])
+        
+        # Si no tiene fecha de último chequeo, lo marcamos como error de rastreo
+        if not c.get("last_check"):
+            errores += 1
+            continue
+            
+        if familia_plan == "business_monitor":
+            rule = rules_map.get(cid)
+            if rule:
+                # Buscamos el último precio en el historial para comparar con el MAP
+                res_p = supabase.table("price_history").select("price").eq("caza_id", cid).order("checked_at", desc=True).limit(1).execute()
+                precio_actual = res_p.data[0]["price"] if res_p.data else 0
+                
+                min_p = float(rule.get("min_price_allowed") or 0)
+                if precio_actual > 0 and min_p > 0 and precio_actual < min_p:
+                    infracciones += 1
+                else:
+                    ok += 1
+            else:
+                ok += 1 
+        else:
+            # Para planes personales, el valor es la vigilancia activa
+            ok += 1
+
+    # 3. Formateo del mensaje según el perfil del usuario
+    saludo = f"🐺 *¡Buen día, {nombre_usuario or 'Cazador'}!* Reporte de Howlify listo.\n\n"
+    
+    if familia_plan == "business_monitor":
+        cuerpo = (
+            f"📊 *Resumen de Radar:*\n"
+            f"✅ Productos OK: {ok}\n"
+            f"🔴 Infracciones MAP: {infracciones}\n"
+            f"⚠️ Errores técnicos: {errores}\n\n"
+            f"{'🚨 ¡Atención! Hay desviaciones de precio en tu canal.' if infracciones > 0 else '🟢 Todos los revendedores cumplen con tus precios.'}"
+        )
+    else:
+        # Tono enfocado en viajes y ahorro personal
+        cuerpo = (
+            f"✈️ *Estado de tus búsquedas:* {total} activas.\n"
+            f"🔎 *Actividad:* El Lobo vigiló tus links en las últimas 24hs.\n"
+            f"✅ *Resultado:* Todo bajo control. Te avisaré al instante si detecto una oportunidad de ahorro."
+        )
+
+    return saludo + cuerpo + "\n\n🔗 [Ver mi Panel](https://howlify.com)"
+
+
+def ejecutar_reporte_diario_total():
+    print("🚀 Iniciando despacho de reportes diarios...")
+    try:
+        # CORRECCIÓN: 'username' en lugar de 'full_name'
+        usuarios = supabase.table("profiles").select("user_id, username, plan, telegram_id, whatsapp_number").execute().data
+        
+        for u in usuarios:
+            uid = u["user_id"]
+            plan_label = u.get("plan") or "starter"
+            
+            res_cazas = supabase.table("cazas").select("*").eq("user_id", uid).eq("estado", "activa").execute()
+            cazas = res_cazas.data or []
+            
+            if not cazas:
+                continue 
+
+            familia = normalize_plan_family(plan_label)
+            # Usamos u.get("username") aquí
+            mensaje = armar_texto_reporte(uid, cazas, familia, u.get("username"))
+            
+            if u.get("telegram_id"):
+                from services.telegram_service import enviar_telegram
+                enviar_telegram(u["telegram_id"], mensaje)
+                print(f"✅ Reporte enviado a {u.get('username')} (TG)")
+                
+    except Exception as e:
+        print(f"❌ Error en el motor de reportes: {e}")
