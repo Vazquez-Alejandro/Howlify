@@ -143,32 +143,25 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
     presas: list[dict] = []
 
     # =========================================================
-    # RUTA A: LINK DIRECTO (CON DISFRAZ DINÁMICO)
+    # RUTA A: LINK DIRECTO (CON DISFRAZ DINÁMICO) - REFORZADA
     # =========================================================
     es_producto_directo = bool(url_input and url_input.startswith("http") and "listado." not in url_input)
     
     if es_producto_directo:
-        # Usamos el disfraz que nos mandó el router o uno de respaldo
         ua_final = user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        
         print(f"🐺 [ML] Link directo. Plan: {plan.upper()} | Disfraz: {ua_final[:40]}...")
         
         with sync_playwright() as p:
             browser = p.chromium.launch(
-                headless=False,
+                headless=False, # Lo dejamos en False para que veas si ML te tira un Captcha
                 args=["--disable-blink-features=AutomationControlled", "--no-sandbox"]
             )
             
             contextos = {}
-            # --- ACÁ ESTÁ EL CAMBIO CLAVE ---
-            # Ahora el contexto usa el User-Agent que elegimos en utils/logic.py
             contextos["Disfraz Lobo"] = browser.new_context(
                 user_agent=ua_final,
                 viewport={"width": 1280, "height": 720}
             )
-            
-            # Si es Pro, seguimos pudiendo probar con un iPhone si querés doble chequeo, 
-            # pero con el disfraz dinámico ya estamos cubiertos.
             
             resultados_temporales = []
             
@@ -182,24 +175,39 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                 try:
                     page.goto(url_input, wait_until="domcontentloaded", timeout=45000)
                     
-                    # Esperamos el precio con el nuevo selector que tenías
+                    # 1. SELECTOR MULTICAPA (Inyectamos meta y data-testid)
+                    selector_precio = 'meta[itemprop="price"], .ui-pdp-price__second-line .andes-money-amount__fraction, .ui-pdp-price .andes-money-amount__fraction, [data-testid="price-part"] .andes-money-amount__fraction'
+                    
                     try:
-                        page.wait_for_selector('.ui-pdp-price__second-line .andes-money-amount__fraction, .ui-pdp-price .andes-money-amount__fraction', timeout=10000)
+                        page.wait_for_selector(selector_precio, timeout=12000)
                     except:
-                        pass
-                        
-                    # 1. Sacamos el precio
+                        print("⚠️ El Lobo no detectó el selector de precio visual, intentando vía Meta...")
+
+                    # 2. EXTRACCIÓN LÓGICA (Primero Meta, después DOM)
                     precio = None
-                    precio_loc = page.locator('.ui-pdp-price__second-line .andes-money-amount__fraction, .ui-pdp-price .andes-money-amount__fraction').first
-                    if precio_loc.count() > 0:
-                        raw = (precio_loc.inner_text() or "").replace(".", "").replace(",", "")
-                        if raw.isdigit():
-                            precio = int(raw)
+                    
+                    # Intento A: Meta Tag (El más robusto para catálogo/UP)
+                    meta_p = page.locator('meta[itemprop="price"]').get_attribute("content")
+                    if meta_p:
+                        try:
+                            precio = int(float(meta_p))
+                            print(f"✅ Precio capturado vía Meta: ${precio}")
+                        except: pass
+
+                    # Intento B: Si el Meta falló, buscamos en el DOM visual
+                    if not precio:
+                        precio_loc = page.locator('.ui-pdp-price__second-line .andes-money-amount__fraction, .ui-pdp-price .andes-money-amount__fraction, [data-testid="price-part"] .andes-money-amount__fraction').first
+                        if precio_loc.count() > 0:
+                            raw = (precio_loc.inner_text() or "").replace(".", "").replace(",", "")
+                            if raw.isdigit():
+                                precio = int(raw)
+                                print(f"✅ Precio capturado vía DOM: ${precio}")
                     
                     if not precio:
+                        print("❌ El Lobo no pudo morder el precio. Posible bloqueo o cambio de diseño.")
                         continue
                         
-                    # 2. 🔥 ESCUDO ANTI-CHANTAS (Reputación del vendedor)
+                    # 3. ESCUDO ANTI-CHANTAS
                     alerta = None
                     if plan in ["pro", "business"]:
                         seller_info = page.locator(".ui-pdp-seller-profile__title, .ui-seller-info, .ui-pdp-seller-profile__subtitle").first
@@ -231,13 +239,11 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
             browser.close()
             
             if resultados_temporales:
-                # El Lobo siempre elige la presa más barata si hubo varios contextos
                 mejor = sorted(resultados_temporales, key=lambda x: x["price"])[0]
                 print(f"🐺 🏆 Caza confirmada a ${mejor['price']}")
                 presas.append(mejor)
                 
         return presas
-
 
     # =========================================================
     # RUTA B: ES UNA BÚSQUEDA POR KEYWORD O LINK DE LISTADO
@@ -472,7 +478,7 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
 # Router central (VERSIÓN NINJA DEFINITIVA)
 # -------------------------------------------------
 
-def hunt_offers(url: str, keyword: str, max_price: int, es_pro: bool = False, headless: bool = True):
+def hunt_offers(url: str, keyword: str, max_price: int, es_pro: bool = False, headless: bool = True, user_id: str = None, caza_id: int = None):
     # 1. GENERAMOS LA IDENTIDAD NINJA
     disfraz = get_random_user_agent()
     delay = apply_human_jitter() # Esto ya hace el time.sleep() internamente

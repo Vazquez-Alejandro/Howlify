@@ -697,12 +697,16 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         st.warning("No hay productos monitoreados.")
         return
 
+    st.markdown("### 📡 Radar de Precios Global")
+    st.caption("Hacé clic en una fila para cargar el análisis detallado abajo.")
+
     # ==========================================================
-    # 1. TRAER REGLAS Y PREPARAR DATOS (INCLUYE SKU)
+    # 1. TRAER REGLAS (MAPEO UNIFICADO)
     # ==========================================================
     rules_res = supabase.table("monitor_rules").select("*").eq("user_id", user_id).execute()
     rules_data = rules_res.data or []
     
+    # Creamos un mapa unificado por ID (clave para que todo funcione)
     rules_map = {str(r.get("caza_id")): r for r in rules_data if r.get("caza_id")}
     rules_by_url = {str(r.get("product_url")): r for r in rules_data if r.get("product_url")}
 
@@ -711,41 +715,42 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         bid = str(b.get("id") or "")
         p_url = b.get("link") or b.get("url") or ""
         
+        # Buscamos la regla por ID o por URL como respaldo
         rule = rules_map.get(bid) or rules_by_url.get(p_url) or {}
         
-        # Obtenemos precio actual
+        # Obtener precio actual
         res_p = supabase.table("price_history").select("price").eq("caza_id", bid).order("checked_at", desc=True).limit(1).execute()
         curr_p = float(res_p.data[0]["price"]) if res_p.data else 0.0
         
         m_p = float(rule.get("min_price_allowed") or 0.0)
         max_p = float(rule.get("max_price_allowed") or 0.0)
 
-        # Semáforo
+        # SEMÁFORO
         if curr_p <= 0: riesgo = "⚪"
         elif m_p > 0 and curr_p < m_p: riesgo = "🔴"
         elif max_p > 0 and curr_p > max_p: riesgo = "🟠"
         else: riesgo = "🟢"
 
-        # Progreso de precio dentro del rango
+        # PROGRESO
         progreso = 0.0
         if m_p > 0 and max_p > m_p:
             progreso = max(0.0, min(1.0, (curr_p - m_p) / (max_p - m_p)))
 
         radar_rows.append({
             "Riesgo": riesgo,
-            "SKU": b.get("sku") or f"ID-{bid}", # <--- NUEVO: Mapeo de SKU
+            "ID": bid,
             "Producto": (b.get("producto") or b.get("keyword") or "SIN NOMBRE").upper(),
+            "URL": p_url,
             "Precio": curr_p,
             "Mín. MAP": m_p,
             "Máximo": max_p,
-            "Posición": progreso,
-            "URL": p_url,
-            "full_id": bid,
-            "raw_data": b
+            "Rango": progreso,
+            "raw_data": b,
+            "full_id": bid
         })
 
     # ==========================================================
-    # 2. RADAR DE PRECIOS (VISTA EXCEL)
+    # 2. RENDER DE TABLA
     # ==========================================================
     df_radar = pd.DataFrame(radar_rows)
     
@@ -754,89 +759,128 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         df_radar["orden"] = df_radar["Riesgo"].map(orden_prioridad)
         df_radar = df_radar.sort_values("orden")
 
-        # Columnas que se muestran en el "Excel"
-        cols_display = ["Riesgo", "SKU", "Producto", "Precio", "Mín. MAP", "Máximo", "Posición", "URL"]
-        
-        st.markdown("### 📡 Radar de Precios Global")
+        df_display = df_radar.drop(columns=["raw_data", "full_id", "orden"], errors='ignore')
+
+        # TABLA FINAL BLINDADA (Compatibilidad asegurada)
         st.data_editor(
-            df_radar[cols_display],
+            df_display,
             use_container_width=True,
             hide_index=True,
-            key="radar_table_v3",
-            disabled=cols_display, # Todo bloqueado, se edita abajo
+            key="radar_table_clean",
+            disabled=["Riesgo", "ID", "Producto", "URL", "Precio", "Rango"], 
             column_config={
                 "URL": st.column_config.LinkColumn("Enlace"),
                 "Precio": st.column_config.NumberColumn(format="$%d"),
                 "Mín. MAP": st.column_config.NumberColumn(format="$%d"),
                 "Máximo": st.column_config.NumberColumn(format="$%d"),
-                "Posición": st.column_config.ProgressColumn(min_value=0, max_value=1),
-            }
+                "Rango": st.column_config.ProgressColumn("Posición", min_value=0, max_value=1),
+            },
+            column_order=("Riesgo", "ID", "Producto", "URL", "Precio", "Mín. MAP", "Máximo", "Rango")
         )
 
         # ==========================================================
-        # 3. EDICIÓN RÁPIDA Y ANÁLISIS
+        # 3. SELECCIÓN & ANÁLISIS DINÁMICO
+        # ==========================================================
+        # ==========================================================
+        # 3. SELECCIÓN & ANÁLISIS DINÁMICO (RECUPERADO)
         # ==========================================================
         st.divider()
         
-        # Selector para elegir qué editar del "Excel"
-        nombres_productos = [f"{row['SKU']} | {row['Producto']}" for row in radar_rows]
-        seleccion = st.selectbox("🔍 Seleccionar ítem para gestionar/analizar:", nombres_productos)
+        # 1. Agregamos un selector manual por si el clic en la tabla falla
+        nombres_productos = [row["Producto"] for row in radar_rows]
+        producto_elegido = st.selectbox(
+            "🔍 Seleccionar producto para configurar/analizar:", 
+            nombres_productos,
+            help="Elegí un producto para ver su historial y ajustar los límites de precio."
+        )
         
-        # Recuperamos la data del producto elegido
-        sku_elegido = seleccion.split(" | ")[0]
-        selected_row = next(item for item in radar_rows if item["SKU"] == sku_elegido)
+        # 2. Buscamos la fila correspondiente en nuestro DataFrame de radar
+        selected_row = next(item for item in radar_rows if item["Producto"] == producto_elegido)
         
         cid = selected_row["full_id"]
         current_keyword = selected_row["Producto"]
         curr_price = float(selected_row["Precio"])
         c_row = selected_row["raw_data"]
-        min_p = float(selected_row["Mín. MAP"])
-        max_p = float(selected_row["Máximo"])
-
-        st.markdown(f"### ✏️ Gestión: {current_keyword}")
-
-        # Métricas rápidas
-        k1, k2, k3 = st.columns(3)
-        with k1: st.metric("Precio Actual", f"${int(curr_price):,}".replace(",", "."))
-        with k2: 
-            compliance_res = supabase.table("price_history").select("price").eq("caza_id", cid).execute()
-            precios_hist = [p["price"] for p in (compliance_res.data or []) if p["price"] > 0]
-            comp_rate = 100
-            if precios_hist and min_p > 0:
-                comp_rate = int((len([p for p in precios_hist if p >= min_p]) / len(precios_hist)) * 100)
-            st.metric("Compliance", f"{comp_rate}%")
-        with k3:
-            estado_txt = "🔴 VIOLACIÓN" if (min_p > 0 and curr_price < min_p) else "🟢 OK"
-            if min_p == 0: estado_txt = "⚪ SIN MAP"
-            st.metric("Estado Salud", estado_txt)
-
-        # Formulario de edición rápida
-        with st.form("quick_edit_rules"):
-            c1, c2 = st.columns(2)
-            nuevo_min = c1.number_input("Ajustar MAP", value=int(min_p), step=1000)
-            nuevo_max = c2.number_input("Ajustar Techo", value=int(max_p), step=1000)
             
-            if st.form_submit_button("💾 Guardar Cambios en Radar", use_container_width=True):
-                supabase.table("monitor_rules").delete().eq("caza_id", int(cid)).execute()
-                nueva_regla = {
-                    "caza_id": int(cid), "user_id": user_id,
-                    "min_price_allowed": int(nuevo_min), "max_price_allowed": int(nuevo_max),
-                    "product_name": current_keyword, "product_url": c_row.get("link") or c_row.get("url")
-                }
-                supabase.table("monitor_rules").insert(nueva_regla).execute()
-                st.success("Regla actualizada")
-                st.rerun()
+        # 3. Traemos las reglas actuales de nuestro mapa unificado
+        rule = rules_map.get(str(cid)) or {}
+        min_p = float(rule.get("min_price_allowed") or 0)
+        max_p = float(rule.get("max_price_allowed") or 0)
 
-        # Historial visual (Gráfico)
+        st.markdown(f"### 📈 Análisis de Detalle: {current_keyword}")
+
+        # --- MÉTRICAS DE CUMPLIMIENTO ---
         res_hist = supabase.table("price_history").select("checked_at, price").eq("caza_id", cid).order("checked_at").execute()
         df_hist = pd.DataFrame(res_hist.data or [])
+
+        compliance_rate = 100
+        if not df_hist.empty and min_p > 0:
+            compliance_rate = int((len(df_hist[df_hist["price"] >= min_p]) / len(df_hist)) * 100)
+
+        # --- LÓGICA DE SEMÁFORO MEJORADA ---
+        if curr_price <= 0: 
+            color, txt = "#808080", "SIN DATOS"
+        elif min_p > 0 and curr_price < min_p: 
+            color, txt = "#FF4B4B", "🔴 MAP VIOLADO"
+        elif max_p > 0 and curr_price > max_p: 
+            color, txt = "#FFA500", "🟠 SOBREPRECIO"
+        elif min_p == 0 and max_p == 0:
+            color, txt = "#555", "⚪ SIN REGLAS"
+        else: 
+            color, txt = "#28A745", "🟢 CUMPLIMIENTO OK"
+
+        k1, k2, k3, k4 = st.columns(4)
+        with k1: st.markdown(f"<small>Precio Actual</small><h3>${int(curr_price):,}</h3>".replace(",", "."), unsafe_allow_html=True)
+        with k2: st.markdown(f"<small>Estado</small><h3 style='color:{color}; font-size:18px;'>{txt}</h3>", unsafe_allow_html=True)
+        with k3: st.markdown(f"<small>MAP (Mínimo)</small><h3>${int(min_p):,}</h3>".replace(",", "."), unsafe_allow_html=True)
+        with k4: st.markdown(f"<small>Compliance</small><h3>{compliance_rate}%</h3>", unsafe_allow_html=True)
+
+        # --- FORMULARIO DE CONFIGURACIÓN ---
+        with st.form("config_rules_v2"):
+            st.caption(f"⚙️ Ajustar límites para: {current_keyword}")
+            c1, c2 = st.columns(2)
+            f_min = c1.number_input("MAP (Mínimo permitido)", value=int(min_p), step=1000)
+            f_max = c2.number_input("Techo (Máximo permitido)", value=int(max_p), step=1000)
+
+            if st.form_submit_button("💾 Guardar Reglas de Monitoreo", use_container_width=True):
+                if not cid:
+                    st.error("No se detectó un ID válido.")
+                else:
+                    # Upsert limpio: borramos y creamos
+                    supabase.table("monitor_rules").delete().filter("caza_id", "eq", int(cid)).execute()
+                
+                    nueva_regla = {
+                        "caza_id": int(cid),
+                        "user_id": user_id,
+                        "min_price_allowed": int(f_min),
+                        "max_price_allowed": int(f_max),
+                        "product_name": str(current_keyword),
+                        "product_url": str(c_row.get("link") or c_row.get("url") or "")
+                    }
+                
+                    res = supabase.table("monitor_rules").insert(nueva_regla).execute()
+                    
+                    if res.data:
+                        st.success(f"✅ ¡Reglas para {current_keyword} actualizadas!")
+                        st.rerun()
+                    else:
+                        st.error("Error al guardar en la base de datos.")
+
+        # --- GRÁFICO HISTÓRICO ---
         if not df_hist.empty:
             df_hist["checked_at"] = pd.to_datetime(df_hist["checked_at"])
             chart = alt.Chart(df_hist).mark_line(point=True, color="#ff4b4b").encode(
-                x=alt.X('checked_at:T', title="Tiempo"),
-                y=alt.Y('price:Q', scale=alt.Scale(zero=False), title="Precio ($)")
-            ).properties(height=250)
+                x=alt.X('checked_at:T', title="Fecha de chequeo"),
+                y=alt.Y('price:Q', scale=alt.Scale(zero=False), title="Precio ($ ARS)")
+            ).properties(height=300)
+            
+            if min_p > 0:
+                rule_line = alt.Chart(pd.DataFrame({'y': [min_p]})).mark_rule(color='red', strokeDash=[5,5]).encode(y='y:Q')
+                chart += rule_line
+            
             st.altair_chart(chart.interactive(), use_container_width=True)
+    else:
+        st.info("Esperando datos de los rastreadores...")
 
             
 def render_business_dashboard(plan: str, plan_label_text: str, user_id: str, busquedas: list):
@@ -2087,6 +2131,7 @@ st.caption(
 
 st.divider()
 
+
 # ==========================================================
 # 📲 PANEL DE ALERTAS UNIFICADO (TELEGRAM + WA/EMAIL)
 # ==========================================================
@@ -2111,6 +2156,7 @@ with st.expander("📲 Configuración de Alertas", expanded=not bool(_wa_val or 
         
         c_tg1, c_tg2 = st.columns(2)
         with c_tg1:
+            # CAMBIO AQUÍ: use_container_width=True
             if st.button("💾 Guardar ID", key="btn_save_tg_v2", use_container_width=True):
                 if save_user_telegram(user_id, nuevo_id_tg):
                     st.session_state["telegram_id"] = nuevo_id_tg
@@ -2118,10 +2164,11 @@ with st.expander("📲 Configuración de Alertas", expanded=not bool(_wa_val or 
                     st.rerun()
         with c_tg2:
             if _tg_val:
+                # CAMBIO AQUÍ: use_container_width=True
                 if st.button("🧪 Probar ID", key="btn_test_tg_v2", use_container_width=True):
                     from services.telegram_service import enviar_telegram
-                    mensaje_test = "🐺 *Prueba Ninja:* El Lobo está activo y listo para aullar."
-                    if enviar_telegram(_tg_val, mensaje_test):
+                    p_tg = {"title": "Prueba Ninja 🐺", "price": 0, "url": "https://howlify.app"}
+                    if enviar_telegram(_tg_val, p_tg, "Test"):
                         st.toast("¡Aullido enviado!", icon="✅")
 
     # --- COLUMNA 2: WHATSAPP O EMAIL ---
@@ -2135,6 +2182,7 @@ with st.expander("📲 Configuración de Alertas", expanded=not bool(_wa_val or 
                 key="wa_number_v2",
             )
 
+            # CAMBIO AQUÍ: use_container_width=True
             if st.button("💾 Guardar WhatsApp", key="btn_save_wa_v2", use_container_width=True):
                 from db.database import normalize_phone 
                 numero = normalize_phone(wa_input)
@@ -2147,6 +2195,7 @@ with st.expander("📲 Configuración de Alertas", expanded=not bool(_wa_val or 
                         st.rerun()
 
             if _wa_val:
+                # CAMBIO AQUÍ: use_container_width=True
                 if st.button("🧪 Probar WA", key="btn_test_wa_v2", use_container_width=True):
                     from services.whatsapp_service import enviar_whatsapp
                     p_wa = {"title": "Prueba Ninja 🐺", "price": 0, "url": "https://howlify.app"}
@@ -2157,48 +2206,7 @@ with st.expander("📲 Configuración de Alertas", expanded=not bool(_wa_val or 
             st.info(f"Alertas activas para: \n**{email}**")
             st.caption("Actualizá a Pro para desbloquear WhatsApp.")
 
-    # --- NUEVA SECCIÓN: REPORTE DIARIO PERSONALIZADO 📅 ---
-    st.divider()
-    st.markdown("#### 📅 Reporte Diario del Lobo")
-    st.caption("Recibí un informe de salud de todas tus cazas activas.")
 
-    # Recuperamos valores de la DB o seteamos defaults
-    rep_enabled = profile.get("report_enabled", True)
-    rep_time_str = profile.get("report_time", "09:00:00")
-    rep_days = profile.get("report_days", ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"])
-
-    c_rep1, c_rep2, c_rep3 = st.columns([1, 1, 2])
-
-    with c_rep1:
-        nuevo_enabled = st.toggle("Activar reporte", value=rep_enabled, key="sw_report_active")
-
-    with c_rep2:
-        from datetime import datetime
-        try:
-            # Manejamos formatos HH:MM:SS o HH:MM
-            t_obj = datetime.strptime(rep_time_str[:5], "%H:%M").time()
-        except:
-            import datetime as dt
-            t_obj = dt.time(9, 0)
-            
-        nueva_hora = st.time_input("Horario", value=t_obj, key="time_report_input")
-
-    with c_rep3:
-        nuevos_dias = st.multiselect(
-            "Días de envío",
-            options=["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"],
-            default=rep_days,
-            key="days_report_input"
-        )
-
-    if st.button("💾 Guardar Preferencias de Reporte", use_container_width=True):
-        from services.database_service import guardar_config_reporte
-        # Convertimos la hora a string ISO para la DB
-        hora_iso = nueva_hora.strftime("%H:%M:%S")
-        if guardar_config_reporte(user_id, nuevo_enabled, hora_iso, nuevos_dias):
-            st.success("¡Configuración guardada! El Lobo será puntual.")
-            st.rerun()
-            
 # ==========================================================
 # VISTA: EL MONITOR (Tus cacerías)
 # ==========================================================
@@ -2210,110 +2218,83 @@ st.write("") # Un espaciador sutil para que no quede pegado arriba
 # ==========================================================
 # NUEVA CAZA
 # ==========================================================
+
 total_ocupado = cazas_activas
 
 if total_ocupado < limite_plan:
-    with st.expander("➕ Configurar nueva cacería", expanded=True):
+    with st.expander("➕ Configurar nueva cacería"):
         n_url = st.text_input("URL")
         n_key = st.text_input("Palabra clave")
 
-        # --- DEBUG EN PANTALLA (Solo para nosotros ahora) ---
-        familia = normalize_plan_family(plan_real_raw)
-        if DEBUG:
-            st.write(f"DEBUG: Plan Raw: {plan_real_raw} | Familia: {familia}")
+        tipo_alerta_ui = st.radio("Estrategia:", ["Precio Piso", "Descuento %"], horizontal=True)
 
-        # --- LÓGICA ADAPTATIVA ---
-        # Forzamos la vista de monitor si la familia es business_monitor
-        if familia == "business_monitor":
-            st.markdown("##### 🛡️ Configuración de Monitoreo MAP (Modo Business)")
-            c_min, c_max = st.columns(2)
-            with c_min:
-                n_min = st.number_input("MAP (Mínimo permitido)", value=0, step=1000, key="monitor_min_input_v2")
-            with c_max:
-                n_max = st.number_input("Techo (Máximo permitido)", value=0, step=1000, key="monitor_max_input_v2")
+        if tipo_alerta_ui == "Precio Piso":
+            n_price = st.number_input(
+                "Precio Máximo ($)",
+                min_value=0,
+                value=500000,
+                step=1000,
+                key="price_piso",
+            )
+            # --- EL TOQUE DE UX ---
+            st.caption(f"🎯 Alertar si el precio baja de: **{_fmt_money(n_price)}**")
+            # ----------------------
+            tipo_db = "piso"
             
-            # --- NUEVO: SELECCIÓN DE CANALES DE NOTIFICACIÓN ---
-            st.markdown("##### 🔔 Notificar por:")
-            col_notif = st.columns(3)
-            with col_notif[0]:
-                alerta_tg = st.checkbox("Telegram", value=True, key="chk_tg_new")
-            with col_notif[1]:
-                alerta_wa = st.checkbox("WhatsApp", value=False, key="chk_wa_new")
-            with col_notif[2]:
-                alerta_em = st.checkbox("Email", value=True, key="chk_em_new")
-
-            # Armamos el string de canales para guardar en 'tipo_alerta'
-            canales_list = []
-            if alerta_tg: canales_list.append("telegram")
-            if alerta_wa: canales_list.append("whatsapp")
-            if alerta_em: canales_list.append("email")
-            tipo_db = ",".join(canales_list) if canales_list else "email"
-            
-            n_price = n_min 
-            st.info(f"📢 Alertas activas vía: **{tipo_db.upper()}**")
-        
         else:
-            # Formulario Estándar para Starter/Pro
-            tipo_alerta_ui = st.radio("Estrategia:", ["Precio Piso", "Descuento %"], horizontal=True)
-
-            if tipo_alerta_ui == "Precio Piso":
-                n_price = st.number_input("Precio Máximo ($)", min_value=0, value=500000, step=1000, key="price_piso_input")
-                st.caption(f"🎯 Alertar si el precio baja de: **{_fmt_money(n_price)}**")
-                tipo_db = "piso"
-            else:
-                n_price = st.slider("Porcentaje deseado (%)", 5, 90, 35, key="price_desc_input")
-                tipo_db = "descuento"
+            n_price = st.slider("Porcentaje deseado (%)", 5, 90, 35, key="price_desc")
+            tipo_db = "descuento"
 
         n_freq = st.selectbox("Frecuencia", rules["freq_options"])
 
+        if DEBUG:
+            st.caption(f"DEBUG UI | tipo_db={tipo_db} | n_price={n_price} | type={type(n_price)}")
+
         if st.button("Lanzar", use_container_width=True):
-            if not n_url.strip() or not n_key.strip():
-                st.error("Completá URL y Palabra clave.")
+            if not n_url.strip():
+                st.error("Ingresá una URL.")
                 st.stop()
 
-            precio_max_int = parse_price_to_int(n_price)
-            src = infer_source_from_url(n_url)
-            if src == "unknown": src = DEFAULT_SOURCE
+            if not n_key.strip():
+                st.error("Ingresá una palabra clave.")
+                st.stop()
 
-            # 1. Guardar Caza
+            precio_max = parse_price_to_int(n_price)
+
+            if tipo_db == "piso" and precio_max <= 0:
+                st.error("El precio máximo debe ser mayor a 0.")
+                st.stop()
+
+            src = infer_source_from_url(n_url)
+            if src == "unknown":
+                src = DEFAULT_SOURCE
+
+            # 1. Guardamos en la base de datos
             resultado = guardar_caza_supabase(
                 user_id=user_id,
                 producto=n_key,
                 url=n_url,
-                precio_max=precio_max_int,
+                precio_max=precio_max,
                 frecuencia=n_freq,
                 tipo_alerta=tipo_db,
-                plan=plan, # Asegurate que 'plan' sea el string correcto (ej: 'business_monitor')
+                plan=plan,
                 source=src,
             )
 
             if resultado is True:
-                # 2. Guardar Regla (Solo si es Monitor)
-                if familia == "business_monitor":
-                    try:
-                        # Buscamos el ID recién creado
-                        last = supabase.table("cazas").select("id").eq("user_id", user_id).order("created_at", desc=True).limit(1).execute()
-                        if last.data:
-                            new_id = last.data[0]["id"]
-                            upsert_monitor_rule(
-                                user_id=user_id,
-                                caza_id=new_id,
-                                product_name=n_key,
-                                product_url=n_url,
-                                source=src,
-                                target_price=int(n_min),
-                                min_price_allowed=int(n_min),
-                                max_price_allowed=int(n_max)
-                            )
-                            st.toast("Reglas MAP guardadas 🐺")
-                    except Exception as e:
-                        st.error(f"Error guardando reglas: {e}")
-
-                st.success("✅ Cacería lanzada con éxito.")
+                # 2. Avisamos que se guardó bien
+                st.success("✅ Caza guardada correctamente.")
+                
+                # 3. Actualizamos la lista local para que aparezca abajo
                 st.session_state["busquedas"] = obtener_cazas(user_id, plan_real_raw) or []
-                st.rerun()
+                
+                # 4. Limpiamos la pantalla (opcional) para que el formulario quede listo para otra carga
+                st.rerun() 
+                
+            elif resultado == "limite":
+                st.warning("⚠️ Alcanzaste el límite de tu plan.")
             else:
-                st.error("Error al guardar.")
+                st.error("❌ Error al guardar la caza.")
 else:
     st.warning(f"Has alcanzado el límite de {limite_plan} búsquedas de tu plan {rules['label']}.")
 
