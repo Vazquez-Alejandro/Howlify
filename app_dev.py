@@ -2087,7 +2087,6 @@ st.caption(
 
 st.divider()
 
-
 # ==========================================================
 # 📲 PANEL DE ALERTAS UNIFICADO (TELEGRAM + WA/EMAIL)
 # ==========================================================
@@ -2112,7 +2111,6 @@ with st.expander("📲 Configuración de Alertas", expanded=not bool(_wa_val or 
         
         c_tg1, c_tg2 = st.columns(2)
         with c_tg1:
-            # CAMBIO AQUÍ: use_container_width=True
             if st.button("💾 Guardar ID", key="btn_save_tg_v2", use_container_width=True):
                 if save_user_telegram(user_id, nuevo_id_tg):
                     st.session_state["telegram_id"] = nuevo_id_tg
@@ -2120,11 +2118,10 @@ with st.expander("📲 Configuración de Alertas", expanded=not bool(_wa_val or 
                     st.rerun()
         with c_tg2:
             if _tg_val:
-                # CAMBIO AQUÍ: use_container_width=True
                 if st.button("🧪 Probar ID", key="btn_test_tg_v2", use_container_width=True):
                     from services.telegram_service import enviar_telegram
-                    p_tg = {"title": "Prueba Ninja 🐺", "price": 0, "url": "https://howlify.app"}
-                    if enviar_telegram(_tg_val, p_tg, "Test"):
+                    mensaje_test = "🐺 *Prueba Ninja:* El Lobo está activo y listo para aullar."
+                    if enviar_telegram(_tg_val, mensaje_test):
                         st.toast("¡Aullido enviado!", icon="✅")
 
     # --- COLUMNA 2: WHATSAPP O EMAIL ---
@@ -2138,7 +2135,6 @@ with st.expander("📲 Configuración de Alertas", expanded=not bool(_wa_val or 
                 key="wa_number_v2",
             )
 
-            # CAMBIO AQUÍ: use_container_width=True
             if st.button("💾 Guardar WhatsApp", key="btn_save_wa_v2", use_container_width=True):
                 from db.database import normalize_phone 
                 numero = normalize_phone(wa_input)
@@ -2151,7 +2147,6 @@ with st.expander("📲 Configuración de Alertas", expanded=not bool(_wa_val or 
                         st.rerun()
 
             if _wa_val:
-                # CAMBIO AQUÍ: use_container_width=True
                 if st.button("🧪 Probar WA", key="btn_test_wa_v2", use_container_width=True):
                     from services.whatsapp_service import enviar_whatsapp
                     p_wa = {"title": "Prueba Ninja 🐺", "price": 0, "url": "https://howlify.app"}
@@ -2162,7 +2157,48 @@ with st.expander("📲 Configuración de Alertas", expanded=not bool(_wa_val or 
             st.info(f"Alertas activas para: \n**{email}**")
             st.caption("Actualizá a Pro para desbloquear WhatsApp.")
 
+    # --- NUEVA SECCIÓN: REPORTE DIARIO PERSONALIZADO 📅 ---
+    st.divider()
+    st.markdown("#### 📅 Reporte Diario del Lobo")
+    st.caption("Recibí un informe de salud de todas tus cazas activas.")
 
+    # Recuperamos valores de la DB o seteamos defaults
+    rep_enabled = profile.get("report_enabled", True)
+    rep_time_str = profile.get("report_time", "09:00:00")
+    rep_days = profile.get("report_days", ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"])
+
+    c_rep1, c_rep2, c_rep3 = st.columns([1, 1, 2])
+
+    with c_rep1:
+        nuevo_enabled = st.toggle("Activar reporte", value=rep_enabled, key="sw_report_active")
+
+    with c_rep2:
+        from datetime import datetime
+        try:
+            # Manejamos formatos HH:MM:SS o HH:MM
+            t_obj = datetime.strptime(rep_time_str[:5], "%H:%M").time()
+        except:
+            import datetime as dt
+            t_obj = dt.time(9, 0)
+            
+        nueva_hora = st.time_input("Horario", value=t_obj, key="time_report_input")
+
+    with c_rep3:
+        nuevos_dias = st.multiselect(
+            "Días de envío",
+            options=["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"],
+            default=rep_days,
+            key="days_report_input"
+        )
+
+    if st.button("💾 Guardar Preferencias de Reporte", use_container_width=True):
+        from services.database_service import guardar_config_reporte
+        # Convertimos la hora a string ISO para la DB
+        hora_iso = nueva_hora.strftime("%H:%M:%S")
+        if guardar_config_reporte(user_id, nuevo_enabled, hora_iso, nuevos_dias):
+            st.success("¡Configuración guardada! El Lobo será puntual.")
+            st.rerun()
+            
 # ==========================================================
 # VISTA: EL MONITOR (Tus cacerías)
 # ==========================================================

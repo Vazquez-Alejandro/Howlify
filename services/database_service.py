@@ -274,29 +274,87 @@ def armar_texto_reporte(user_id, cazas, familia_plan, nombre_usuario=""):
 
 
 def ejecutar_reporte_diario_total():
-    print("🚀 Iniciando despacho de reportes diarios...")
+    """
+    Motor de reportes con tolerancia de segundos y validación de día/hora.
+    """
+    from datetime import datetime
+    import pytz # Recomendado para manejar el timezone de Argentina
+
+    # 1. Configuración de tiempo local (Argentina)
+    tz = pytz.timezone('America/Argentina/Buenos_Aires')
+    now = datetime.now(tz)
+    
+    dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    dia_actual = dias_semana[now.weekday()]
+    
+    # Formateamos la hora para que coincida con el tipo TIME de Postgres (HH:MM:00)
+    # Usamos :00 para ignorar los segundos del sistema y matchear la DB
+    hora_actual = now.strftime("%H:%M:00") 
+
+    print(f"🐺 [LOG] Ejecutando motor: {dia_actual} {now.strftime('%H:%M:%S')}")
+    print(f"🔎 [LOG] Buscando en DB: report_time = '{hora_actual}' y dia = '{dia_actual}'")
+
     try:
-        # CORRECCIÓN: 'username' en lugar de 'full_name'
-        usuarios = supabase.table("profiles").select("user_id, username, plan, telegram_id, whatsapp_number").execute().data
+        # 2. Query con filtros de preferencia del usuario
+        res_usuarios = (supabase.table("profiles")
+            .select("user_id, username, plan, telegram_id, report_days, report_time")
+            .eq("report_enabled", True)
+            .eq("report_time", hora_actual) # Match con la hora exacta (minuto)
+            .contains("report_days", [dia_actual])
+            .execute())
         
+        usuarios = res_usuarios.data or []
+        
+        if not usuarios:
+            print(f"☕ [LOG] No hay reportes programados para este minuto.")
+            return
+
+        print(f"🚀 [LOG] Despachando {len(usuarios)} reportes...")
+
         for u in usuarios:
             uid = u["user_id"]
             plan_label = u.get("plan") or "starter"
             
-            res_cazas = supabase.table("cazas").select("*").eq("user_id", uid).eq("estado", "activa").execute()
+            # 3. Obtener las cazas activas del usuario
+            res_cazas = supabase.table("cazas")\
+                .select("*")\
+                .eq("user_id", uid)\
+                .eq("estado", "activa")\
+                .execute()
+            
             cazas = res_cazas.data or []
             
             if not cazas:
+                print(f"ℹ️  [LOG] {u['username']} no tiene cazas activas. Saltando.")
                 continue 
 
+            # 4. Generar el mensaje adaptativo (Business vs Travel)
+            from utils.logic import normalize_plan_family
             familia = normalize_plan_family(plan_label)
-            # Usamos u.get("username") aquí
             mensaje = armar_texto_reporte(uid, cazas, familia, u.get("username"))
             
+            # 5. Envío final por Telegram
             if u.get("telegram_id"):
                 from services.telegram_service import enviar_telegram
-                enviar_telegram(u["telegram_id"], mensaje)
-                print(f"✅ Reporte enviado a {u.get('username')} (TG)")
+                if enviar_telegram(u["telegram_id"], mensaje):
+                    print(f"✅ [LOG] Reporte enviado con éxito a {u['username']}")
+                else:
+                    print(f"❌ [LOG] Error al enviar Telegram a {u['username']}")
                 
     except Exception as e:
-        print(f"❌ Error en el motor de reportes: {e}")
+        print(f"❌ [LOG] Error crítico en el motor de reportes: {e}")
+
+def guardar_config_reporte(user_id, enabled, hora, dias):
+    try:
+        print(f"DEBUG: Intentando guardar en DB -> ID: {user_id}, Hora: {hora}, Días: {dias}")
+        res = supabase.table("profiles").update({
+            "report_enabled": enabled,
+            "report_time": hora,
+            "report_days": dias
+        }).eq("user_id", user_id).execute()
+        
+        print(f"DEBUG: Respuesta Supabase: {res.data}")
+        return len(res.data) > 0
+    except Exception as e:
+        print(f"❌ Error al guardar config: {e}")
+        return False
