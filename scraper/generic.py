@@ -18,10 +18,12 @@ import os
 import re
 import time
 import unicodedata
+import requests
+from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional
 from urllib.parse import urljoin, urlparse
+from services.database_service import subir_evidencia_storage, registrar_infraccion
 
-import requests
 
 DEBUG = os.getenv("OH_SCRAPER_DEBUG", "0") == "1"
 HEADLESS = os.getenv("OH_HEADLESS", "1") != "0"
@@ -472,24 +474,34 @@ def _extract_price_from_container(container) -> Optional[int]:
     return None
 
 
-def _hunt_offers_playwright_dom(url: str, keyword: str, max_price: int, limit: int = 80) -> List[Dict[str, Any]]:
+def _hunt_offers_playwright_dom(
+    url: str, 
+    keyword: str, 
+    max_price: int, 
+    user_id: str,    # <-- Agregamos ID de usuario
+    caza_id: str,    # <-- Agregamos ID de la caza
+    limit: int = 80
+) -> List[Dict[str, Any]]:
     """
-    Fallback general para sitios que sí renderizan productos en DOM.
+    Fallback general con Captura de Pantalla de Infracciones y Registro de Reincidentes.
     """
     try:
-        from playwright.sync_api import sync_playwright  # type: ignore
+        from playwright.sync_api import sync_playwright
     except Exception:
-        _log("Playwright no disponible.")
+        print("Playwright no disponible.")
         return []
 
     base = "{u.scheme}://{u.netloc}".format(u=urlparse(url))
     out: List[Dict[str, Any]] = []
     selector = _join_product_selectors()
 
+    # Aseguramos carpeta temporal para las fotos en tu Linux Mint
+    os.makedirs("temp", exist_ok=True)
+
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=HEADLESS)
+        browser = p.chromium.launch(headless=True) # HEADLESS para que no moleste
         context = browser.new_context(
-            user_agent=DEFAULT_HEADERS["user-agent"],
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             viewport={"width": 1365, "height": 900},
             locale="es-AR",
         )
@@ -501,128 +513,121 @@ def _hunt_offers_playwright_dom(url: str, keyword: str, max_price: int, limit: i
             try:
                 page.wait_for_load_state("networkidle", timeout=15000)
             except Exception:
-                _log("networkidle timeout - continuing")
+                pass
             time.sleep(1.0)
 
+            # --- Lógica de Scroll (la mantenemos igual) ---
             last_count = 0
             stable = 0
             for _ in range(12):
                 page.mouse.wheel(0, 2600)
                 time.sleep(1.0)
-
                 links = page.locator(selector)
                 cnt = links.count()
-                _log("scroll cards:", cnt)
-
-                if cnt <= last_count:
-                    stable += 1
-                else:
-                    stable = 0
-                    last_count = cnt
-
-                if stable >= 3:
-                    break
+                if cnt <= last_count: stable += 1
+                else: stable = 0; last_count = cnt
+                if stable >= 3: break
 
             links = page.locator(selector)
             total = min(links.count(), 160)
-            _log("total anchors:", links.count(), "-> scanning:", total)
-
             raw_out: List[Dict[str, Any]] = []
-            for i in range(total):
-                if len(raw_out) >= limit * 2:
-                    break
 
+            for i in range(total):
+                if len(raw_out) >= limit * 2: break
                 try:
                     a = links.nth(i)
                     href = a.get_attribute("href") or ""
-                    if not href or not _looks_product_link(href):
-                        continue
-
+                    if not href or not _looks_product_link(href): continue
                     full_url = urljoin(base, href)
 
-                    title = (a.get_attribute("title") or "").strip()
-                    if not title:
-                        try:
-                            title = (a.inner_text() or "").strip()
-                        except Exception:
-                            title = ""
-
+                    title = (a.get_attribute("title") or a.inner_text() or "").strip()
                     title = _clean_title(title)
-                    if not title:
+                    if not title or (keyword and not _kw_match(title, keyword)):
                         continue
 
-                    if keyword and not _kw_match(title, keyword):
-                        continue
-
+                    # Extracción de Precio
                     price = None
+                    container = None
                     try:
                         container = a.locator("xpath=ancestor::*[self::article or self::div][1]")
                         price = _extract_price_from_container(container)
                     except Exception:
                         price = None
 
-                    if price is None:
-                        continue
-                    if max_price > 0 and price > max_price:
+                    if price is None: continue
+                    
+                    # --- 🐺 LÓGICA DE INFRACCIÓN Y EVIDENCIA ---
+                    # Si el precio es MENOR al permitido (Infracción MAP)
+                    if max_price > 0 and price < max_price:
+                        print(f"🚨 [MAP VIOLADO] {title}: ${price} < ${max_price}")
+                        
+                        # 1. Sacamos captura SOLO del contenedor del producto
+                        nombre_foto = f"evidencia_{caza_id}_{int(datetime.now().timestamp())}.jpg"
+                        path_local = os.path.join("temp", nombre_foto)
+                        
+                        try:
+                            container.scroll_into_view_if_needed()
+                            container.screenshot(path=path_local, type="jpeg", quality=60)
+                            
+                            # 2. Subimos a Supabase Storage
+                            url_evidencia = subir_evidencia_storage(path_local, nombre_foto)
+                            
+                            # 3. Registramos en el historial de reincidentes
+                            if url_evidencia:
+                                registrar_infraccion(user_id, caza_id, price, max_price, url_evidencia)
+                                print(f"✅ Evidencia guardada y registrada: {url_evidencia}")
+                        except Exception as e_snap:
+                            print(f"⚠️ Error al capturar foto: {e_snap}")
+
+                    # Filtro de seguridad para el output del scraper
+                    if max_price > 0 and price > max_price * 10: # Evitar falsos positivos gigantes
                         continue
 
-                    raw_out.append(
-                        {
-                            "title": title,
-                            "price": price,
-                            "url": full_url,
-                            "source": "generic_dom",
-                        }
-                    )
+                    raw_out.append({
+                        "title": title, "price": price, "url": full_url, "source": "generic_dom"
+                    })
                 except Exception:
                     continue
 
             out = _dedupe_results(raw_out)[:limit]
         finally:
-            try:
-                context.close()
-            except Exception:
-                pass
-            try:
-                browser.close()
-            except Exception:
-                pass
+            context.close()
+            browser.close()
 
-    _log("dom returned:", len(out))
     return out
-
 
 # ----------------------------
 # Public entrypoint
 # ----------------------------
 
-def hunt_offers_generic(url: str, keyword: str = "", max_price: Any = 0, depth: int = 1) -> List[Dict[str, Any]]:
+def hunt_offers_generic(
+    url: str, 
+    keyword: str = "", 
+    max_price: Any = 0, 
+    depth: int = 1,
+    user_id: str = None,  # Argumento nuevo
+    caza_id: str = None   # Argumento nuevo
+) -> List[Dict[str, Any]]:
     """
-    Un único entrypoint para Howlify.
-    Decide estrategia según dominio/plataforma.
+    Entrypoint principal ajustado para pasar IDs de auditoría.
     """
     max_price_i = _ensure_int(max_price, 0)
-
-    _log("URL:", url)
-    _log("keyword:", repr(keyword), "max_price:", max_price_i)
-
     results: List[Dict[str, Any]] = []
 
+    # Estrategia VTEX (omitida por brevedad, mantenela igual si la usás)
     if is_vtex_site(url):
-        _log("strategy: vtex_api_category")
         results = _vtex_api_search(url, keyword, max_price_i, limit=80)
-        _log("vtex_api_category results:", len(results))
 
-        if not results:
-            _log("vtex category failed -> fallback keyword search")
-            results = _vtex_api_search_by_keyword(url, keyword, max_price_i, limit=80)
-            _log("vtex_api_ft results:", len(results))
-
+    # Estrategia Playwright con Auditoría Visual
     if not results:
-        _log("strategy: playwright_dom")
-        results = _hunt_offers_playwright_dom(url, keyword, max_price_i, limit=80)
-        _log("playwright_dom results:", len(results))
+        results = _hunt_offers_playwright_dom(
+            url, 
+            keyword, 
+            max_price_i, 
+            user_id=user_id, 
+            caza_id=caza_id, 
+            limit=80
+        )
 
     results = _filter_results(results, keyword, max_price_i)
-    _log("final results:", len(results))
     return results[:80]

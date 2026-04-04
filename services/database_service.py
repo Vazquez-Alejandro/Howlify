@@ -358,3 +358,46 @@ def guardar_config_reporte(user_id, enabled, hora, dias):
     except Exception as e:
         print(f"❌ Error al guardar config: {e}")
         return False
+    
+def registrar_infraccion(user_id, caza_id, precio_detectado, precio_minimo, url_foto=None):
+    """
+    Guarda la infracción en el historial para detectar reincidentes.
+    """
+    try:
+        data = {
+            "user_id": user_id,
+            "caza_id": caza_id,
+            "precio_detectado": precio_detectado,
+            "precio_minimo_regla": precio_minimo,
+            "url_captura": url_foto
+        }
+        res = supabase.table("infracciones_log").insert(data).execute()
+        
+        if res.data:
+            print(f"📉 [LOG] Infracción registrada para la caza {caza_id}")
+            return True
+    except Exception as e:
+        print(f"❌ Error al registrar reincidente: {e}")
+        return False
+    
+def subir_evidencia_storage(file_path, file_name):
+    """
+    Sube la captura de pantalla al Storage de Supabase y devuelve la URL pública.
+    """
+    try:
+        with open(file_path, 'rb') as f:
+            # Subimos el archivo al bucket 'evidencia-lobos'
+            storage_res = supabase.storage.from_("evidencia-lobos").upload(
+                path=file_name,
+                file=f,
+                file_options={"content-type": "image/jpeg"}
+            )
+            
+            # Obtenemos la URL pública para el reporte
+            url = supabase.storage.from_("evidencia-lobos").get_public_url(file_name)
+            return url
+    except Exception as e:
+        print(f"❌ Error subiendo evidencia: {e}")
+        return None
+    
+    
