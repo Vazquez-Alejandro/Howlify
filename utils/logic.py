@@ -149,3 +149,59 @@ def _safe_float(val, default=0.0):
     except (ValueError, TypeError):
         print(f"⚠️ _safe_float: No pude convertir '{val}'")
         return default
+    
+def clean_ml_url(url: str) -> str:
+    """
+    Limpia las URLs de Mercado Libre eliminando parámetros de tracking 
+    (?...) y anclas (#...) que rompen la redirección y el scraping.
+    """
+    if not url or not isinstance(url, str):
+        return url
+    # Cortamos primero por el ancla y luego por los parámetros de búsqueda
+    return url.split('#')[0].split('?')[0].strip()
+
+# ==========================================================
+# 5. PERSISTENCIA Y REGLAS (Pegá esto al final de logic.py)
+# ==========================================================
+
+def guardar_caza_supabase(user_id, producto, url, precio_max, frecuencia, tipo_alerta, plan, source):
+    """Inserta una nueva cacería en la tabla principal de Supabase."""
+    from auth.supabase_client import supabase # Import local para evitar líos
+    try:
+        data = {
+            "user_id": user_id,
+            "producto": producto,
+            "link": url,
+            "precio_max": precio_max,
+            "frecuencia": frecuencia,
+            "plan": plan,
+            "tipo_alerta": tipo_alerta,
+            "source": source,
+            "estado": "activa"
+        }
+        res = supabase.table("cazas").insert(data).execute()
+        return True if res.data else False
+    except Exception as e:
+        print(f"❌ Error en guardar_caza_supabase: {e}")
+        return False
+
+def upsert_monitor_rule(user_id, caza_id, product_name, product_url, source, target_price, min_price_allowed, max_price_allowed):
+    """Guarda o actualiza las reglas específicas para el Dashboard Business."""
+    from auth.supabase_client import supabase
+    try:
+        data = {
+            "user_id": user_id,
+            "caza_id": caza_id,
+            "product_name": product_name,
+            "product_url": product_url,
+            "source": source,
+            "target_price": target_price,
+            "min_price_allowed": min_price_allowed,
+            "max_price_allowed": max_price_allowed
+        }
+        # Intentamos actualizar si ya existe para ese caza_id, sino insertamos
+        res = supabase.table("monitor_rules").upsert(data, on_conflict="caza_id").execute()
+        return True if res.data else False
+    except Exception as e:
+        print(f"❌ Error en upsert_monitor_rule: {e}")
+        return False

@@ -36,13 +36,26 @@ print("🚀 APP REINICIADA - IMPORTANDO MÓDULOS...")
 
 from auth.supabase_client import supabase # Importante que esté después de load_dotenv()
 from auth.auth_supabase import supa_signup, supa_login, supa_reset_password
-from db.database import obtener_cazas, save_user_telegram, get_user_profile
 from scraper.scraper_pro import hunt_offers
 from config import PLAN_LIMITS
 from services.business_service import obtener_top_oportunidades
 from services.whatsapp_service import enviar_whatsapp
 from services.telegram_service import enviar_telegram
 from utils.affiliate import get_affiliate_url
+# 1. Las funciones de Base de Datos se quedan en db.database
+from db.database import (
+    obtener_cazas, 
+    save_user_telegram, 
+    get_user_profile
+)
+
+# 2. Las funciones de Lógica se quedan en utils.logic
+from utils.logic import (
+    guardar_caza_supabase, 
+    normalize_plan_family,
+    clean_ml_url, 
+    upsert_monitor_rule 
+)
 
 # ==========================================================
 # ⚙️ 3. CONSTANTES Y RUTAS
@@ -2220,61 +2233,69 @@ st.write("") # Un espaciador sutil para que no quede pegado arriba
 # ==========================================================
 
 total_ocupado = cazas_activas
-
 if total_ocupado < limite_plan:
-    with st.expander("➕ Configurar nueva cacería"):
+    with st.expander("➕ Configurar nueva cacería", expanded=True):
         n_url = st.text_input("URL")
         n_key = st.text_input("Palabra clave")
 
-        tipo_alerta_ui = st.radio("Estrategia:", ["Precio Piso", "Descuento %"], horizontal=True)
+        familia = normalize_plan_family(plan_real_raw)
 
-        if tipo_alerta_ui == "Precio Piso":
-            n_price = st.number_input(
-                "Precio Máximo ($)",
-                min_value=0,
-                value=500000,
-                step=1000,
-                key="price_piso",
-            )
-            # --- EL TOQUE DE UX ---
-            st.caption(f"🎯 Alertar si el precio baja de: **{_fmt_money(n_price)}**")
-            # ----------------------
-            tipo_db = "piso"
+        # --- LÓGICA ADAPTATIVA DE FORMULARIO ---
+        if familia == "business_monitor":
+            st.markdown("##### 🛡️ Configuración de Monitoreo MAP (Modo Business)")
+            c_min, c_max = st.columns(2)
+            with c_min:
+                n_min = st.number_input("MAP (Mínimo permitido)", value=0, step=1000, key="monitor_min_input_v2")
+            with c_max:
+                n_max = st.number_input("Techo (Máximo permitido)", value=0, step=1000, key="monitor_max_input_v2")
             
+            st.markdown("##### 🔔 Notificar por:")
+            col_notif = st.columns(3)
+            with col_notif[0]:
+                alerta_tg = st.checkbox("Telegram", value=True, key="chk_tg_new")
+            with col_notif[1]:
+                alerta_wa = st.checkbox("WhatsApp", value=False, key="chk_wa_new")
+            with col_notif[2]:
+                alerta_em = st.checkbox("Email", value=True, key="chk_em_new")
+
+            # Definimos variables para la DB
+            tipo_db = "piso" # Para que el scraper no busque descuentos
+            n_price = n_min 
+            
+            canales_list = [c for c, v in zip(["telegram", "whatsapp", "email"], [alerta_tg, alerta_wa, alerta_em]) if v]
+            st.info(f"📢 Alertas activas vía: **{', '.join(canales_list).upper() if canales_list else 'EMAIL'}**")
+        
         else:
-            n_price = st.slider("Porcentaje deseado (%)", 5, 90, 35, key="price_desc")
-            tipo_db = "descuento"
+            # Formulario Estándar para Starter/Pro
+            tipo_alerta_ui = st.radio("Estrategia:", ["Precio Piso", "Descuento %"], horizontal=True)
+
+            if tipo_alerta_ui == "Precio Piso":
+                n_price = st.number_input("Precio Máximo ($)", min_value=0, value=500000, step=1000, key="price_piso_input")
+                st.caption(f"🎯 Alertar si el precio baja de: **{_fmt_money(n_price)}**")
+                tipo_db = "piso"
+            else:
+                n_price = st.slider("Porcentaje deseado (%)", 5, 90, 35, key="price_desc_input")
+                tipo_db = "descuento"
 
         n_freq = st.selectbox("Frecuencia", rules["freq_options"])
 
-        if DEBUG:
-            st.caption(f"DEBUG UI | tipo_db={tipo_db} | n_price={n_price} | type={type(n_price)}")
-
         if st.button("Lanzar", use_container_width=True):
-            if not n_url.strip():
-                st.error("Ingresá una URL.")
+            if not n_url.strip() or not n_key.strip():
+                st.error("Completá URL y Palabra clave.")
                 st.stop()
 
-            if not n_key.strip():
-                st.error("Ingresá una palabra clave.")
-                st.stop()
-
-            precio_max = parse_price_to_int(n_price)
-
-            if tipo_db == "piso" and precio_max <= 0:
-                st.error("El precio máximo debe ser mayor a 0.")
-                st.stop()
-
+            # 1. PRE-CÁLCULOS
+            precio_max_int = parse_price_to_int(n_price)
             src = infer_source_from_url(n_url)
-            if src == "unknown":
-                src = DEFAULT_SOURCE
-
-            # 1. Guardamos en la base de datos
+            if src == "unknown": src = DEFAULT_SOURCE
+            
+            # 2. GUARDADO DE LA CAZA (Base de datos)
+            # Primero aseguramos que la cacería exista en Supabase
             resultado = guardar_caza_supabase(
                 user_id=user_id,
                 producto=n_key,
                 url=n_url,
-                precio_max=precio_max,
+                precio_max=precio_max_int,
                 frecuencia=n_freq,
                 tipo_alerta=tipo_db,
                 plan=plan,
@@ -2282,21 +2303,53 @@ if total_ocupado < limite_plan:
             )
 
             if resultado is True:
-                # 2. Avisamos que se guardó bien
-                st.success("✅ Caza guardada correctamente.")
-                
-                # 3. Actualizamos la lista local para que aparezca abajo
+                # OBTENEMOS EL ID DE LA CAZA RECIÉN CREADA
+                time.sleep(1.2) # Delay de seguridad para consistencia en Supabase
+                try:
+                    res_caza = supabase.table("cazas").select("id").eq("user_id", user_id).order("created_at", desc=True).limit(1).execute()
+                    
+                    if res_caza.data:
+                        new_id = res_caza.data[0]["id"]
+                        
+                        # 3. GUARDADO DE REGLAS BUSINESS (Si corresponde)
+                        if familia == "business_monitor":
+                            upsert_monitor_rule(
+                                user_id=user_id,
+                                caza_id=new_id,
+                                product_name=n_key,
+                                product_url=n_url,
+                                source=src,
+                                target_price=int(n_min),
+                                min_price_allowed=int(n_min),
+                                max_price_allowed=int(n_max)
+                            )
+
+                        # 4. RASTREO INICIAL BLOQUEANTE (El secreto del $0)
+                        # Usamos st.status para "frenar" el rerun hasta que el scraper termine
+                        with st.status("🐺 El Lobo está oliendo la presa por primera vez...", expanded=True) as status:
+                            es_biz = (familia == "business_monitor")
+                            # Ejecutamos el motor. Si es Business, pasamos el MAP (n_min)
+                            p_target = n_min if es_biz else precio_max_int
+                            
+                            # RASTREO SIN HEADLESS PARA DEBUG (Cambiá a True después)
+                            res_ini = hunt_offers(n_url, n_key, p_target, es_pro=es_biz, headless=False)
+                            
+                            if res_ini:
+                                # GUARDADO EXPLÍCITO EN HISTORIAL
+                                save_price_history(user_id=user_id, caza_id=new_id, results=res_ini)
+                                status.update(label=f"✅ ¡Presa detectada! Precio: ${res_ini[0].get('price')}", state="complete", expanded=False)
+                                st.toast("Radar sincronizado 📈")
+                            else:
+                                status.update(label="⚠️ Caza creada, pero el Lobo no detectó el precio inicial.", state="error")
+
+                except Exception as e:
+                    st.error(f"⚠️ Error en post-procesamiento: {e}")
+
+                # 5. FINALIZACIÓN Y REFRESCO
+                st.success("✅ Cacería lanzada con éxito.")
                 st.session_state["busquedas"] = obtener_cazas(user_id, plan_real_raw) or []
-                
-                # 4. Limpiamos la pantalla (opcional) para que el formulario quede listo para otra carga
-                st.rerun() 
-                
-            elif resultado == "limite":
-                st.warning("⚠️ Alcanzaste el límite de tu plan.")
-            else:
-                st.error("❌ Error al guardar la caza.")
-else:
-    st.warning(f"Has alcanzado el límite de {limite_plan} búsquedas de tu plan {rules['label']}.")
+                time.sleep(1) # Tiempo para que el usuario lea el éxito
+                st.rerun()
 
 # ==========================================================
 # LISTADO / OLFATEAR (VERSIÓN DINÁMICA PRO - SIN GRISADO)
