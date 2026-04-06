@@ -2146,18 +2146,61 @@ st.divider()
 
 
 # ==========================================================
-# 📲 PANEL DE ALERTAS UNIFICADO (TELEGRAM + WA/EMAIL)
+# 📲 PANEL DE ALERTAS UNIFICADO (TELEGRAM + WA/EMAIL + REPORTE)
 # ==========================================================
 
 _wa_val = st.session_state.get("whatsapp_number", (profile.get("whatsapp_number") or "").strip())
 _tg_val = st.session_state.get("telegram_id", (profile.get("telegram_id") or "").strip())
 
 with st.expander("📲 Configuración de Alertas", expanded=not bool(_wa_val or _tg_val)):
-    st.caption("Configurá tus canales de recepción para que el Lobo te avise al instante.")
+    st.caption("Configurá tus canales y el horario de tu reporte diario Business.")
     
+    # 1. DEFINICIÓN DE VARIABLE PARA EVITAR EL NAMEERROR
+    familia = normalize_plan_family(plan_real_raw)
+
+    # 2. SECCIÓN: REPORTE DIARIO (Solo visible para Business o Admin)
+    if familia == "business" or es_admin: 
+        st.markdown("#### 📅 Programación de Reporte Diario")
+        st.caption("Elegí a qué hora el Lobo debe enviarte el resumen de todos tus monitoreos.")
+        
+        c_hora, c_dias = st.columns([1, 2])
+        with c_hora:
+            # Recuperamos la hora actual del perfil si existe, sino 09:00
+            val_hora = profile.get("report_time") or "09:00"
+            n_hora_reporte = st.time_input(
+                "Hora del envío", 
+                value=datetime.strptime(val_hora[:5], "%H:%M").time(), 
+                key="time_global_bus_final"
+            )
+        
+        with c_dias:
+            val_dias = profile.get("report_days") or ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
+            n_dias_reporte = st.multiselect(
+                "Días de activación",
+                ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"],
+                default=val_dias,
+                key="days_global_bus_final"
+            )
+            
+        if st.button("💾 Guardar Agenda de Reportes", use_container_width=True):
+            try:
+                hora_str = n_hora_reporte.strftime("%H:%M:%S")
+                supabase.table("profiles").update({
+                    "report_time": hora_str,
+                    "report_days": n_dias_reporte,
+                    "report_enabled": True
+                }).eq("user_id", user_id).execute()
+                st.success(f"✅ ¡Configuración guardada! Reporte programado a las {hora_str}.")
+                time.sleep(1)
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Error al conectar con la base de datos: {e}")
+        st.divider()
+
+    # --- CANALES DE COMUNICACIÓN ---
     col_tg, col_wa_em = st.columns(2)
 
-    # --- COLUMNA 1: TELEGRAM ---
+    # COLUMNA 1: TELEGRAM
     with col_tg:
         st.markdown("#### 📱 Telegram")
         nuevo_id_tg = st.text_input(
@@ -2169,7 +2212,6 @@ with st.expander("📲 Configuración de Alertas", expanded=not bool(_wa_val or 
         
         c_tg1, c_tg2 = st.columns(2)
         with c_tg1:
-            # CAMBIO AQUÍ: use_container_width=True
             if st.button("💾 Guardar ID", key="btn_save_tg_v2", use_container_width=True):
                 if save_user_telegram(user_id, nuevo_id_tg):
                     st.session_state["telegram_id"] = nuevo_id_tg
@@ -2177,14 +2219,12 @@ with st.expander("📲 Configuración de Alertas", expanded=not bool(_wa_val or 
                     st.rerun()
         with c_tg2:
             if _tg_val:
-                # CAMBIO AQUÍ: use_container_width=True
                 if st.button("🧪 Probar ID", key="btn_test_tg_v2", use_container_width=True):
-                    from services.telegram_service import enviar_telegram
                     p_tg = {"title": "Prueba Ninja 🐺", "price": 0, "url": "https://howlify.app"}
                     if enviar_telegram(_tg_val, p_tg, "Test"):
                         st.toast("¡Aullido enviado!", icon="✅")
 
-    # --- COLUMNA 2: WHATSAPP O EMAIL ---
+    # COLUMNA 2: WHATSAPP O EMAIL
     with col_wa_em:
         if rules["features"].get("whatsapp_alerts", False):
             st.markdown("#### 🟢 WhatsApp")
@@ -2195,9 +2235,7 @@ with st.expander("📲 Configuración de Alertas", expanded=not bool(_wa_val or 
                 key="wa_number_v2",
             )
 
-            # CAMBIO AQUÍ: use_container_width=True
             if st.button("💾 Guardar WhatsApp", key="btn_save_wa_v2", use_container_width=True):
-                from db.database import normalize_phone 
                 numero = normalize_phone(wa_input)
                 if not numero:
                     st.error("Ingresá un número válido.")
@@ -2208,9 +2246,7 @@ with st.expander("📲 Configuración de Alertas", expanded=not bool(_wa_val or 
                         st.rerun()
 
             if _wa_val:
-                # CAMBIO AQUÍ: use_container_width=True
                 if st.button("🧪 Probar WA", key="btn_test_wa_v2", use_container_width=True):
-                    from services.whatsapp_service import enviar_whatsapp
                     p_wa = {"title": "Prueba Ninja 🐺", "price": 0, "url": "https://howlify.app"}
                     if enviar_whatsapp(numero=_wa_val, oferta=p_wa, caza_nombre="Test"):
                         st.toast("¡WhatsApp enviado!", icon="✅")
@@ -2218,7 +2254,6 @@ with st.expander("📲 Configuración de Alertas", expanded=not bool(_wa_val or 
             st.markdown("#### 📧 Email")
             st.info(f"Alertas activas para: \n**{email}**")
             st.caption("Actualizá a Pro para desbloquear WhatsApp.")
-
 
 # ==========================================================
 # VISTA: EL MONITOR (Tus cacerías)
@@ -2241,15 +2276,15 @@ if total_ocupado < limite_plan:
         familia = normalize_plan_family(plan_real_raw)
 
         # --- LÓGICA ADAPTATIVA DE FORMULARIO ---
-        if familia == "business_monitor":
+        if familia == "business": # normalize_plan_family devuelve 'business'
             st.markdown("##### 🛡️ Configuración de Monitoreo MAP (Modo Business)")
             c_min, c_max = st.columns(2)
             with c_min:
-                n_min = st.number_input("MAP (Mínimo permitido)", value=0, step=1000, key="monitor_min_input_v2")
+                n_min = st.number_input("MAP (Mínimo permitido)", value=0, step=1000, key="monitor_min_input_v3")
             with c_max:
-                n_max = st.number_input("Techo (Máximo permitido)", value=0, step=1000, key="monitor_max_input_v2")
+                n_max = st.number_input("Techo (Máximo permitido)", value=0, step=1000, key="monitor_max_input_v3")
             
-            st.markdown("##### 🔔 Notificar por:")
+            st.markdown("##### 🔔 Notificar alertas inmediatas por:")
             col_notif = st.columns(3)
             with col_notif[0]:
                 alerta_tg = st.checkbox("Telegram", value=True, key="chk_tg_new")
@@ -2258,8 +2293,7 @@ if total_ocupado < limite_plan:
             with col_notif[2]:
                 alerta_em = st.checkbox("Email", value=True, key="chk_em_new")
 
-            # Definimos variables para la DB
-            tipo_db = "piso" # Para que el scraper no busque descuentos
+            tipo_db = "piso" 
             n_price = n_min 
             
             canales_list = [c for c, v in zip(["telegram", "whatsapp", "email"], [alerta_tg, alerta_wa, alerta_em]) if v]
@@ -2271,7 +2305,6 @@ if total_ocupado < limite_plan:
 
             if tipo_alerta_ui == "Precio Piso":
                 n_price = st.number_input("Precio Máximo ($)", min_value=0, value=500000, step=1000, key="price_piso_input")
-                st.caption(f"🎯 Alertar si el precio baja de: **{_fmt_money(n_price)}**")
                 tipo_db = "piso"
             else:
                 n_price = st.slider("Porcentaje deseado (%)", 5, 90, 35, key="price_desc_input")
@@ -2284,17 +2317,17 @@ if total_ocupado < limite_plan:
                 st.error("Completá URL y Palabra clave.")
                 st.stop()
 
-            # 1. PRE-CÁLCULOS
+            # 1. PRE-CÁLCULOS Y LIMPIEZA (Vital para que no mueran los links)
+            url_limpia = clean_ml_url(n_url)
             precio_max_int = parse_price_to_int(n_price)
-            src = infer_source_from_url(n_url)
+            src = infer_source_from_url(url_limpia)
             if src == "unknown": src = DEFAULT_SOURCE
             
-            # 2. GUARDADO DE LA CAZA (Base de datos)
-            # Primero aseguramos que la cacería exista en Supabase
+            # 2. GUARDADO DE LA CAZA
             resultado = guardar_caza_supabase(
                 user_id=user_id,
                 producto=n_key,
-                url=n_url,
+                url=url_limpia, 
                 precio_max=precio_max_int,
                 frecuencia=n_freq,
                 tipo_alerta=tipo_db,
@@ -2303,52 +2336,46 @@ if total_ocupado < limite_plan:
             )
 
             if resultado is True:
-                # OBTENEMOS EL ID DE LA CAZA RECIÉN CREADA
-                time.sleep(1.2) # Delay de seguridad para consistencia en Supabase
+                time.sleep(1.2) 
                 try:
                     res_caza = supabase.table("cazas").select("id").eq("user_id", user_id).order("created_at", desc=True).limit(1).execute()
                     
                     if res_caza.data:
                         new_id = res_caza.data[0]["id"]
                         
-                        # 3. GUARDADO DE REGLAS BUSINESS (Si corresponde)
-                        if familia == "business_monitor":
+                        # 3. GUARDADO DE REGLAS BUSINESS
+                        if familia == "business":
                             upsert_monitor_rule(
                                 user_id=user_id,
                                 caza_id=new_id,
                                 product_name=n_key,
-                                product_url=n_url,
+                                product_url=url_limpia,
                                 source=src,
                                 target_price=int(n_min),
                                 min_price_allowed=int(n_min),
                                 max_price_allowed=int(n_max)
                             )
 
-                        # 4. RASTREO INICIAL BLOQUEANTE (El secreto del $0)
-                        # Usamos st.status para "frenar" el rerun hasta que el scraper termine
-                        with st.status("🐺 El Lobo está oliendo la presa por primera vez...", expanded=True) as status:
-                            es_biz = (familia == "business_monitor")
-                            # Ejecutamos el motor. Si es Business, pasamos el MAP (n_min)
-                            p_target = n_min if es_biz else precio_max_int
+                        # 4. RASTREO INICIAL SINCRONIZADO
+                        with st.status("🐺 El Lobo está oliendo la presa...", expanded=True) as status:
+                            es_biz_pro = (familia == "business")
+                            p_target = n_min if es_biz_pro else precio_max_int
                             
-                            # RASTREO SIN HEADLESS PARA DEBUG (Cambiá a True después)
-                            res_ini = hunt_offers(n_url, n_key, p_target, es_pro=es_biz, headless=False)
+                            res_ini = hunt_offers(url_limpia, n_key, p_target, es_pro=es_biz_pro, headless=FORCE_HEADLESS)
                             
                             if res_ini:
-                                # GUARDADO EXPLÍCITO EN HISTORIAL
                                 save_price_history(user_id=user_id, caza_id=new_id, results=res_ini)
                                 status.update(label=f"✅ ¡Presa detectada! Precio: ${res_ini[0].get('price')}", state="complete", expanded=False)
                                 st.toast("Radar sincronizado 📈")
                             else:
-                                status.update(label="⚠️ Caza creada, pero el Lobo no detectó el precio inicial.", state="error")
+                                status.update(label="⚠️ Caza creada, rastro inicial fallido.", state="error")
 
                 except Exception as e:
-                    st.error(f"⚠️ Error en post-procesamiento: {e}")
+                    st.error(f"⚠️ Error post-proceso: {e}")
 
-                # 5. FINALIZACIÓN Y REFRESCO
                 st.success("✅ Cacería lanzada con éxito.")
                 st.session_state["busquedas"] = obtener_cazas(user_id, plan_real_raw) or []
-                time.sleep(1) # Tiempo para que el usuario lea el éxito
+                time.sleep(1) 
                 st.rerun()
 
 # ==========================================================

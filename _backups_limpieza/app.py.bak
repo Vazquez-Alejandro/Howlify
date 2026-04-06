@@ -819,12 +819,16 @@ else:
                                 from urllib.parse import urlparse
                                 host = urlparse(str(url2)).netloc.lower().strip()
 
+                                # --- BUSCÁ ESTE BLOQUE EN TU ARCHIVO ---
+
                                 if "mercadolibre" in host:
                                     from scraper.scraper_pro import hunt_offers as hunt_offers_ml
-                                    resultados = hunt_offers_ml(url2, kw2, precio2)
+                                    # Agregamos los IDs (user_id ya lo tenés en el scope de Streamlit)
+                                    resultados = hunt_offers_ml(url2, kw2, precio2, user_id=user_id, caza_id=b["id"])
                                 else:
                                     from scraper.generic import hunt_offers_generic
-                                    resultados = hunt_offers_generic(url2, kw2, precio2)
+                                    # Acá también pasamos los IDs para que funcione la captura y el log
+                                    resultados = hunt_offers_generic(url2, kw2, precio2, user_id=user_id, caza_id=b["id"])
 
                             except Exception as e:
                                 st.warning(f"Error al rastrear: {e}")
