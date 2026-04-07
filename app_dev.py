@@ -2321,10 +2321,42 @@ if total_ocupado < limite_plan:
                 tipo_db = "descuento"
             n_min, n_max = 0, 0 
 
-        # FRECUENCIA (Para todos)
+        # ==========================================================
+        # 🐺 SECCIÓN DE FRECUENCIA Y REPORTE DIARIO
+        # ==========================================================
         st.divider()
-        n_freq = st.selectbox("Frecuencia de revisión (Reporte)", rules["freq_options"], key="freq_sel_final")
+        
+        # 1. FRECUENCIA DE RASTREO (Para todos los planes)
+        n_freq = st.selectbox("Frecuencia de rastreo del Sabueso:", rules["freq_options"], key="freq_sel_final")
 
+        # 2. CONFIGURACIÓN DE REPORTE (Solo Business Monitor y Reseller)
+        # Usamos familia_raw que ya definimos arriba del bloque
+        if "business" in familia_raw.lower():
+            st.markdown("#### 📅 Configuración de Reporte de Salud")
+            st.caption("Recibí un resumen del estado de tus links y alertas en tu horario preferido.")
+            
+            c_dias, c_hora = st.columns([2, 1])
+            with c_dias:
+                dias_rep = st.multiselect(
+                    "Días de envío:",
+                    ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"],
+                    default=["Lunes", "Miércoles", "Viernes"],
+                    key="dias_rep_new_caza"
+                )
+            with c_hora:
+                hora_rep = st.selectbox(
+                    "Hora:",
+                    [f"{h:02d}:00" for h in range(24)],
+                    index=9, # 09:00 AM por defecto
+                    key="hora_rep_new_caza"
+                )
+        else:
+            # Para Starter/Pro seteamos valores vacíos para no romper la función de guardado
+            dias_rep, hora_rep = [], None
+
+        # ==========================================================
+        # BOTÓN LANZAR
+        # ==========================================================
         if st.button("Lanzar", width="stretch", key="btn_lanzar_caza_final"):
             if not n_url.strip() or not n_key.strip():
                 st.error("Completá URL y Palabra clave.")
@@ -2333,7 +2365,10 @@ if total_ocupado < limite_plan:
                 precio_max_int = parse_price_to_int(n_price)
                 src = infer_source_from_url(url_limpia) or DEFAULT_SOURCE
                 
+                # 🐺 NOTA: Aquí deberás actualizar guardar_caza_supabase 
+                # para que acepte dias_rep y hora_rep más adelante.
                 res = guardar_caza_supabase(user_id, n_key, url_limpia, precio_max_int, n_freq, tipo_db, plan, src)
+                
                 if res is True:
                     if es_solo_monitor:
                         res_caza = supabase.table("cazas").select("id").eq("user_id", user_id).order("created_at", desc=True).limit(1).execute()
@@ -2343,7 +2378,7 @@ if total_ocupado < limite_plan:
                     st.success("✅ Caza creada correctamente.")
                     time.sleep(1); st.rerun()
 
-st.divider() # Este mantiene la separación con el listado de abajo
+st.divider() # Mantiene la separación con el listado de abajo
 
 # ==========================================================
 # 2. BOTÓN MASIVO Y LISTADO (CENTRO DE CONTROL)
