@@ -75,6 +75,27 @@ FORCE_HEADLESS = True
 if DEBUG:
     st.sidebar.info("🔧 Modo Debug Activo")
 
+# ==========================================================
+# UTILIDADES: PROCESAMIENTO DE IMÁGENES (BASE64)
+# ==========================================================
+
+def get_image_base64(path):
+    """
+    Convierte una imagen local en una cadena Base64 para bypass de seguridad 
+    del navegador y visualización directa en Streamlit.
+    """
+    if not path:
+        return None
+        
+    if os.path.exists(path):
+        try:
+            with open(path, "rb") as f:
+                # Leemos el binario y lo encodeamos a texto
+                return base64.b64encode(f.read()).decode()
+        except Exception as e:
+            print(f"⚠️ Error al procesar imagen Base64: {e}")
+            return None
+    return None
 
 
 # --- DETECTOR DE RECOVERY CON ESTILO HOWLIFY ---
@@ -719,85 +740,133 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
     rules_res = supabase.table("monitor_rules").select("*").eq("user_id", user_id).execute()
     rules_data = rules_res.data or []
     
-    # Creamos un mapa unificado por ID (clave para que todo funcione)
     rules_map = {str(r.get("caza_id")): r for r in rules_data if r.get("caza_id")}
     rules_by_url = {str(r.get("product_url")): r for r in rules_data if r.get("product_url")}
 
     radar_rows = []
     for b in busquedas:
-        bid = str(b.get("id") or "")
+        # 1. Limpieza de ID y Filtro Anti-Crash (Evita el error de bigint)
+        bid = str(b.get("id") or "").strip()
+        if not bid or not bid.isdigit():
+            continue
+            
         p_url = b.get("link") or b.get("url") or ""
         
-        # Buscamos la regla por ID o por URL como respaldo
+        # 2. Mapeo de reglas
         rule = rules_map.get(bid) or rules_by_url.get(p_url) or {}
         
-        # Obtener precio actual
+        # 3. Consulta de precio (Segura con bid validado)
         res_p = supabase.table("price_history").select("price").eq("caza_id", bid).order("checked_at", desc=True).limit(1).execute()
         curr_p = float(res_p.data[0]["price"]) if res_p.data else 0.0
         
         m_p = float(rule.get("min_price_allowed") or 0.0)
         max_p = float(rule.get("max_price_allowed") or 0.0)
 
-        # SEMÁFORO
-
-        # Aseguramos que si no hay regla, no pinte verde por error
+        # 4. SEMÁFORO
         if curr_p <= 0: 
-            riesgo = "⚪" # Sin datos
-        elif m_p > 0 and curr_p < (m_p - 0.01): # Margen de centavos
-            riesgo = "🔴" # VIOLACIÓN
+            riesgo = "⚪"
+        elif m_p > 0 and curr_p < (m_p - 0.01):
+            riesgo = "🔴" 
         elif max_p > 0 and curr_p > (max_p + 0.01):
-            riesgo = "🟠" # SOBREPRECIO
+            riesgo = "🟠"
         elif m_p == 0 and max_p == 0:
-            riesgo = "⚪" # Sin reglas configuradas
+            riesgo = "⚪"
         else:
-            riesgo = "🟢" # CUMPLIMIENTO OK
+            riesgo = "🟢"
 
-        # PROGRESO (Evitamos división por cero)
+        # 5. PROGRESO
         progreso = 0.0
         if m_p > 0 and max_p > m_p:
             progreso = max(0.0, min(1.0, (curr_p - m_p) / (max_p - m_p)))
 
+        # 6. 📸 LÓGICA DE EVIDENCIA: Extraemos la ruta del objeto 'b'
+        foto_path = b.get("screenshot")
+        evidencia_val = "📸 Ver" if (riesgo == "🔴" and foto_path) else ""
+
+        # 7. ARMADO DE FILA (Con ID para la visualización)
         radar_rows.append({
             "Riesgo": riesgo,
             "ID": bid,
             "Producto": (b.get("producto") or b.get("keyword") or "SIN NOMBRE").upper(),
-            "URL": p_url,
             "Precio": curr_p,
             "Mín. MAP": m_p,
             "Máximo": max_p,
+            "Evidencia": evidencia_val,
             "Rango": progreso,
+            "URL": p_url,
             "raw_data": b,
             "full_id": bid
         })
 
     # ==========================================================
-    # 2. RENDER DE TABLA
+    # 2. RENDER DE TABLA Y VISUALIZADOR DE EVIDENCIA
     # ==========================================================
     df_radar = pd.DataFrame(radar_rows)
     
     if not df_radar.empty:
+        # Ordenamos por severidad del riesgo
         orden_prioridad = {"🔴": 0, "🟠": 1, "🟡": 2, "🟢": 3, "⚪": 4}
         df_radar["orden"] = df_radar["Riesgo"].map(orden_prioridad)
         df_radar = df_radar.sort_values("orden")
 
+        # Limpiamos columnas de proceso para la vista de tabla
         df_display = df_radar.drop(columns=["raw_data", "full_id", "orden"], errors='ignore')
 
-        # TABLA FINAL BLINDADA (Compatibilidad asegurada)
+        # RENDER DE LA TABLA
         st.data_editor(
             df_display,
             use_container_width=True,
             hide_index=True,
-            key="radar_table_clean",
-            disabled=["Riesgo", "ID", "Producto", "URL", "Precio", "Rango"], 
+            key="radar_table_business_vFinal",
+            disabled=True,
             column_config={
-                "URL": st.column_config.LinkColumn("Enlace"),
-                "Precio": st.column_config.NumberColumn(format="$%d"),
-                "Mín. MAP": st.column_config.NumberColumn(format="$%d"),
-                "Máximo": st.column_config.NumberColumn(format="$%d"),
+                "Riesgo": st.column_config.TextColumn("Riesgo", width="small"),
+                "Producto": st.column_config.TextColumn("Producto", width="medium"),
+                "Precio": st.column_config.NumberColumn("Precio", format="$%d"),
+                "Mín. MAP": st.column_config.NumberColumn("Mín. MAP", format="$%d"),
+                "Máximo": st.column_config.NumberColumn("Máximo", format="$%d"),
+                "Evidencia": st.column_config.TextColumn("Evidencia", width="small"),
                 "Rango": st.column_config.ProgressColumn("Posición", min_value=0, max_value=1),
+                "URL": st.column_config.LinkColumn("Enlace", width="small"),
+                "ID": st.column_config.TextColumn("ID", width="small"),
             },
-            column_order=("Riesgo", "ID", "Producto", "URL", "Precio", "Mín. MAP", "Máximo", "Rango")
+            column_order=("Riesgo", "ID", "Producto", "Precio", "Mín. MAP", "Máximo", "Evidencia", "Rango", "URL")
         )
+
+        st.divider() # Una línea sutil para separar la tabla de la foto
+
+        # --- BLOQUE DE VISUALIZACIÓN DE FOTO (Base64) ---
+        # Filtramos solo los productos que tienen el emoji de cámara
+        con_evidencia = df_radar[df_radar["Evidencia"] != ""]["Producto"].unique()
+        
+        if len(con_evidencia) > 0:
+            st.markdown("#### 🕵️ Inspección de Evidencia")
+            seleccion = st.selectbox(
+                "Seleccioná un producto para ver la captura de pantalla:", 
+                con_evidencia,
+                index=None,
+                placeholder="Elegí una infracción 🔴 para ver la prueba..."
+            )
+            
+            if seleccion:
+                # Extraemos la fila original para obtener la ruta
+                fila_orig = df_radar[df_radar["Producto"] == seleccion].iloc[0]
+                ruta_foto = fila_orig["raw_data"].get("screenshot")
+                
+                if ruta_foto:
+                    img_b64 = get_image_base64(ruta_foto) # Usamos tu nueva utilidad
+                    if img_b64:
+                        st.image(
+                            f"data:image/png;base64,{img_b64}", 
+                            caption=f"Evidencia de Infracción: {seleccion}",
+                            use_container_width=True # Se adapta al ancho de tu ThinkPad
+                        )
+                    else:
+                        st.warning(f"⚠️ El archivo existe en DB pero no se encontró en el disco: {ruta_foto}")
+                else:
+                    st.info("No hay captura vinculada a este registro.")
+        else:
+            st.info("✅ No se detectaron infracciones con evidencia fotográfica por el momento.")
 
         # ==========================================================
         # 3. SELECCIÓN & ANÁLISIS DINÁMICO
@@ -2328,7 +2397,7 @@ if total_ocupado < limite_plan:
                 st.error("Completá URL y Palabra clave.")
                 st.stop()
 
-            # 1. PRE-CÁLCULOS Y LIMPIEZA (Vital para que no mueran los links)
+            # 1. PRE-CÁLCULOS Y LIMPIEZA
             url_limpia = clean_ml_url(n_url)
             precio_max_int = parse_price_to_int(n_price)
             src = infer_source_from_url(url_limpia)
@@ -2368,20 +2437,13 @@ if total_ocupado < limite_plan:
                             )
 
                         # 4. RASTREO INICIAL SINCRONIZADO
-
                         with st.status("🐺 El Lobo está oliendo la presa...", expanded=True) as status:
-                            # 1. RECUPERAMOS EL PLAN DE LA SIMULACIÓN DIRECTO DEL SIDEBAR
-                            # Si por alguna razón plan_vista no existe, usamos el valor del radio button
                             plan_para_el_lobo = st.session_state.get('admin_plan_sim', plan_vista).lower().replace(" ", "_")
-                            
-                            print(f"DEBUG INTERNO: Enviando plan '{plan_para_el_lobo}' al scraper.") # Esto lo ves en tu terminal
-
                             es_biz_pro = plan_para_el_lobo in ["pro", "business_reseller", "business_monitor"]
                             
-                            # 2. TARGET DE PRECIO
                             p_target = n_min if familia == "business" else precio_max_int
                             
-                            # 3. LLAMADA AL MOTOR (Usamos la variable blindada)
+                            # LLAMADA AL MOTOR
                             res_ini = hunt_offers(
                                 url_limpia, 
                                 n_key, 
@@ -2392,7 +2454,18 @@ if total_ocupado < limite_plan:
                             )
                             
                             if res_ini:
+                                # A. Guardamos historial de precios
                                 save_price_history(user_id=user_id, caza_id=new_id, results=res_ini)
+                                
+                                # B. 🔥 PERSISTENCIA DE EVIDENCIA: Vinculamos la captura a la cacería
+                                foto_path = res_ini[0].get("screenshot")
+                                if foto_path:
+                                    try:
+                                        supabase.table("cazas").update({"screenshot": foto_path}).eq("id", new_id).execute()
+                                        print(f"✅ Evidencia vinculada al ID {new_id}: {foto_path}")
+                                    except Exception as e_db:
+                                        print(f"⚠️ Error vinculando foto en DB: {e_db}")
+
                                 status.update(label=f"✅ ¡Presa detectada! Precio: ${res_ini[0].get('price')}", state="complete", expanded=False)
                                 st.toast("Radar sincronizado 📈")
                             else:
@@ -2402,10 +2475,13 @@ if total_ocupado < limite_plan:
                     st.error(f"⚠️ Error post-proceso: {e}")
 
                 st.success("✅ Cacería lanzada con éxito.")
+                
+                # 🔄 RECARGA CRÍTICA: Traemos los datos frescos (ya con el screenshot guardado)
+                print("🔄 Recargando búsquedas en session_state...")
                 st.session_state["busquedas"] = obtener_cazas(user_id, plan_real_raw) or []
+                
                 time.sleep(1) 
                 st.rerun()
-
 # ==========================================================
 # LISTADO / OLFATEAR (VERSIÓN DINÁMICA PRO - SIN GRISADO)
 # ==========================================================
