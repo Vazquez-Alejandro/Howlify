@@ -739,12 +739,20 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         max_p = float(rule.get("max_price_allowed") or 0.0)
 
         # SEMÁFORO
-        if curr_p <= 0: riesgo = "⚪"
-        elif m_p > 0 and curr_p < m_p: riesgo = "🔴"
-        elif max_p > 0 and curr_p > max_p: riesgo = "🟠"
-        else: riesgo = "🟢"
 
-        # PROGRESO
+        # Aseguramos que si no hay regla, no pinte verde por error
+        if curr_p <= 0: 
+            riesgo = "⚪" # Sin datos
+        elif m_p > 0 and curr_p < (m_p - 0.01): # Margen de centavos
+            riesgo = "🔴" # VIOLACIÓN
+        elif max_p > 0 and curr_p > (max_p + 0.01):
+            riesgo = "🟠" # SOBREPRECIO
+        elif m_p == 0 and max_p == 0:
+            riesgo = "⚪" # Sin reglas configuradas
+        else:
+            riesgo = "🟢" # CUMPLIMIENTO OK
+
+        # PROGRESO (Evitamos división por cero)
         progreso = 0.0
         if m_p > 0 and max_p > m_p:
             progreso = max(0.0, min(1.0, (curr_p - m_p) / (max_p - m_p)))
@@ -1136,11 +1144,14 @@ def run_manual_hunt(b, headless=True):
     kw = b.get("keyword") or b.get("producto") or ""
     precio = b.get("precio_max") or 0
     
-    plan_str = b.get('plan', 'starter').lower()
-    es_pro_real = (plan_str in ["pro", "business"])
+    # 🔥 CAMBIO CLAVE: Usamos 'plan_vista' (el del radio button) en vez del plan de la DB
+    plan_str = plan_vista.lower() 
+    
+    # Definimos si es pro/business basándonos en la vista actual
+    es_pro_simulado = (plan_str in ["pro", "business_monitor", "business_reseller"])
 
-    # Pasamos el headless a hunt_offers
-    return hunt_offers(url, kw, precio, es_pro=es_pro_real, headless=headless)
+    # Pasamos el plan y el flag a hunt_offers para que el scraper sepa que debe sacar fotos
+    return hunt_offers(url, kw, precio, es_pro=es_pro_simulado, plan=plan_str, headless=headless)
   
 
 def es_plan_business(plan: str) -> bool:
@@ -2357,11 +2368,28 @@ if total_ocupado < limite_plan:
                             )
 
                         # 4. RASTREO INICIAL SINCRONIZADO
+
                         with st.status("🐺 El Lobo está oliendo la presa...", expanded=True) as status:
-                            es_biz_pro = (familia == "business")
-                            p_target = n_min if es_biz_pro else precio_max_int
+                            # 1. RECUPERAMOS EL PLAN DE LA SIMULACIÓN DIRECTO DEL SIDEBAR
+                            # Si por alguna razón plan_vista no existe, usamos el valor del radio button
+                            plan_para_el_lobo = st.session_state.get('admin_plan_sim', plan_vista).lower().replace(" ", "_")
                             
-                            res_ini = hunt_offers(url_limpia, n_key, p_target, es_pro=es_biz_pro, headless=FORCE_HEADLESS)
+                            print(f"DEBUG INTERNO: Enviando plan '{plan_para_el_lobo}' al scraper.") # Esto lo ves en tu terminal
+
+                            es_biz_pro = plan_para_el_lobo in ["pro", "business_reseller", "business_monitor"]
+                            
+                            # 2. TARGET DE PRECIO
+                            p_target = n_min if familia == "business" else precio_max_int
+                            
+                            # 3. LLAMADA AL MOTOR (Usamos la variable blindada)
+                            res_ini = hunt_offers(
+                                url_limpia, 
+                                n_key, 
+                                p_target, 
+                                es_pro=es_biz_pro, 
+                                plan=plan_para_el_lobo, 
+                                headless=FORCE_HEADLESS
+                            )
                             
                             if res_ini:
                                 save_price_history(user_id=user_id, caza_id=new_id, results=res_ini)
