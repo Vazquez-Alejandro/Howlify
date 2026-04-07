@@ -739,12 +739,20 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         max_p = float(rule.get("max_price_allowed") or 0.0)
 
         # SEMÁFORO
-        if curr_p <= 0: riesgo = "⚪"
-        elif m_p > 0 and curr_p < m_p: riesgo = "🔴"
-        elif max_p > 0 and curr_p > max_p: riesgo = "🟠"
-        else: riesgo = "🟢"
 
-        # PROGRESO
+        # Aseguramos que si no hay regla, no pinte verde por error
+        if curr_p <= 0: 
+            riesgo = "⚪" # Sin datos
+        elif m_p > 0 and curr_p < (m_p - 0.01): # Margen de centavos
+            riesgo = "🔴" # VIOLACIÓN
+        elif max_p > 0 and curr_p > (max_p + 0.01):
+            riesgo = "🟠" # SOBREPRECIO
+        elif m_p == 0 and max_p == 0:
+            riesgo = "⚪" # Sin reglas configuradas
+        else:
+            riesgo = "🟢" # CUMPLIMIENTO OK
+
+        # PROGRESO (Evitamos división por cero)
         progreso = 0.0
         if m_p > 0 and max_p > m_p:
             progreso = max(0.0, min(1.0, (curr_p - m_p) / (max_p - m_p)))

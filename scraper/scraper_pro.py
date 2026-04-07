@@ -6,6 +6,8 @@ import re
 import time
 from pathlib import Path
 from urllib.parse import urlparse
+from datetime import datetime 
+from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
@@ -22,6 +24,8 @@ ML_FORCE_HEADFUL = os.getenv("OH_ML_HEADLESS", "") == "0"
 BASE_DIR = Path(__file__).resolve().parents[1]  # .../howlify
 PROFILE_PATH = BASE_DIR / "sessions" / "ml_profile"
 DEBUG_SHOT_PATH = BASE_DIR / "sessions" / "ml_debug.png"
+EVIDENCE_PATH = Path("evidence")
+EVIDENCE_PATH.mkdir(parents=True, exist_ok=True)
 
 # -------------------------------------------------
 # Helpers
@@ -130,131 +134,106 @@ def _keyword_match(title_l: str, keyword: str) -> bool:
 
     match_count = sum(1 for tok in tokens if tok in title_l)
     return match_count > 0
-
 # -------------------------------------------------
 # MercadoLibre scraper: Listados (Persistente) + Directo (Multi-Disfraz)
 # -------------------------------------------------
-# 🔥 Agregamos 'user_agent' al final para que el disfraz sea real
 def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headless: bool, plan: str = "starter", user_agent: str = None) -> list[dict]:
     if url_input and url_input.startswith("http") and not _is_mercadolibre(url_input):
         raise ValueError(f"[ML] URL no es MercadoLibre: {url_input}")
 
     max_price_i = int(max_price or 0)
     presas: list[dict] = []
+    
+    # 🔥 DEFINIMOS ES_PRO ACÁ PARA QUE TODO EL MUNDO LA CONOZCA
+    es_pro = plan.lower() in ["pro", "business", "business_monitor", "business_reseller"]
 
-    # =========================================================
-    # RUTA A: LINK DIRECTO (CON DISFRAZ DINÁMICO) - REFORZADA
+# =========================================================
+    # RUTA A: LINK DIRECTO (CON DISFRAZ DINÁMICO)
     # =========================================================
     es_producto_directo = bool(url_input and url_input.startswith("http") and "listado." not in url_input)
     
     if es_producto_directo:
-        ua_final = user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        print(f"🐺 [ML] Link directo. Plan: {plan.upper()} | Disfraz: {ua_final[:40]}...")
+        # 🎭 1. NUEVO DISFRAZ (Rotación de User Agent para evitar el 429)
+        ua_final = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+        print(f"🐺 [ML] Link directo detectado. Plan: {plan.upper()} | Usando nuevo UA...")
         
         with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=False, # Lo dejamos en False para que veas si ML te tira un Captcha
-                args=["--disable-blink-features=AutomationControlled", "--no-sandbox"]
-            )
-            
-            contextos = {}
-            contextos["Disfraz Lobo"] = browser.new_context(
-                user_agent=ua_final,
+            # LANZAMOS NAVEGADOR CON DISFRAZ
+            browser = p.chromium.launch(headless=headless, args=["--no-sandbox"])
+            context = browser.new_context(
+                user_agent=ua_final, 
                 viewport={"width": 1280, "height": 720}
             )
+            page = context.new_page()
             
-            resultados_temporales = []
-            
-            for nombre_disfraz, ctx in contextos.items():
-                ctx.add_init_script('''
-                    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-                ''')
-                page = ctx.new_page()
-                page.set_default_timeout(45000)
+            try:
+                # 🕒 2. PAUSA HUMANA (Evita que ML detecte peticiones automatizadas ráfaga)
+                import random
+                wait_time = random.uniform(2, 5)
+                print(f"⏳ El Lobo espera {wait_time:.2f}s para camuflarse...")
+                time.sleep(wait_time)
+
+                page.goto(url_input, wait_until="domcontentloaded", timeout=45000)
                 
-                try:
-                    page.goto(url_input, wait_until="domcontentloaded", timeout=45000)
-                    
-                    # 1. SELECTOR MULTICAPA (Inyectamos meta y data-testid)
-                    selector_precio = 'meta[itemprop="price"], .ui-pdp-price__second-line .andes-money-amount__fraction, .ui-pdp-price .andes-money-amount__fraction, [data-testid="price-part"] .andes-money-amount__fraction'
-                    
-                    try:
-                        page.wait_for_selector(selector_precio, timeout=12000)
-                    except:
-                        print("⚠️ El Lobo no detectó el selector de precio visual, intentando vía Meta...")
+                # CAPTURA DE PRECIO (Meta + DOM)
+                precio = None
+                meta_p = page.locator('meta[itemprop="price"]').get_attribute("content")
+                if meta_p:
+                    try: precio = int(float(meta_p))
+                    except: pass
 
-                    # 2. EXTRACCIÓN LÓGICA (Primero Meta, después DOM)
-                    precio = None
-                    
-                    # Intento A: Meta Tag (El más robusto para catálogo/UP)
-                    meta_p = page.locator('meta[itemprop="price"]').get_attribute("content")
-                    if meta_p:
-                        try:
-                            precio = int(float(meta_p))
-                            print(f"✅ Precio capturado vía Meta: ${precio}")
-                        except: pass
-
-                    # Intento B: Si el Meta falló, buscamos en el DOM visual
-                    if not precio:
-                        precio_loc = page.locator('.ui-pdp-price__second-line .andes-money-amount__fraction, .ui-pdp-price .andes-money-amount__fraction, [data-testid="price-part"] .andes-money-amount__fraction').first
-                        if precio_loc.count() > 0:
-                            raw = (precio_loc.inner_text() or "").replace(".", "").replace(",", "")
-                            if raw.isdigit():
-                                precio = int(raw)
-                                print(f"✅ Precio capturado vía DOM: ${precio}")
-                    
-                    if not precio:
-                        print("❌ El Lobo no pudo morder el precio. Posible bloqueo o cambio de diseño.")
-                        continue
-                        
-                    # 3. ESCUDO ANTI-CHANTAS
-                    alerta = None
-                    if plan in ["pro", "business"]:
-                        seller_info = page.locator(".ui-pdp-seller-profile__title, .ui-seller-info, .ui-pdp-seller-profile__subtitle").first
-                        if seller_info.count() > 0:
-                            seller_text = seller_info.inner_text().lower()
-                            if "demora en entregar" in seller_text or "no brinda buena" in seller_text:
-                                alerta = "🚩 RED FLAG: Vendedor con mala reputación."
-                            elif "mercadolíder" not in seller_text and "nuevo" in seller_text:
-                                alerta = "⚠️ CUIDADO: Vendedor nuevo sin historial."
-                            
+                if not precio:
+                    p_loc = page.locator('.ui-pdp-price__second-line .andes-money-amount__fraction, .ui-pdp-price .andes-money-amount__fraction').first
+                    if p_loc.count() > 0:
+                        raw = (p_loc.inner_text() or "").replace(".", "").replace(",", "")
+                        if raw.isdigit(): precio = int(raw)
+                
+                # 3. PROCESAMIENTO CON ÉXITO
+                if precio:
                     title_loc = page.locator(".ui-pdp-title").first
                     title = title_loc.inner_text() if title_loc.count() > 0 else "Producto ML"
+                    
+                    foto_path = None
+                    # 📸 SOLO SI ES BUSINESS/PRO GATILLAMOS LA CÁMARA
+                    if es_pro:
+                        try:
+                            os.makedirs("evidence", exist_ok=True)
+                            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            foto_path = f"evidence/directo_{ts}.png"
+                            
+                            page.evaluate("window.scrollTo(0, 0)")
+                            time.sleep(1) 
+                            page.screenshot(path=foto_path)
+                            print(f"✅ EVIDENCIA GUARDADA: {foto_path}")
+                        except Exception as e:
+                            print(f"⚠️ Error foto: {e}")
 
+                    # 4. ARMAMOS EL DICCIONARIO PARA LA TABLA
                     if max_price_i == 0 or precio <= max_price_i:
-                        resultados_temporales.append({
+                        presas.append({
                             "title": title[:120],
                             "price": precio,
                             "url": url_input,
                             "source": "mercadolibre",
-                            "alerta": alerta,
-                            "disfraz_usado": nombre_disfraz
+                            "screenshot": foto_path
                         })
-                        
-                except Exception as e:
-                    print(f"❌ Error en cacería: {e}")
-                finally:
-                    page.close()
-            
-            browser.close()
-            
-            if resultados_temporales:
-                mejor = sorted(resultados_temporales, key=lambda x: x["price"])[0]
-                print(f"🐺 🏆 Caza confirmada a ${mejor['price']}")
-                presas.append(mejor)
-                
-        return presas
+                else:
+                    # Si no hay precio, chequeamos si nos clavaron un 429 otra vez
+                    content = page.content()
+                    if "rate_limited" in content or "429" in content:
+                        print("🛡️ BLOQUEO DETECTADO: Mercado Libre sigue pidiendo un respiro.")
 
+            except Exception as e:
+                print(f"❌ Error en cacería directa: {e}")
+            finally:
+                browser.close()
+        
+        return presas
+    
     # =========================================================
-    # RUTA B: ES UNA BÚSQUEDA POR KEYWORD O LINK DE LISTADO
+    # RUTA B: BÚSQUEDA POR KEYWORD O LISTADO
     # =========================================================
-    if url_input and "listado." in url_input:
-        print("🐺 [ML] Link de Listado detectado. Usando Perfil Persistente...")
-        target_url = url_input
-    else:
-        print("🐺 [ML] Búsqueda por Keyword detectada. Usando Perfil Persistente...")
-        slug = (keyword or "").strip().replace(" ", "-")
-        target_url = f"https://listado.mercadolibre.com.ar/{slug}"
+    target_url = url_input if (url_input and "listado." in url_input) else f"https://listado.mercadolibre.com.ar/{(keyword or '').strip().replace(' ', '-')}"
 
     PROFILE_PATH.mkdir(parents=True, exist_ok=True)
     DEBUG_SHOT_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -262,218 +241,74 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
     with sync_playwright() as p:
         context = p.chromium.launch_persistent_context(
             user_data_dir=str(PROFILE_PATH),
-            headless=False,
+            headless=headless,
             channel="chrome",
             locale="es-AR",
             viewport={"width": 1365, "height": 900},
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--disable-dev-shm-usage",
-                "--no-sandbox",
-            ],
+            args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
         )
-
-        context.add_init_script(
-            '''
-            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-            Object.defineProperty(navigator, 'languages', { get: () => ['es-AR', 'es', 'en-US', 'en'] });
-            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-            window.chrome = window.chrome || { runtime: {} };
-            '''
-        )
-
         page = context.pages[0] if context.pages else context.new_page()
-        page.set_default_timeout(60000)
 
         try:
             page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
-
-            if not headless:
-                try:
-                    page.bring_to_front()
-                except Exception:
-                    pass
-
             _human_touch(page)
 
+            # Esperamos las cards
             try:
-                page.wait_for_load_state("networkidle", timeout=15000)
-            except Exception:
-                pass
-
-            # PRIMERO: si ya hay cards, NO es bloqueo
-            if not _has_result_cards(page):
-                html_lower = ""
-                try:
-                    html_lower = page.content().lower()
-                except Exception:
-                    pass
-
-                if html_lower and _looks_like_block(html_lower):
-                    if headless:
-                        return [{"source": "mercadolibre", "blocked": True, "url": target_url}]
-
-                    try:
-                        page.bring_to_front()
-                    except Exception:
-                        pass
-
-                    try:
-                        page.wait_for_selector(
-                            "div.poly-card, div.ui-search-result__wrapper, li.ui-search-layout__item",
-                            timeout=75000,
-                        )
-                    except Exception:
-                        pass
-
-                    _human_touch(page)
-
-                    if not _has_result_cards(page):
-                        try:
-                            html_lower = page.content().lower()
-                        except Exception:
-                            html_lower = ""
-
-                        if html_lower and _looks_like_block(html_lower):
-                            try:
-                                page.screenshot(path=str(DEBUG_SHOT_PATH), full_page=True)
-                            except Exception:
-                                pass
-                            return [{"source": "mercadolibre", "blocked": True, "url": target_url}]
-
-            try:
-                page.wait_for_selector(
-                    "div.poly-card, div.ui-search-result__wrapper, li.ui-search-layout__item",
-                    timeout=15000,
-                )
-                cards = page.locator(
-                    "div.poly-card, div.ui-search-result__wrapper, li.ui-search-layout__item"
-                )
-            except Exception:
-                try:
-                    page.screenshot(path=str(DEBUG_SHOT_PATH), full_page=True)
-                except Exception:
-                    pass
+                page.wait_for_selector("div.poly-card, .ui-search-result__wrapper", timeout=15000)
+                cards = page.locator("div.poly-card, .ui-search-result__wrapper")
+            except:
                 return []
 
-            _human_touch(page)
-
-            count_cards = cards.count()
-            if count_cards == 0:
-                try:
-                    page.screenshot(path=str(DEBUG_SHOT_PATH), full_page=True)
-                except Exception:
-                    pass
-                return []
-
-            n = min(count_cards, 120)
+            n = min(cards.count(), 20)
             seen_keys = set()
 
             for i in range(n):
                 try:
                     card = cards.nth(i)
-
+                    
+                    # 🔗 Link
                     link = None
-                    a = card.locator("a.ui-search-link").first
-                    if a.count() == 0:
-                        a = card.locator("a").first
-                    if a.count() > 0:
-                        link = a.get_attribute("href")
-                        if link and link.startswith("/"):
-                            link = "https://www.mercadolibre.com.ar" + link
-
-                    title = ""
-
-                    for sel in [
-                        "h2.ui-search-item__title",
-                        "span.poly-component__title",
-                        "a.ui-search-link",
-                        "h2",
-                    ]:
-                        try:
-                            loc = card.locator(sel).first
-                            if loc.count() == 0:
-                                continue
-
-                            txt = (loc.inner_text() or "").strip()
-                            if not txt:
-                                continue
-
-                            txt_l = txt.lower().strip()
-                            if _looks_like_noise_title(txt_l):
-                                continue
-
-                            title = txt
-                            break
-                        except Exception:
-                            continue
-
-                    if not title:
-                        txt = (card.inner_text() or "").strip()
-                        lines = [x.strip() for x in txt.split("\n") if x.strip()]
-                        for ln in lines:
-                            ln_l = ln.lower().strip()
-                            if _looks_like_noise_title(ln_l):
-                                continue
-
-                            if "$" in ln and len(ln.strip()) < 12:
-                                continue
-
-                            title = ln
-                            break
-
-                    if not title:
-                        continue
-
-                    title_l = title.lower().strip()
-
-                    if _looks_like_noise_title(title_l):
-                        continue
-
-                    if keyword and not _keyword_match(title_l, keyword):
-                        continue
-
+                    a_tag = card.locator("a").first
+                    if a_tag.count() > 0:
+                        link = a_tag.get_attribute("href")
+                        if link and link.startswith("/"): link = "https://www.mercadolibre.com.ar" + link
+                    
+                    # 🏷️ Título
+                    title = (card.locator("h2").first.inner_text() or "Producto").strip()
+                    
+                    # 💰 Precio
                     precio = None
-                    ploc = card.locator(
-                        "span.andes-money-amount__fraction, span.price-tag-fraction"
-                    ).first
+                    ploc = card.locator("span.andes-money-amount__fraction").first
                     if ploc.count() > 0:
-                        raw = (ploc.inner_text() or "").strip().replace(".", "").replace(",", "")
-                        if raw.isdigit():
-                            precio = int(raw)
+                        raw = (ploc.inner_text() or "").replace(".", "").replace(",", "")
+                        if raw.isdigit(): precio = int(raw)
 
-                    if precio is None:
-                        precio = _to_int_price(card.inner_text() or "")
-
-                    if precio is None:
+                    if not precio or (max_price_i > 0 and precio > max_price_i):
                         continue
 
-                    if max_price_i > 0 and int(precio) > max_price_i:
-                        continue
+                    # 📸 Screenshot (Solo si es PRO)
+                    foto_path = None
+                    if es_pro:
+                        try:
+                            Path("evidence").mkdir(parents=True, exist_ok=True)
+                            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            foto_path = f"evidence/evidencia_{i}_{ts}.png"
+                            card.screenshot(path=foto_path)
+                        except: pass
 
-                    key = ((link or target_url).strip(), int(precio))
-                    if key in seen_keys:
-                        continue
-                    seen_keys.add(key)
-
-                    presas.append(
-                        {
-                            "title": title[:120],
-                            "price": int(precio),
-                            "url": link or target_url,
-                            "source": "mercadolibre",
-                        }
-                    )
-                except Exception:
-                    continue
+                    presas.append({
+                        "title": title[:120],
+                        "price": precio,
+                        "url": link or target_url,
+                        "source": "mercadolibre",
+                        "screenshot": foto_path
+                    })
+                except: continue
 
             return presas
-
         finally:
-            try:
-                context.close()
-            except Exception:
-                pass
+            context.close()
 # -------------------------------------------------
 # Router central (VERSIÓN NINJA DEFINITIVA)
 # -------------------------------------------------
