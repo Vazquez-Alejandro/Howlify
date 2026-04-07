@@ -2225,17 +2225,33 @@ st.caption(
 st.divider()
 
 # ==========================================================
-# 0. LÓGICA DE IDENTIDAD (PARA TODO EL DASHBOARD)
+# 0. LÓGICA DE IDENTIDAD (CORREGIDA PARA SIMULACIÓN)
 # ==========================================================
-plan_para_el_form = st.session_state.get('admin_plan_sim', plan_real_raw)
+# Si sos admin, usamos el plan que elegiste en el radio button 'admin_plan_sim'
+# Si no, usamos el plan real de tu base de datos.
+if es_admin:
+    # 'admin_plan_sim' es la key del radio button en tu sidebar
+    plan_simulado_raw = st.session_state.get('admin_plan_sim', 'Starter')
+    # Mapeamos el nombre lindo del radio button al nombre técnico de la DB
+    mapa_tecnico = {
+        "Starter": "starter",
+        "Pro": "pro",
+        "Business Reseller": "business_reseller",
+        "Business Monitor": "business_monitor"
+    }
+    plan_para_el_form = mapa_tecnico.get(plan_simulado_raw, "starter")
+else:
+    plan_para_el_form = plan_real_raw
+
 familia_raw = normalize_plan_family(plan_para_el_form)
-es_business = "business" in familia_raw.lower()
+es_solo_monitor = (plan_para_el_form == "business_monitor")
+
 
 # ==========================================================
 # 1. ZONA DE CONFIGURACIÓN (UNIFICADA)
 # ==========================================================
 
-# --- 📲 NOTIFICACIONES ---
+# --- 📲 EXPANDER DE NOTIFICACIONES (RESTAURADO) ---
 with st.expander("📲 Configurar Notificaciones", expanded=False):
     st.markdown("Gestioná tus canales de alerta para no perder ninguna presa.")
     try:
@@ -2251,18 +2267,19 @@ with st.expander("📲 Configurar Notificaciones", expanded=False):
     if not t_id:
         url_bot = f"https://t.me/HowlifyBot?start={user_id}" 
         st.link_button("🐺 Vincular Telegram ahora", url_bot, width="stretch")
-        if st.button("🔄 Verificar Vinculación", key="btn_verify_tg_final"): 
+        if st.button("🔄 Verificar Vinculación", key="btn_verify_tg_vfinal"): 
             st.rerun()
     else:
         st.success(f"✅ Vinculado (ID: {t_id})")
-        if st.button("🧪 Probar Alerta Telegram", width="stretch", key="btn_test_tg_final"): 
+        if st.button("🧪 Probar Alerta Telegram", width="stretch", key="btn_test_tg_vfinal"): 
             st.toast("Enviando...")
 
     st.divider()
     st.markdown("#### 🟩 WhatsApp")
-    if es_business or "pro" in familia_raw.lower():
-        ws_num = st.text_input("Número (ej: 54911...)", value=ws_actual if ws_actual else "", key="ws_input_final_panel")
-        if st.button("💾 Guardar WhatsApp", width="stretch", key="btn_save_ws_final"):
+    # Lógica de WhatsApp basada en el plan simulado/real
+    if es_solo_monitor or "pro" in familia_raw.lower() or "business" in familia_raw.lower():
+        ws_num = st.text_input("Número (ej: 54911...)", value=ws_actual if ws_actual else "", key="ws_input_vfinal")
+        if st.button("💾 Guardar WhatsApp", width="stretch", key="btn_save_ws_vfinal"):
             if ws_num.strip():
                 supabase.table("profiles").update({"whatsapp_number": ws_num.strip()}).eq("user_id", user_id).execute()
                 st.success("✅ Guardado.")
@@ -2277,7 +2294,8 @@ if total_ocupado < limite_plan:
         n_url = st.text_input("URL", placeholder="Pegá el link de Mercado Libre...", key="new_hunt_url_final")
         n_key = st.text_input("Palabra clave", placeholder="Ej: Lavarropas Inverter...", key="new_hunt_key_final")
 
-        if es_business:
+        if es_solo_monitor:
+            # --- VISTA MONITOR (MAP) ---
             st.markdown("##### 🛡️ Configuración de Monitoreo MAP")
             c_min, c_max = st.columns(2)
             with c_min:
@@ -2292,6 +2310,8 @@ if total_ocupado < limite_plan:
             alerta_wa = col_n[1].checkbox("WhatsApp", value=False, key="chk_wa_biz")
             alerta_em = col_n[2].checkbox("Email", value=True, key="chk_em_biz")
         else:
+            # --- VISTA ESTÁNDAR (STARTER, PRO, RESELLER) ---
+            st.markdown("##### 🎯 Configuración de Cacería")
             tipo_alerta_ui = st.radio("Estrategia:", ["Precio Piso", "Descuento %"], horizontal=True, key="strat_radio_final")
             if tipo_alerta_ui == "Precio Piso":
                 n_price = st.number_input("Precio Máximo ($)", min_value=0, value=500000, step=1000, key="price_piso_final")
@@ -2301,7 +2321,9 @@ if total_ocupado < limite_plan:
                 tipo_db = "descuento"
             n_min, n_max = 0, 0 
 
-        n_freq = st.selectbox("Frecuencia de revisión", rules["freq_options"], key="freq_sel_final")
+        # FRECUENCIA (Para todos)
+        st.divider()
+        n_freq = st.selectbox("Frecuencia de revisión (Reporte)", rules["freq_options"], key="freq_sel_final")
 
         if st.button("Lanzar", width="stretch", key="btn_lanzar_caza_final"):
             if not n_url.strip() or not n_key.strip():
@@ -2313,10 +2335,15 @@ if total_ocupado < limite_plan:
                 
                 res = guardar_caza_supabase(user_id, n_key, url_limpia, precio_max_int, n_freq, tipo_db, plan, src)
                 if res is True:
-                    st.success("✅ Caza creada.")
+                    if es_solo_monitor:
+                        res_caza = supabase.table("cazas").select("id").eq("user_id", user_id).order("created_at", desc=True).limit(1).execute()
+                        if res_caza.data:
+                            upsert_monitor_rule(user_id, res_caza.data[0]["id"], n_key, url_limpia, src, n_min, n_min, n_max)
+                    
+                    st.success("✅ Caza creada correctamente.")
                     time.sleep(1); st.rerun()
 
-st.divider()
+st.divider() # Este mantiene la separación con el listado de abajo
 
 # ==========================================================
 # 2. BOTÓN MASIVO Y LISTADO (CENTRO DE CONTROL)
