@@ -147,27 +147,23 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
     # 🔥 DEFINIMOS ES_PRO ACÁ PARA QUE TODO EL MUNDO LA CONOZCA
     es_pro = plan.lower() in ["pro", "business", "business_monitor", "business_reseller"]
 
-# =========================================================
+    # =========================================================
     # RUTA A: LINK DIRECTO (CON DISFRAZ DINÁMICO)
     # =========================================================
     es_producto_directo = bool(url_input and url_input.startswith("http") and "listado." not in url_input)
     
     if es_producto_directo:
-        # 🎭 1. NUEVO DISFRAZ (Rotación de User Agent para evitar el 429)
+        # 🎭 1. DISFRAZ ROTATIVO
         ua_final = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
-        print(f"🐺 [ML] Link directo detectado. Plan: {plan.upper()} | Usando nuevo UA...")
+        print(f"🐺 [ML] Link directo. Plan: {plan.upper()} | Usando nuevo UA...")
         
         with sync_playwright() as p:
-            # LANZAMOS NAVEGADOR CON DISFRAZ
             browser = p.chromium.launch(headless=headless, args=["--no-sandbox"])
-            context = browser.new_context(
-                user_agent=ua_final, 
-                viewport={"width": 1280, "height": 720}
-            )
+            context = browser.new_context(user_agent=ua_final, viewport={"width": 1280, "height": 720})
             page = context.new_page()
             
             try:
-                # 🕒 2. PAUSA HUMANA (Evita que ML detecte peticiones automatizadas ráfaga)
+                # 🕒 2. PAUSA HUMANA
                 import random
                 wait_time = random.uniform(2, 5)
                 print(f"⏳ El Lobo espera {wait_time:.2f}s para camuflarse...")
@@ -175,7 +171,7 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
 
                 page.goto(url_input, wait_until="domcontentloaded", timeout=45000)
                 
-                # CAPTURA DE PRECIO (Meta + DOM)
+                # EXTRACCIÓN DE PRECIO
                 precio = None
                 meta_p = page.locator('meta[itemprop="price"]').get_attribute("content")
                 if meta_p:
@@ -194,21 +190,36 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                     title = title_loc.inner_text() if title_loc.count() > 0 else "Producto ML"
                     
                     foto_path = None
-                    # 📸 SOLO SI ES BUSINESS/PRO GATILLAMOS LA CÁMARA
+                    # 📸 LÓGICA DE EVIDENCIA (DEBUG REFORZADO)
                     if es_pro:
                         try:
-                            os.makedirs("evidence", exist_ok=True)
+                            # Aseguramos ruta absoluta para evitar perder archivos en Linux
+                            base_path = os.path.abspath("evidence")
+                            os.makedirs(base_path, exist_ok=True)
+                            
                             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                            foto_path = f"evidence/directo_{ts}.png"
+                            filename = f"directo_{ts}.png"
+                            full_path = os.path.join(base_path, filename)
+                            
+                            print(f"🕵️ Intentando capturar pantalla en: {full_path}")
                             
                             page.evaluate("window.scrollTo(0, 0)")
-                            time.sleep(1) 
-                            page.screenshot(path=foto_path)
-                            print(f"✅ EVIDENCIA GUARDADA: {foto_path}")
+                            time.sleep(1.5) # Esperamos el renderizado visual
+                            
+                            # Disparo de cámara
+                            page.screenshot(path=full_path)
+                            
+                            # Verificación física del archivo
+                            if os.path.exists(full_path):
+                                foto_path = full_path
+                                size = os.path.getsize(full_path)
+                                print(f"✅ ¡ÉXITO! Archivo creado: {size} bytes")
+                            else:
+                                print(f"❌ ERROR: Playwright terminó pero el archivo NO existe en {full_path}")
                         except Exception as e:
-                            print(f"⚠️ Error foto: {e}")
+                            print(f"⚠️ ERROR CRÍTICO EN SCREENSHOT: {e}")
 
-                    # 4. ARMAMOS EL DICCIONARIO PARA LA TABLA
+                    # 4. ARMAMOS EL DICCIONARIO
                     if max_price_i == 0 or precio <= max_price_i:
                         presas.append({
                             "title": title[:120],
@@ -218,10 +229,9 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                             "screenshot": foto_path
                         })
                 else:
-                    # Si no hay precio, chequeamos si nos clavaron un 429 otra vez
                     content = page.content()
                     if "rate_limited" in content or "429" in content:
-                        print("🛡️ BLOQUEO DETECTADO: Mercado Libre sigue pidiendo un respiro.")
+                        print("🛡️ BLOQUEO DETECTADO: Seguimos en Rate Limit.")
 
             except Exception as e:
                 print(f"❌ Error en cacería directa: {e}")
@@ -229,7 +239,6 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                 browser.close()
         
         return presas
-    
     # =========================================================
     # RUTA B: BÚSQUEDA POR KEYWORD O LISTADO
     # =========================================================
@@ -313,15 +322,16 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
 # Router central (VERSIÓN NINJA DEFINITIVA)
 # -------------------------------------------------
 
-def hunt_offers(url: str, keyword: str, max_price: int, es_pro: bool = False, headless: bool = True, user_id: str = None, caza_id: int = None):
+def hunt_offers(url: str, keyword: str, max_price: int, es_pro: bool = False, headless: bool = True, user_id: str = None, caza_id: int = None, plan: str = 'starter'):
     # 1. GENERAMOS LA IDENTIDAD NINJA
     disfraz = get_random_user_agent()
-    delay = apply_human_jitter() # Esto ya hace el time.sleep() internamente
+    # Asegurate de tener importado 'apply_human_jitter'
+    delay = apply_human_jitter() 
     
     url_low = url.lower()
-    host = _domain(url).lower()
+    host = _domain(url).lower() if '_domain' in locals() or '_domain' in globals() else urlparse(url).netloc
     
-    # 2. LOGS DE COMBATE (Para que veas la rotación en la terminal)
+    # 2. LOGS DE COMBATE
     print(f"🔍 DEBUG: Host: {host} | URL: {url_low[:40]}... | Headless: {headless}")
     print(f"🕵️‍♂️ LOBO CAMALEÓN: Usando {disfraz[:40]}... | Pausa: {delay:.2f}s")
 
@@ -336,22 +346,25 @@ def hunt_offers(url: str, keyword: str, max_price: int, es_pro: bool = False, he
             max_price, 
             es_pro=es_pro, 
             headless=False,
-            user_agent=disfraz # <--- Pasamos el disfraz al scraper de vuelos
+            user_agent=disfraz
         )
 
     # 4. Mercado Libre
     if "mercadolibre" in host:
         print(f"🛒 MATCH ML detectado (Headless: {headless})...")
-        plan_str = "pro" if es_pro else "starter"
         
-        # Ejecutamos con el disfraz y el modo que nos mandaron
+        # 🔥 ACÁ ESTÁ EL CAMBIO: Usamos el plan que llega por parámetro
+        # Si no llega nada, usamos 'pro' si es_pro es True, sino 'starter'
+        plan_final = plan if plan else ("pro" if es_pro else "starter")
+        
+        # Ejecutamos pasando el plan a la función interna
         res = _scrape_mercadolibre(
             url, 
             keyword, 
             max_price, 
-            headless=False, 
-            plan=plan_str,
-            user_agent=disfraz # <--- Pasamos el disfraz al scraper de ML
+            headless=headless, # Usamos el headless que viene por parámetro
+            plan=plan_final,   # <--- Ahora sí acepta el argumento 'plan'
+            user_agent=disfraz 
         )
         
         if res and isinstance(res[0], dict) and res[0].get("blocked"):
