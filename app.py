@@ -75,6 +75,27 @@ FORCE_HEADLESS = True
 if DEBUG:
     st.sidebar.info("🔧 Modo Debug Activo")
 
+# ==========================================================
+# UTILIDADES: PROCESAMIENTO DE IMÁGENES (BASE64)
+# ==========================================================
+
+def get_image_base64(path):
+    """
+    Convierte una imagen local en una cadena Base64 para bypass de seguridad 
+    del navegador y visualización directa en Streamlit.
+    """
+    if not path:
+        return None
+        
+    if os.path.exists(path):
+        try:
+            with open(path, "rb") as f:
+                # Leemos el binario y lo encodeamos a texto
+                return base64.b64encode(f.read()).decode()
+        except Exception as e:
+            print(f"⚠️ Error al procesar imagen Base64: {e}")
+            return None
+    return None
 
 
 # --- DETECTOR DE RECOVERY CON ESTILO HOWLIFY ---
@@ -719,85 +740,133 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
     rules_res = supabase.table("monitor_rules").select("*").eq("user_id", user_id).execute()
     rules_data = rules_res.data or []
     
-    # Creamos un mapa unificado por ID (clave para que todo funcione)
     rules_map = {str(r.get("caza_id")): r for r in rules_data if r.get("caza_id")}
     rules_by_url = {str(r.get("product_url")): r for r in rules_data if r.get("product_url")}
 
     radar_rows = []
     for b in busquedas:
-        bid = str(b.get("id") or "")
+        # 1. Limpieza de ID y Filtro Anti-Crash (Evita el error de bigint)
+        bid = str(b.get("id") or "").strip()
+        if not bid or not bid.isdigit():
+            continue
+            
         p_url = b.get("link") or b.get("url") or ""
         
-        # Buscamos la regla por ID o por URL como respaldo
+        # 2. Mapeo de reglas
         rule = rules_map.get(bid) or rules_by_url.get(p_url) or {}
         
-        # Obtener precio actual
+        # 3. Consulta de precio (Segura con bid validado)
         res_p = supabase.table("price_history").select("price").eq("caza_id", bid).order("checked_at", desc=True).limit(1).execute()
         curr_p = float(res_p.data[0]["price"]) if res_p.data else 0.0
         
         m_p = float(rule.get("min_price_allowed") or 0.0)
         max_p = float(rule.get("max_price_allowed") or 0.0)
 
-        # SEMÁFORO
-
-        # Aseguramos que si no hay regla, no pinte verde por error
+        # 4. SEMÁFORO
         if curr_p <= 0: 
-            riesgo = "⚪" # Sin datos
-        elif m_p > 0 and curr_p < (m_p - 0.01): # Margen de centavos
-            riesgo = "🔴" # VIOLACIÓN
+            riesgo = "⚪"
+        elif m_p > 0 and curr_p < (m_p - 0.01):
+            riesgo = "🔴" 
         elif max_p > 0 and curr_p > (max_p + 0.01):
-            riesgo = "🟠" # SOBREPRECIO
+            riesgo = "🟠"
         elif m_p == 0 and max_p == 0:
-            riesgo = "⚪" # Sin reglas configuradas
+            riesgo = "⚪"
         else:
-            riesgo = "🟢" # CUMPLIMIENTO OK
+            riesgo = "🟢"
 
-        # PROGRESO (Evitamos división por cero)
+        # 5. PROGRESO
         progreso = 0.0
         if m_p > 0 and max_p > m_p:
             progreso = max(0.0, min(1.0, (curr_p - m_p) / (max_p - m_p)))
 
+        # 6. 📸 LÓGICA DE EVIDENCIA: Extraemos la ruta del objeto 'b'
+        foto_path = b.get("screenshot")
+        evidencia_val = "📸 Ver" if (riesgo == "🔴" and foto_path) else ""
+
+        # 7. ARMADO DE FILA (Con ID para la visualización)
         radar_rows.append({
             "Riesgo": riesgo,
             "ID": bid,
             "Producto": (b.get("producto") or b.get("keyword") or "SIN NOMBRE").upper(),
-            "URL": p_url,
             "Precio": curr_p,
             "Mín. MAP": m_p,
             "Máximo": max_p,
+            "Evidencia": evidencia_val,
             "Rango": progreso,
+            "URL": p_url,
             "raw_data": b,
             "full_id": bid
         })
 
     # ==========================================================
-    # 2. RENDER DE TABLA
+    # 2. RENDER DE TABLA Y VISUALIZADOR DE EVIDENCIA
     # ==========================================================
     df_radar = pd.DataFrame(radar_rows)
     
     if not df_radar.empty:
+        # Ordenamos por severidad del riesgo
         orden_prioridad = {"🔴": 0, "🟠": 1, "🟡": 2, "🟢": 3, "⚪": 4}
         df_radar["orden"] = df_radar["Riesgo"].map(orden_prioridad)
         df_radar = df_radar.sort_values("orden")
 
+        # Limpiamos columnas de proceso para la vista de tabla
         df_display = df_radar.drop(columns=["raw_data", "full_id", "orden"], errors='ignore')
 
-        # TABLA FINAL BLINDADA (Compatibilidad asegurada)
+        # RENDER DE LA TABLA
         st.data_editor(
             df_display,
             use_container_width=True,
             hide_index=True,
-            key="radar_table_clean",
-            disabled=["Riesgo", "ID", "Producto", "URL", "Precio", "Rango"], 
+            key="radar_table_business_vFinal",
+            disabled=True,
             column_config={
-                "URL": st.column_config.LinkColumn("Enlace"),
-                "Precio": st.column_config.NumberColumn(format="$%d"),
-                "Mín. MAP": st.column_config.NumberColumn(format="$%d"),
-                "Máximo": st.column_config.NumberColumn(format="$%d"),
+                "Riesgo": st.column_config.TextColumn("Riesgo", width="small"),
+                "Producto": st.column_config.TextColumn("Producto", width="medium"),
+                "Precio": st.column_config.NumberColumn("Precio", format="$%d"),
+                "Mín. MAP": st.column_config.NumberColumn("Mín. MAP", format="$%d"),
+                "Máximo": st.column_config.NumberColumn("Máximo", format="$%d"),
+                "Evidencia": st.column_config.TextColumn("Evidencia", width="small"),
                 "Rango": st.column_config.ProgressColumn("Posición", min_value=0, max_value=1),
+                "URL": st.column_config.LinkColumn("Enlace", width="small"),
+                "ID": st.column_config.TextColumn("ID", width="small"),
             },
-            column_order=("Riesgo", "ID", "Producto", "URL", "Precio", "Mín. MAP", "Máximo", "Rango")
+            column_order=("Riesgo", "ID", "Producto", "Precio", "Mín. MAP", "Máximo", "Evidencia", "Rango", "URL")
         )
+
+        st.divider() # Una línea sutil para separar la tabla de la foto
+
+        # --- BLOQUE DE VISUALIZACIÓN DE FOTO (Base64) ---
+        # Filtramos solo los productos que tienen el emoji de cámara
+        con_evidencia = df_radar[df_radar["Evidencia"] != ""]["Producto"].unique()
+        
+        if len(con_evidencia) > 0:
+            st.markdown("#### 🕵️ Inspección de Evidencia")
+            seleccion = st.selectbox(
+                "Seleccioná un producto para ver la captura de pantalla:", 
+                con_evidencia,
+                index=None,
+                placeholder="Elegí una infracción 🔴 para ver la prueba..."
+            )
+            
+            if seleccion:
+                # Extraemos la fila original para obtener la ruta
+                fila_orig = df_radar[df_radar["Producto"] == seleccion].iloc[0]
+                ruta_foto = fila_orig["raw_data"].get("screenshot")
+                
+                if ruta_foto:
+                    img_b64 = get_image_base64(ruta_foto) # Usamos tu nueva utilidad
+                    if img_b64:
+                        st.image(
+                            f"data:image/png;base64,{img_b64}", 
+                            caption=f"Evidencia de Infracción: {seleccion}",
+                            use_container_width=True # Se adapta al ancho de tu ThinkPad
+                        )
+                    else:
+                        st.warning(f"⚠️ El archivo existe en DB pero no se encontró en el disco: {ruta_foto}")
+                else:
+                    st.info("No hay captura vinculada a este registro.")
+        else:
+            st.info("✅ No se detectaron infracciones con evidencia fotográfica por el momento.")
 
         # ==========================================================
         # 3. SELECCIÓN & ANÁLISIS DINÁMICO
@@ -2273,45 +2342,43 @@ with st.expander("📲 Configuración de Alertas", expanded=not bool(_wa_val or 
 # así que dejamos que dibuje todo lo de abajo normalmente.
 
 st.write("") # Un espaciador sutil para que no quede pegado arriba
-
 # ==========================================================
-# NUEVA CAZA
+# 1. BLOQUE: NUEVA CAZA (ADAPTATIVO)
 # ==========================================================
-
 total_ocupado = cazas_activas
 if total_ocupado < limite_plan:
     with st.expander("➕ Configurar nueva cacería", expanded=True):
-        n_url = st.text_input("URL")
-        n_key = st.text_input("Palabra clave")
+        n_url = st.text_input("URL", placeholder="Pegá el link de Mercado Libre...")
+        n_key = st.text_input("Palabra clave", placeholder="Ej: Lavarropas Inverter...")
 
-        familia = normalize_plan_family(plan_real_raw)
+        # 🛡️ NORMALIZACIÓN FORZADA
+        familia_raw = normalize_plan_family(plan_real_raw)
+        
+        # Si el plan es business_monitor o similar, lo tratamos como business
+        es_business = "business" in familia_raw.lower()
 
-        # --- LÓGICA ADAPTATIVA DE FORMULARIO ---
-        if familia == "business": # normalize_plan_family devuelve 'business'
-            st.markdown("##### 🛡️ Configuración de Monitoreo MAP (Modo Business)")
+        if es_business:
+            # --- VISTA BUSINESS (LIMPIA) ---
+            st.markdown("##### 🛡️ Configuración de Monitoreo MAP")
             c_min, c_max = st.columns(2)
             with c_min:
-                n_min = st.number_input("MAP (Mínimo permitido)", value=0, step=1000, key="monitor_min_input_v3")
+                n_min = st.number_input("Mínimo permitido (MAP)", value=0, step=1000, key="monitor_min_input_v3")
             with c_max:
-                n_max = st.number_input("Techo (Máximo permitido)", value=0, step=1000, key="monitor_max_input_v3")
+                n_max = st.number_input("Techo máximo", value=0, step=1000, key="monitor_max_input_v3")
             
-            st.markdown("##### 🔔 Notificar alertas inmediatas por:")
-            col_notif = st.columns(3)
-            with col_notif[0]:
-                alerta_tg = st.checkbox("Telegram", value=True, key="chk_tg_new")
-            with col_notif[1]:
-                alerta_wa = st.checkbox("WhatsApp", value=False, key="chk_wa_new")
-            with col_notif[2]:
-                alerta_em = st.checkbox("Email", value=True, key="chk_em_new")
-
+            # Seteamos estas variables por atrás para que el 'Lanzar' no explote
             tipo_db = "piso" 
             n_price = n_min 
             
-            canales_list = [c for c, v in zip(["telegram", "whatsapp", "email"], [alerta_tg, alerta_wa, alerta_em]) if v]
-            st.info(f"📢 Alertas activas vía: **{', '.join(canales_list).upper() if canales_list else 'EMAIL'}**")
+            st.markdown("##### 🔔 Alertas inmediatas")
+            c1, c2, c3 = st.columns(3)
+            alerta_tg = c1.checkbox("Telegram", value=True)
+            alerta_wa = c2.checkbox("WhatsApp", value=False)
+            alerta_em = c3.checkbox("Email", value=True)
         
         else:
-            # Formulario Estándar para Starter/Pro
+            # --- VISTA STANDARD (STARTER/PRO) ---
+            # Solo acá mostramos el radio de estrategia y el precio máximo
             tipo_alerta_ui = st.radio("Estrategia:", ["Precio Piso", "Descuento %"], horizontal=True)
 
             if tipo_alerta_ui == "Precio Piso":
@@ -2320,194 +2387,147 @@ if total_ocupado < limite_plan:
             else:
                 n_price = st.slider("Porcentaje deseado (%)", 5, 90, 35, key="price_desc_input")
                 tipo_db = "descuento"
+            
+            n_min, n_max = 0, 0 # No se usan en este modo
 
-        n_freq = st.selectbox("Frecuencia", rules["freq_options"])
+        n_freq = st.selectbox("Frecuencia de revisión", rules["freq_options"])
 
         if st.button("Lanzar", use_container_width=True):
             if not n_url.strip() or not n_key.strip():
                 st.error("Completá URL y Palabra clave.")
                 st.stop()
 
-            # 1. PRE-CÁLCULOS Y LIMPIEZA (Vital para que no mueran los links)
             url_limpia = clean_ml_url(n_url)
             precio_max_int = parse_price_to_int(n_price)
-            src = infer_source_from_url(url_limpia)
-            if src == "unknown": src = DEFAULT_SOURCE
+            src = infer_source_from_url(url_limpia) or DEFAULT_SOURCE
             
-            # 2. GUARDADO DE LA CAZA
             resultado = guardar_caza_supabase(
-                user_id=user_id,
-                producto=n_key,
-                url=url_limpia, 
-                precio_max=precio_max_int,
-                frecuencia=n_freq,
-                tipo_alerta=tipo_db,
-                plan=plan,
-                source=src,
+                user_id=user_id, producto=n_key, url=url_limpia, 
+                precio_max=precio_max_int, frecuencia=n_freq,
+                tipo_alerta=tipo_db, plan=plan, source=src
             )
 
             if resultado is True:
                 time.sleep(1.2) 
                 try:
                     res_caza = supabase.table("cazas").select("id").eq("user_id", user_id).order("created_at", desc=True).limit(1).execute()
-                    
                     if res_caza.data:
                         new_id = res_caza.data[0]["id"]
-                        
-                        # 3. GUARDADO DE REGLAS BUSINESS
                         if familia == "business":
                             upsert_monitor_rule(
-                                user_id=user_id,
-                                caza_id=new_id,
-                                product_name=n_key,
-                                product_url=url_limpia,
-                                source=src,
-                                target_price=int(n_min),
-                                min_price_allowed=int(n_min),
-                                max_price_allowed=int(n_max)
+                                user_id=user_id, caza_id=new_id, product_name=n_key,
+                                product_url=url_limpia, source=src, target_price=int(n_min),
+                                min_price_allowed=int(n_min), max_price_allowed=int(n_max)
                             )
 
-                        # 4. RASTREO INICIAL SINCRONIZADO
-
-                        with st.status("🐺 El Lobo está oliendo la presa...", expanded=True) as status:
-                            # 1. RECUPERAMOS EL PLAN DE LA SIMULACIÓN DIRECTO DEL SIDEBAR
-                            # Si por alguna razón plan_vista no existe, usamos el valor del radio button
-                            plan_para_el_lobo = st.session_state.get('admin_plan_sim', plan_vista).lower().replace(" ", "_")
-                            
-                            print(f"DEBUG INTERNO: Enviando plan '{plan_para_el_lobo}' al scraper.") # Esto lo ves en tu terminal
-
-                            es_biz_pro = plan_para_el_lobo in ["pro", "business_reseller", "business_monitor"]
-                            
-                            # 2. TARGET DE PRECIO
+                        with st.status("🐺 El Lobo está oliendo la presa...", expanded=True) as status_lobo:
+                            plan_sim = st.session_state.get('admin_plan_sim', plan_vista).lower().replace(" ", "_")
+                            es_biz_pro = plan_sim in ["pro", "business_reseller", "business_monitor"]
                             p_target = n_min if familia == "business" else precio_max_int
                             
-                            # 3. LLAMADA AL MOTOR (Usamos la variable blindada)
-                            res_ini = hunt_offers(
-                                url_limpia, 
-                                n_key, 
-                                p_target, 
-                                es_pro=es_biz_pro, 
-                                plan=plan_para_el_lobo, 
-                                headless=FORCE_HEADLESS
-                            )
+                            res_ini = hunt_offers(url_limpia, n_key, p_target, es_pro=es_biz_pro, plan=plan_sim, headless=FORCE_HEADLESS)
                             
                             if res_ini:
                                 save_price_history(user_id=user_id, caza_id=new_id, results=res_ini)
-                                status.update(label=f"✅ ¡Presa detectada! Precio: ${res_ini[0].get('price')}", state="complete", expanded=False)
-                                st.toast("Radar sincronizado 📈")
+                                foto_path = res_ini[0].get("screenshot")
+                                if foto_path:
+                                    supabase.table("cazas").update({"screenshot": foto_path}).eq("id", new_id).execute()
+                                status_lobo.update(label=f"✅ Presa detectada: ${res_ini[0].get('price')}", state="complete", expanded=False)
                             else:
-                                status.update(label="⚠️ Caza creada, rastro inicial fallido.", state="error")
-
+                                status_lobo.update(label="⚠️ Sin rastro inicial, pero caza creada.", state="error")
                 except Exception as e:
-                    st.error(f"⚠️ Error post-proceso: {e}")
-
-                st.success("✅ Cacería lanzada con éxito.")
+                    st.error(f"⚠️ Error: {e}")
+                
                 st.session_state["busquedas"] = obtener_cazas(user_id, plan_real_raw) or []
-                time.sleep(1) 
                 st.rerun()
 
 # ==========================================================
-# LISTADO / OLFATEAR (VERSIÓN DINÁMICA PRO - SIN GRISADO)
+# 2. BLOQUE: LISTADO / OLFATEAR (OPTIMIZADO)
 # ==========================================================
-
-# 1. Contenedor superior para el botón y barra de progreso
-top_zone = st.container()
-status_slot = st.empty()
-
-# Diccionario para mapear cada card con su espacio de actualización
+status_slot = st.empty() # Declarado fuera de cualquier bucle para que sea accesible
 card_placeholders = {}
 
-# 2. RENDERIZADO DE LAS CARDS (Las dibujamos primero para generar los slots)
 if st.session_state.get("busquedas"):
-    st.subheader(f"Mis Cacerías ({rules['label']})")
+    st.subheader(f"Mis Cacerías ({rules.get('label', 'Monitor')})")
 
     for i, b in enumerate(st.session_state["busquedas"]):
         rid = str(b.get("id", i))
+        kw = b.get("keyword") or b.get("producto") or "Sin nombre"
+        url = b.get("url") or b.get("link") or ""
+        p_raw = b.get("precio_max", 0)
+        tipo = (b.get("tipo_alerta") or "piso").strip().lower()
 
         with st.container(border=True):
             col_info, col_btns = st.columns([3, 1])
 
             with col_info:
-                p_raw = b.get("precio_max", 0)
-                tipo = (b.get("tipo_alerta") or "piso").strip().lower()
-                
                 try:
                     p_val = int(float(p_raw))
                     label_precio = f"Máx: ${p_val:,}".replace(",", ".") if tipo == "piso" else f"Objetivo: {p_val}% desc."
                 except:
                     label_precio = f"Objetivo: {p_raw}"
 
-                kw = b.get("keyword") or b.get("producto") or "Sin nombre"
-                url = b.get("url") or b.get("link") or ""
-                
-                st.markdown(f"**🐺 {kw.upper()}** ({tipo.capitalize()})")
-                st.caption(f"🔗 {url[:60]}...")
+                st.markdown(f"**🐺 {kw.upper()}**")
+                st.caption(f"🔗 {url[:50]}...")
                 st.write(f"🎯 {label_precio} | ⏱️ {b.get('frecuencia', 'Manual')}")
                 
-                # --- EL SLOT MÁGICO ---
-                # Este espacio se actualizará en tiempo real durante la búsqueda masiva
                 card_placeholders[rid] = st.empty()
-                
-                # Si ya hay resultados previos, mostramos un resumen leve
                 old_res = st.session_state.get(f"last_res_{rid}", [])
                 if old_res:
-                    with card_placeholders[rid]:
-                        st.caption(f"✨ {len(old_res)} ofertas en cache.")
+                    card_placeholders[rid].caption(f"✨ {len(old_res)} ofertas en cache.")
 
             with col_btns:
-                c_olf, c_edit, c_del = st.columns(3)
+                # Usamos una sola fila de 3 columnas para los iconos
+                btn_cols = st.columns(3)
+                
+                # BOTÓN OLFATEAR
+                if btn_cols[0].button("🐺", key=f"olf_{rid}", use_container_width=True):
+                    status_slot.info(f"⏳ El Lobo está rastreando {kw}...")
+                    res_ind = hunt_offers(url, kw, parse_price_to_int(p_raw), 
+                                         es_pro=(b.get('plan','').lower() in ["pro", "business"]), 
+                                         headless=FORCE_HEADLESS)
+                    st.session_state[f"last_res_{rid}"] = res_ind
+                    st.rerun()
 
-                with c_olf:
-                    # OLFATEAR INDIVIDUAL
-                    if st.button("🐺", key=f"olf_{rid}", use_container_width=True):
-                        st.session_state["editing_caza"] = None
-                        status_slot.info(f"⏳ El Lobo está rastreando {kw}...")
-                        try:
-                            with st.spinner(""):
-                                kw2, url2 = kw, url
-                                precio2 = parse_price_to_int(p_raw)
-                                plan_real = b.get('plan', 'starter').lower()
-                                es_pro_real = (plan_real in ["pro", "business"])
+                # BOTÓN EDITAR
+                if btn_cols[1].button("✏️", key=f"edit_{rid}", use_container_width=True):
+                    st.session_state["editing_caza"] = b
+                    st.rerun()
 
-                                resultados = hunt_offers(url2, kw2, precio2, es_pro=es_pro_real, headless=FORCE_HEADLESS) or []
-                                st.session_state[f"last_res_{rid}"] = resultados
-                                st.session_state["last_updated_rid"] = rid
-                                if resultados and st.session_state.get("sound_enabled", True):
-                                    st.session_state["sound_tick"] += 1
-                                    st.session_state["play_sound"] = True
-                                st.rerun()
-                        except Exception as e:
-                            status_slot.error(f"❌ Error: {str(e)}")
+                # BOTÓN ELIMINAR
+                if btn_cols[2].button("🗑️", key=f"del_{rid}", use_container_width=True):
+                    supabase.table("cazas").delete().eq("id", b["id"]).execute()
+                    st.session_state["busquedas"] = [x for x in st.session_state["busquedas"] if str(x.get("id")) != rid]
+                    st.rerun()
 
-                with c_edit:
-                    if st.button("✏️", key=f"edit_{rid}", use_container_width=True):
-                        st.session_state["editing_caza"] = b
-                        st.rerun()
-
-                with c_del:
-                    if st.button("🗑️", key=f"del_{rid}", use_container_width=True):
-                        supabase.table("cazas").delete().eq("id", b["id"]).execute()
-                        st.session_state["busquedas"] = [x for x in st.session_state["busquedas"] if str(x.get("id")) != rid]
-                        st.rerun()
-
-            # RESULTADOS (Debajo de cada card)
-            res = st.session_state.get(f"last_res_{rid}", []) or []
+            # Resultados debajo de la card
+            res = st.session_state.get(f"last_res_{rid}", [])
             if res:
                 with st.expander(f"✅ Resultados ({len(res)})", expanded=False):
-                    for r in res[:10]:
-                        c1, c2 = st.columns([4, 1])
-                        with c1:
-                            st.markdown(f"**{str(r.get('title'))[:80]}**")
-                            st.caption(f"Precio: ${int(r.get('price', 0)):,}".replace(",", "."))
-                        with c2:
-                            st.link_button("Ver", get_affiliate_url(r.get("url")), use_container_width=True)
+                    for r in res[:5]:
+                        r_col1, r_col2 = st.columns([4, 1])
+                        r_col1.write(f"**{r.get('title')[:60]}** - ${int(r.get('price', 0)):,}".replace(",", "."))
+                        r_col2.link_button("Ver", get_affiliate_url(r.get("url")), use_container_width=True)
 
-# 3. LÓGICA DEL BOTÓN MASIVO (En la zona superior)
+# ==========================================================
+# 1. DECLARACIÓN DE CONTENEDORES (Crucial para evitar NameError)
+# ==========================================================
+top_zone = st.container() # 👈 Definimos el espacio en la parte superior
+status_slot = st.empty()  # 👈 Slot para mensajes globales
+card_placeholders = {}    # 👈 Diccionario para feedback en las cards
+
+# ==========================================================
+# 2. LÓGICA DEL BOTÓN MASIVO (Dentro de top_zone)
+# ==========================================================
 with top_zone:
-    if st.button("🔎 Olfatear todas mis cazas", use_container_width=True):
-        busquedas = st.session_state.get("busquedas", []) or []
+    # Agregamos un poco de espacio visual
+    st.markdown("### 🐺 Centro de Operaciones")
+    
+    if st.button("🔎 Olfatear todas mis cazas", use_container_width=True, key="btn_massive_hunt"):
+        busquedas = st.session_state.get("busquedas", [])
+        
         if not busquedas:
-            st.info("No tenés cazas.")
+            st.info("No tenés cacerías activas para olfatear.")
         else:
             encontro_total = False
             progreso_bar = st.progress(0)
@@ -2516,36 +2536,45 @@ with top_zone:
                 rid = str(b.get("id", i))
                 kw = b.get("keyword") or b.get("producto") or "Producto"
                 
-                # Feedback visual en la card específica
-                with card_placeholders[rid]:
-                    st.warning(f"⏳ Olfateando...")
+                # Feedback visual en la card específica (si ya fue renderizada)
+                if rid in card_placeholders:
+                    card_placeholders[rid].warning(f"⏳ Olfateando {kw}...")
                 
+                # Actualizamos barra global
                 progreso_bar.progress((i + 1) / len(busquedas))
 
                 try:
-                    # LLAMADA AL MOTOR
+                    # LLAMADA AL MOTOR (hunt_offers o run_manual_hunt)
+                    # Asegurate que run_manual_hunt esté definida en tu código
                     resultados = run_manual_hunt(b, headless=FORCE_HEADLESS) or []
                     st.session_state[f"last_res_{rid}"] = resultados
                     
                     # ACTUALIZACIÓN EN VIVO DE LA CARD
-                    with card_placeholders[rid]:
+                    if rid in card_placeholders:
                         if resultados:
                             encontro_total = True
-                            st.success(f"✅ ¡{len(resultados)} nuevas!")
+                            card_placeholders[rid].success(f"✅ ¡{len(resultados)} nuevas!")
                         else:
-                            st.info("🌑 Sin ofertas.")
+                            card_placeholders[rid].info("🌑 Sin ofertas.")
 
-                    save_price_history(user_id=user_id, caza_id=b.get("id"), results=resultados)
-                except:
-                    with card_placeholders[rid]: st.error("❌ Error")
+                    # Persistencia
+                    if resultados:
+                        save_price_history(user_id=user_id, caza_id=b.get("id"), results=resultados)
+                        
+                except Exception as e:
+                    print(f"❌ Error en cacería {rid}: {e}")
+                    if rid in card_placeholders:
+                        card_placeholders[rid].error("❌ Error de conexión")
                     continue
 
-            # AULLIDO FINAL
+            # AULLIDO FINAL (Sonido)
             if encontro_total and st.session_state.get("sound_enabled", True):
                 st.session_state["sound_tick"] += 1
                 st.session_state["play_sound"] = True
             
             progreso_bar.empty()
+            st.success("🎯 Rastreo masivo completado.")
+            time.sleep(1)
             st.rerun()
 
 # ==========================================================
