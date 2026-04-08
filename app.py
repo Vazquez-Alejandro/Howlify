@@ -43,6 +43,7 @@ from services.business_service import obtener_top_oportunidades
 from services.whatsapp_service import enviar_whatsapp
 from services.telegram_service import enviar_telegram
 from utils.affiliate import get_affiliate_url
+from scraper.airbnb import hunt_airbnb
 
 # --- 🛠️ SERVICIOS DE BASE DE DATOS ---
 # Centralizamos guardar_caza_supabase aquí, que es donde vive ahora
@@ -119,7 +120,7 @@ if params.get("type") == "recovery" and "token" in params:
             confirmar = st.text_input("Confirmar contraseña", type="password", placeholder="Repetí tu contraseña")
             
             st.markdown("---")
-            if st.button("Actualizar y Entrar", width='stretch', type="primary"):
+            if st.button("Actualizar y Entrar", use_container_width=True, type="primary"):
                 if nueva_pass == confirmar and len(nueva_pass) >= 8:
                     try:
                         # Validación del token
@@ -140,7 +141,7 @@ if params.get("type") == "recovery" and "token" in params:
                 else:
                     st.error("Las claves no coinciden o no cumplen los requisitos (min 8 caracteres).")
                     
-        if st.button("Cancelar", width='stretch'):
+        if st.button("Cancelar", use_container_width=True):
             st.query_params.clear()
             st.rerun()
             
@@ -224,7 +225,7 @@ if "editing_caza" in st.session_state and st.session_state["editing_caza"] is no
         c1, c2 = st.columns(2)
         
         with c1:
-            if st.button("💾 Guardar", width='stretch', type="primary"):
+            if st.button("💾 Guardar", use_container_width=True, type="primary"):
                 try:
                     # 1. DATA PURA PARA LA BASE DE DATOS (Usando los nombres reales)
                     data_db = {
@@ -255,7 +256,7 @@ if "editing_caza" in st.session_state and st.session_state["editing_caza"] is no
                     st.error(f"Error al guardar: {e}")
         
         with c2:
-            if st.button("❌ Cancelar", width='stretch'):
+            if st.button("❌ Cancelar", use_container_width=True):
                 st.session_state["editing_caza"] = None
                 st.rerun()
 
@@ -515,24 +516,18 @@ def domain_from_url(url: str) -> str:
 
 def infer_source_from_url(url: str) -> str:
     d = domain_from_url(url)
-    if "mercadolibre" in d:
-        return "mercadolibre"
-    if "fravega" in d:
-        return "fravega"
-    if "garbarino" in d:
-        return "garbarino"
-    if "tiendamia" in d:
-        return "tiendamia"
-    if "temu" in d:
-        return "temu"
-    if "tripstore" in d:
-        return "tripstore"
-    if "carrefour" in d:
-        return "carrefour"
-    if "despegar" in d:
-        return "despegar"
+    if "mercadolibre" in d: return "mercadolibre"
+    if "fravega" in d: return "fravega"
+    if "garbarino" in d: return "garbarino"
+    if "tiendamia" in d: return "tiendamia"
+    if "temu" in d: return "temu"
+    if "tripstore" in d: return "tripstore"
+    if "carrefour" in d: return "carrefour"
+    if "despegar" in d: return "despegar"
+    # --- AGREGADO ---
+    if "airbnb" in d: return "airbnb" 
+    # ----------------
     return "unknown"
-
 
 def parse_price_to_int(value) -> int:
     if value is None:
@@ -650,11 +645,11 @@ def mostrar_tarjeta_oportunidad(id_rastreo, titulo, precio_actual, precio_min_hi
                 
         btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 2])
         with btn_col1:
-            st.button("✏️ Editar", key=f"edit_{id_rastreo}", width='stretch')
+            st.button("✏️ Editar", key=f"edit_{id_rastreo}", use_container_width=True)
         with btn_col2:
-            st.button("🗑️ Eliminar", key=f"del_{id_rastreo}", type="primary", width='stretch')
+            st.button("🗑️ Eliminar", key=f"del_{id_rastreo}", type="primary", use_container_width=True)
         with btn_col3:
-            st.button("📲 Activar Alerta WhatsApp", key=f"wa_{id_rastreo}", width='stretch')
+            st.button("📲 Activar Alerta WhatsApp", key=f"wa_{id_rastreo}", use_container_width=True)
             
 def render_profile_section(user_email, plan_actual):
     st.markdown("## 👤 Mi Perfil y Configuración")
@@ -667,7 +662,7 @@ def render_profile_section(user_email, plan_actual):
         st.text_input("Correo electrónico", value=user_email, disabled=True)
         st.write("")
         
-        if st.button("🚪 Cerrar Sesión", type="primary", width='stretch'):
+        if st.button("🚪 Cerrar Sesión", type="primary", use_container_width=True):
             st.session_state.clear()
             st.rerun()
 
@@ -678,11 +673,11 @@ def render_profile_section(user_email, plan_actual):
         col1, col2 = st.columns(2)
         with col1:
             
-            if st.button("🚀 Cambiar o Mejorar Plan", width='stretch'):
+            if st.button("🚀 Cambiar o Mejorar Plan", use_container_width=True):
                 st.toast("En breve: Redirigiendo a MercadoPago/Stripe...")
         with col2:
           
-            if st.button("📄 Historial de Facturas", width='stretch'):
+            if st.button("📄 Historial de Facturas", use_container_width=True):
                 st.toast("En breve: Abriendo portal de facturación...")
 
     with tab_ayuda:
@@ -695,8 +690,8 @@ def render_profile_section(user_email, plan_actual):
             
             col_submit, _ = st.columns([1, 2])
             with col_submit:
-                # Este ya estaba bien (width='stretch')
-                enviado = st.form_submit_button("Enviar Reporte", width='stretch')
+                # Este ya estaba bien (use_container_width=True)
+                enviado = st.form_submit_button("Enviar Reporte", use_container_width=True)
             
             if enviado:
                 if url_rota and descripcion:
@@ -820,7 +815,7 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         # RENDER DE LA TABLA
         st.data_editor(
             df_display,
-            width='stretch',
+            use_container_width=True,
             hide_index=True,
             key="radar_table_business_vFinal",
             disabled=True,
@@ -864,7 +859,7 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
                         st.image(
                             f"data:image/png;base64,{img_b64}", 
                             caption=f"Evidencia de Infracción: {seleccion}",
-                            width='stretch' # Se adapta al ancho de tu ThinkPad
+                            use_container_width=True # Se adapta al ancho de tu ThinkPad
                         )
                     else:
                         st.warning(f"⚠️ El archivo existe en DB pero no se encontró en el disco: {ruta_foto}")
@@ -937,7 +932,7 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
             f_min = c1.number_input("MAP (Mínimo permitido)", value=int(min_p), step=1000)
             f_max = c2.number_input("Techo (Máximo permitido)", value=int(max_p), step=1000)
 
-            if st.form_submit_button("💾 Guardar Reglas de Monitoreo", width='stretch'):
+            if st.form_submit_button("💾 Guardar Reglas de Monitoreo", use_container_width=True):
                 if not cid:
                     st.error("No se detectó un ID válido.")
                 else:
@@ -973,7 +968,7 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
                 rule_line = alt.Chart(pd.DataFrame({'y': [min_p]})).mark_rule(color='red', strokeDash=[5,5]).encode(y='y:Q')
                 chart += rule_line
             
-            st.altair_chart(chart.interactive(), width='stretch')
+            st.altair_chart(chart.interactive(), use_container_width=True)
     else:
         st.info("Esperando datos de los rastreadores...")
 
@@ -1000,7 +995,7 @@ def render_business_dashboard(plan: str, plan_label_text: str, user_id: str, bus
 
     elif plan_normalizado == "reseller":
         st.subheader("📊 Business Dashboard · Reseller")
-        if st.button("Buscar Oportunidades 🚀", width='stretch'):
+        if st.button("Buscar Oportunidades 🚀", use_container_width=True):
             with st.spinner("Olfateando mercado..."):
                 ops = obtener_top_oportunidades(user_id)
                 if ops:
@@ -1164,18 +1159,25 @@ def save_user_whatsapp(user_id: str, whatsapp_number: str) -> bool:
 # ==========================================================
     
 def run_manual_hunt(b, headless=True):
+    # ESTO TIENE QUE APARECER EN TU TERMINAL
+    print("\n[!!!] EJECUTANDO DISPATCHER DE LA JAURÍA") 
+    
     url = b.get("url") or b.get("link") or ""
-    kw = b.get("keyword") or b.get("producto") or ""
     precio = b.get("precio_max") or 0
+    src = infer_source_from_url(url).strip().lower()
     
-    # 🔥 CAMBIO CLAVE: Usamos 'plan_vista' (el del radio button) en vez del plan de la DB
-    plan_str = plan_vista.lower() 
-    
-    # Definimos si es pro/business basándonos en la vista actual
-    es_pro_simulado = (plan_str in ["pro", "business_monitor", "business_reseller"])
+    print(f"[!!!] FUENTE DETECTADA: '{src}'")
 
-    # Pasamos el plan y el flag a hunt_offers para que el scraper sepa que debe sacar fotos
-    return hunt_offers(url, kw, precio, es_pro=es_pro_simulado, plan=plan_str, headless=headless)
+    if src == "airbnb":
+        print("🏠 [Dispatcher] Airbnb detectado. Saltando a hunt_airbnb...")
+        return hunt_airbnb(url, precio)
+    
+    # Si llega acá, es porque no entró al if de arriba
+    print(f"🌐 [Dispatcher] No es Airbnb. Derivando a hunt_offers para {src}...")
+    
+    plan_str = plan_vista.lower() 
+    es_pro_simulado = (plan_str in ["pro", "business_monitor", "business_reseller"])
+    return hunt_offers(url, b.get("keyword", ""), precio, es_pro=es_pro_simulado, plan=plan_str, headless=headless)
   
 
 def es_plan_business(plan: str) -> bool:
@@ -1559,7 +1561,7 @@ def render_business_reseller_dashboard(plan_label_text: str):
                 }
             )
 
-        st.dataframe(rows, width='stretch', hide_index=True)
+        st.dataframe(rows, use_container_width=True, hide_index=True)
 
 
 
@@ -1673,6 +1675,23 @@ st.markdown(
         margin-bottom: 1rem;
     }
 
+    /* 🎨 EL NUEVO ESTILO PARA LOS DESPLEGABLES */
+    div[data-baseweb="select"] > div {
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        background-color: rgba(255, 255, 255, 0.07) !important;
+        border-radius: 14px !important; /* Para que combine con tus inputs */
+    }
+
+    /* Efecto al pasar el mouse */
+    div[data-baseweb="select"]:hover > div {
+        border-color: #ff4b4b !important;
+    }
+    
+    /* Estilo para el texto dentro del select */
+    div[data-testid="stSelectbox"] label {
+        color: #ddd !important;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -1700,7 +1719,7 @@ def mostrar_selector_producto():
             """,
             unsafe_allow_html=True,
         )
-        if st.button("Elegir Howlify", width='stretch', key="choose_consumer"):
+        if st.button("Elegir Howlify", use_container_width=True, key="choose_consumer"):
             st.session_state["product_type"] = "consumer"
             st.rerun()
 
@@ -1716,7 +1735,7 @@ def mostrar_selector_producto():
             """,
             unsafe_allow_html=True,
         )
-        if st.button("Elegir Business", width='stretch', key="choose_business"):
+        if st.button("Elegir Business", use_container_width=True, key="choose_business"):
             st.session_state["product_type"] = "business"
             st.rerun()
 
@@ -1744,7 +1763,7 @@ def mostrar_planes_consumer():
             """,
             unsafe_allow_html=True,
         )
-        if st.button("Elegir Starter", width='stretch', key="choose_starter"):
+        if st.button("Elegir Starter", use_container_width=True, key="choose_starter"):
             st.session_state["plan_elegido"] = "starter"
             st.rerun()
 
@@ -1763,7 +1782,7 @@ def mostrar_planes_consumer():
             """,
             unsafe_allow_html=True,
         )
-        if st.button("Elegir Pro", width='stretch', key="choose_pro"):
+        if st.button("Elegir Pro", use_container_width=True, key="choose_pro"):
             st.session_state["plan_elegido"] = "pro"
             st.rerun()
 
@@ -1791,7 +1810,7 @@ def mostrar_planes_business():
             """,
             unsafe_allow_html=True,
         )
-        if st.button("Elegir Business Reseller", width='stretch', key="choose_business_reseller"):
+        if st.button("Elegir Business Reseller", use_container_width=True, key="choose_business_reseller"):
             st.session_state["plan_elegido"] = "business_reseller"
             st.rerun()
 
@@ -1810,7 +1829,7 @@ def mostrar_planes_business():
             """,
             unsafe_allow_html=True,
         )
-        if st.button("Elegir Business Monitor", width='stretch', key="choose_business_monitor"):
+        if st.button("Elegir Business Monitor", use_container_width=True, key="choose_business_monitor"):
             st.session_state["plan_elegido"] = "business_monitor"
             st.rerun()
 
@@ -1910,7 +1929,7 @@ if "user_logged" not in st.session_state:
         u = st.text_input("Usuario o Email", key="l_u")
         p = st.text_input("Contraseña", type="password", key="l_p")
 
-        if st.button("Entrar", width='stretch', type="primary", key="l_submit"):
+        if st.button("Entrar", use_container_width=True, type="primary", key="l_submit"):
             user, err = supa_login(u, p)
             if user:
                 st.session_state["user_logged"] = user
@@ -1934,7 +1953,7 @@ if "user_logged" not in st.session_state:
             else:
                 st.error(err) # El error ya viene "cheto" desde auth_supabase.py
 
-        if st.button("Olvidé mi contraseña", width='stretch', key="l_reset"):
+        if st.button("Olvidé mi contraseña", use_container_width=True, key="l_reset"):
             if "@" in (u or ""):
                 # Ahora devuelve (bool, mensaje)
                 ok, msg = supa_reset_password(u)
@@ -1957,7 +1976,7 @@ if "user_logged" not in st.session_state:
 
             c1, c2, c3 = st.columns([1, 1.2, 1])
             with c2:
-                if st.button("← Volver", width='stretch', key="back_product_type"):
+                if st.button("← Volver", use_container_width=True, key="back_product_type"):
                     st.session_state["product_type"] = None
                     st.rerun()
 
@@ -1979,7 +1998,7 @@ if "user_logged" not in st.session_state:
                 level, icon = password_strength(np)
                 st.caption(f"Seguridad: {icon} {level}")
 
-            if st.button("Finalizar Registro", width='stretch', key="r_submit", type="primary"):
+            if st.button("Finalizar Registro", use_container_width=True, key="r_submit", type="primary"):
                 # Validamos que no falte nada antes de llamar a la función
                 if not nu or not em or not np or not np_confirm:
                     st.warning("⚠️ No te olvides de completar todos los campos.")
@@ -1994,7 +2013,7 @@ if "user_logged" not in st.session_state:
                     elif err:
                         st.error(err) # Acá sale el mensaje en criollo (ya registrado, etc)
 
-            if st.button("← Cambiar plan", width='stretch', key="back_to_plans"):
+            if st.button("← Cambiar plan", use_container_width=True, key="back_to_plans"):
                 st.session_state["plan_elegido"] = None
                 st.rerun()
 
@@ -2069,7 +2088,7 @@ with st.sidebar:
     st.markdown("### ⚙️ Utilidades")
     st.session_state["sound_enabled"] = st.checkbox("🔊 Sonido", value=st.session_state["sound_enabled"])
 
-    if st.button("🧩 Conectar MercadoLibre (resolver captcha/login)", width='stretch'):
+    if st.button("🧩 Conectar MercadoLibre (resolver captcha/login)", use_container_width=True):
         try:
             proc = subprocess.run(
                 [sys.executable, "scripts/ml_connect.py"],
@@ -2097,7 +2116,7 @@ with st.sidebar:
         st.divider()
         st.subheader("🛠️ Panel de Admin")
 
-        if st.button("🔄 Refrescar panel", width='stretch'):
+        if st.button("🔄 Refrescar panel", use_container_width=True):
             st.rerun()
 
         plan_simulado = st.radio(
@@ -2136,7 +2155,7 @@ with st.sidebar:
             if not rows:
                 st.caption("No hay usuarios.")
             else:
-                st.dataframe(rows, width='stretch', hide_index=True)
+                st.dataframe(rows, use_container_width=True, hide_index=True)
         except Exception as e:
             st.error(f"Error cargando usuarios: {e}")
 
@@ -2217,32 +2236,94 @@ es_solo_monitor = (plan_para_el_form == "business_monitor")
 
 # ==========================================================
 # 1. ZONA DE CONFIGURACIÓN (UNIFICADA)
-# ==========================================================
-# --- 📲 EXPANDER DE NOTIFICACIONES (RESTAURADO E INTEGRADO) ---
+# ==========================================================# 
+# --- 📲 EXPANDER DE NOTIFICACIONES (REPORTE DIARIO AL PRINCIPIO) ---
 with st.expander("📲 Configurar Notificaciones", expanded=False):
-    st.markdown("Gestioná tus canales de alerta para no perder ninguna presa.")
+    st.markdown("Gestioná el reporte de salud de la jauría y tus canales de alerta.")
     
     # 1. Carga de datos de perfil
     try:
-        res_prof = supabase.table("profiles").select("telegram_id", "whatsapp_number", "email_notifications").eq("user_id", user_id).execute()
+        res_prof = supabase.table("profiles").select(
+            "telegram_id", "whatsapp_number", "email_notifications", 
+            "report_enabled", "report_time", "report_days"
+        ).eq("user_id", user_id).execute()
+        
         prof_data = res_prof.data[0] if res_prof.data else {}
         t_id = prof_data.get("telegram_id")
         ws_actual = prof_data.get("whatsapp_number")
         mail_active = prof_data.get("email_notifications", True)
+        
+        # Datos del reporte
+        rep_enabled = prof_data.get("report_enabled", True)
+        rep_time_db = prof_data.get("report_time", "09:00:00")
+        rep_days_db = prof_data.get("report_days", ["Lunes", "Miércoles", "Viernes"])
     except Exception as e_prof:
         st.error(f"Error al cargar perfil: {e_prof}")
         t_id, ws_actual, mail_active = None, None, True
+        rep_enabled, rep_time_db, rep_days_db = True, "09:00:00", []
 
-    # Traemos las reglas del plan para validar permisos
-    rules = get_effective_plan_rules(plan)
-    # Usamos las variables que ya tenés en tu lógica para planes
-    # (Ajustalas si tus llaves de rules se llaman distinto, ej: rules['can_use_telegram'])
+    # --- 📅 1. SECCIÓN REPORTE DIARIO (PROTAGONISTA) ---
+    st.markdown("#### 📅 Reporte Diario de Salud")
+    st.caption("Recibí un resumen matutino de todas tus cacerías activas directamente en Telegram.")
     
-    # --- 📧 SECCIÓN EMAIL (Para todos los planes) ---
+    col_rep1, col_rep2 = st.columns([2, 1])
+    with col_rep1:
+        nuevos_dias = st.multiselect(
+            "Días de envío:",
+            ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"],
+            default=rep_days_db if rep_days_db else ["Lunes"],
+            key="ms_report_days_profile"
+        )
+    with col_rep2:
+        hora_actual_formato = rep_time_db[:5] if rep_time_db else "09:00"
+        lista_horas = [f"{h:02d}:00" for h in range(24)]
+        idx_hora = lista_horas.index(hora_actual_formato) if hora_actual_formato in lista_horas else 9
+        nueva_hora = st.selectbox("Hora:", lista_horas, index=idx_hora, key="sb_report_time_profile")
+    
+    col_tgl, col_btn_rep = st.columns([1, 2])
+    with col_tgl:
+        activar_rep = st.toggle("Activar Reporte", value=rep_enabled, key="tg_report_enabled")
+    with col_btn_rep:
+        if st.button("💾 Guardar Agenda de Reporte", width="stretch", key="btn_save_report_vfinal"):
+            updates = {
+                "report_enabled": activar_rep,
+                "report_days": nuevos_dias,
+                "report_time": f"{nueva_hora}:00"
+            }
+            supabase.table("profiles").update(updates).eq("user_id", user_id).execute()
+            st.success("✅ Agenda del Lobo actualizada.")
+            time.sleep(1); st.rerun()
+
+    st.divider()
+
+    # --- 🟦 2. SECCIÓN TELEGRAM ---
+    st.markdown("#### 🟦 Telegram")
+    if "pro" in plan.lower() or "business" in plan.lower():
+        if not t_id:
+            url_bot = f"https://t.me/howlify_bot?start={user_id}" 
+            st.link_button("🐺 Vincular Telegram ahora", url_bot, width="stretch")
+            if st.button("🔄 Verificar Vinculación", key="btn_verify_tg_vfinal"): st.rerun()
+        else:
+            st.success(f"✅ Vinculado (ID: {t_id})")
+            col_tel1, col_tel2 = st.columns(2)
+            with col_tel1:
+                if st.button("🧪 Probar Alerta", width="stretch", key="btn_test_tg_vfinal"): 
+                    exito = enviar_telegram(t_id, "¡Aullido de prueba exitoso! 🐺")
+                    if exito: st.toast("✅ ¡Mensaje enviado!")
+            with col_tel2:
+                if st.button("🗑️ Desvincular", width="stretch", key="btn_unlink_tg"):
+                    supabase.table("profiles").update({"telegram_id": None}).eq("user_id", user_id).execute()
+                    st.rerun()
+    else:
+        st.warning("🔒 Telegram disponible en planes **Pro** y **Business**.")
+
+    st.divider()
+
+    # --- 📧 3. SECCIÓN EMAIL ---
     st.markdown("#### 📧 Correo Electrónico")
     col_m1, col_m2 = st.columns([3, 1])
     with col_m1:
-        st.info(f"Las alertas se enviarán a: **{st.session_state.get('user_email', 'tu email de registro')}**")
+        st.info(f"Alertas enviadas a: **{st.session_state.get('user_email', 'tu email')}**")
     with col_m2:
         nuevo_estado_mail = st.toggle("Activar", value=mail_active, key="tg_mail_notif")
         
@@ -2252,53 +2333,44 @@ with st.expander("📲 Configurar Notificaciones", expanded=False):
 
     st.divider()
 
-    # --- 🟦 SECCIÓN TELEGRAM (Solo Pro y Business) ---
-    st.markdown("#### 🟦 Telegram")
-    # Verificamos si el plan permite Telegram (Pro o Business)
-    if "pro" in plan.lower() or "business" in plan.lower():
-        if not t_id:
-            url_bot = f"https://t.me/howlify_bot?start={user_id}" 
-            st.link_button("🐺 Vincular Telegram ahora", url_bot, width="stretch")
-            if st.button("🔄 Verificar Vinculación", key="btn_verify_tg_vfinal"): 
-                st.rerun()
-        else:
-            st.success(f"✅ Vinculado (ID: {t_id})")
-            col_tel1, col_tel2 = st.columns(2)
-            with col_tel1:
-                if st.button("🧪 Probar Alerta", width="stretch", key="btn_test_tg_vfinal"): 
-                    with st.spinner("Enviando..."):
-                        exito = enviar_telegram(t_id, "¡Aullido de prueba exitoso! 🐺")
-                        if exito: st.toast("✅ ¡Mensaje enviado!")
-                        else: st.error("❌ Falló el envío.")
-            with col_tel2:
-                if st.button("🗑️ Desvincular", width="stretch", key="btn_unlink_tg"):
-                    supabase.table("profiles").update({"telegram_id": None}).eq("user_id", user_id).execute()
-                    st.warning("Cuenta desvinculada.")
-                    time.sleep(1); st.rerun()
-    else:
-        st.warning("🔒 Telegram disponible en planes **Pro** y **Business**.")
-
-    st.divider()
-
-    # --- 🟩 SECCIÓN WHATSAPP (Solo Business) ---
+    # --- 🟩 4. SECCIÓN WHATSAPP ---
     st.markdown("#### 🟩 WhatsApp")
-    # Según tu lógica anterior, solo para Business
-    if "business" in plan.lower():
+    if plan.lower() in ["pro", "business_reseller", "business_monitor"]:
         ws_num = st.text_input("Número (ej: 54911...)", value=ws_actual if ws_actual else "", key="ws_input_vfinal")
         if st.button("💾 Guardar WhatsApp", width="stretch", key="btn_save_ws_vfinal"):
-            if ws_num.strip():
-                supabase.table("profiles").update({"whatsapp_number": ws_num.strip()}).eq("user_id", user_id).execute()
-                st.success("✅ Guardado.")
+            ws_limpio = "".join(filter(str.isdigit, ws_num))
+            if len(ws_limpio) >= 10:
+                supabase.table("profiles").update({"whatsapp_number": ws_limpio}).eq("user_id", user_id).execute()
+                st.success(f"✅ WhatsApp {ws_limpio} vinculado.")
                 time.sleep(1); st.rerun()
+            else:
+                st.error("⚠️ El número es demasiado corto.")
     else:
-        st.warning("🔒 WhatsApp solo disponible en plan **Business Monitor**.")
+        st.info("💡 **Tip:** WhatsApp disponible en planes **Pro** o **Business**.")
 
-# --- ➕ NUEVA CACERÍA ---
+# --- ➕ NUEVA CACERÍA (LIMPIO - SIN REPORTE) ---
 total_ocupado = cazas_activas
 if total_ocupado < limite_plan:
     with st.expander("➕ Configurar nueva cacería", expanded=False):
-        n_url = st.text_input("URL", placeholder="Pegá el link de Mercado Libre...", key="new_hunt_url_final")
-        n_key = st.text_input("Palabra clave", placeholder="Ej: Lavarropas Inverter...", key="new_hunt_key_final")
+        # 1. Selección de Nicho para guiar al usuario
+        tipo_caza = st.selectbox(
+            "¿Qué vamos a olfatear?",
+            ["🛒 Producto (ML, Tiendas)", "✈️ Vuelo (Despegar)", "🏠 Alojamiento (Airbnb)"],
+            key="tipo_caza_selector"
+        )
+
+        # 2. Ayuda contextual según la selección
+        if "Airbnb" in tipo_caza:
+            st.info("💡 **Guía Pro:** Configurá tus fechas y huéspedes directamente en la web de Airbnb. Una vez que tengas los resultados, pegá la URL aquí. El Lobo vigilará el precio total de esa búsqueda exacta.")
+        elif "Vuelo" in tipo_caza:
+            st.info("💡 **Guía Pro:** Usá la URL de Despegar con tus fechas ya elegidas. El Lobo rastreará el precio para ese tramo y cantidad de pasajeros.")
+
+        col_url, col_kw = st.columns([2, 1])
+        with col_url:
+            n_url = st.text_input("URL", placeholder="Pegá el link aquí...", key="new_hunt_url_final")
+        with col_kw:
+            p_holder = "Ej: 2 pers, 4 noches" if "Airbnb" in tipo_caza else "Ej: Lavarropas Inverter..."
+            n_key = st.text_input("Palabra clave / Etiqueta", placeholder=p_holder, key="new_hunt_key_final")
 
         if es_solo_monitor:
             # --- VISTA MONITOR (MAP) ---
@@ -2327,53 +2399,27 @@ if total_ocupado < limite_plan:
                 tipo_db = "descuento"
             n_min, n_max = 0, 0 
 
-        # ==========================================================
-        # 🐺 SECCIÓN DE FRECUENCIA Y REPORTE DIARIO
-        # ==========================================================
+        # --- FRECUENCIA ---
         st.divider()
-        
-        # 1. FRECUENCIA DE RASTREO (Para todos los planes)
         n_freq = st.selectbox("Frecuencia de rastreo del Sabueso:", rules["freq_options"], key="freq_sel_final")
 
-        # 2. CONFIGURACIÓN DE REPORTE (Solo Business Monitor y Reseller)
-        # Usamos familia_raw que ya definimos arriba del bloque
-        if "business" in familia_raw.lower():
-            st.markdown("#### 📅 Configuración de Reporte de Salud")
-            st.caption("Recibí un resumen del estado de tus links y alertas en tu horario preferido.")
-            
-            c_dias, c_hora = st.columns([2, 1])
-            with c_dias:
-                dias_rep = st.multiselect(
-                    "Días de envío:",
-                    ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"],
-                    default=["Lunes", "Miércoles", "Viernes"],
-                    key="dias_rep_new_caza"
-                )
-            with c_hora:
-                hora_rep = st.selectbox(
-                    "Hora:",
-                    [f"{h:02d}:00" for h in range(24)],
-                    index=9, # 09:00 AM por defecto
-                    key="hora_rep_new_caza"
-                )
-        else:
-            # Para Starter/Pro seteamos valores vacíos para no romper la función de guardado
-            dias_rep, hora_rep = [], None
-
-        # ==========================================================
-        # BOTÓN LANZAR
-        # ==========================================================
+        # --- BOTÓN LANZAR ---
         if st.button("Lanzar", width="stretch", key="btn_lanzar_caza_final"):
             if not n_url.strip() or not n_key.strip():
-                st.error("Completá URL y Palabra clave.")
+                st.error("Completá URL y Palabra clave / Etiqueta.")
             else:
                 url_limpia = clean_ml_url(n_url)
                 precio_max_int = parse_price_to_int(n_price)
                 src = infer_source_from_url(url_limpia) or DEFAULT_SOURCE
                 
-                # 🐺 NOTA: Aquí deberás actualizar guardar_caza_supabase 
-                # para que acepte dias_rep y hora_rep más adelante.
-                res = guardar_caza_supabase(user_id, n_key, url_limpia, precio_max_int, n_freq, tipo_db, plan, src, dias_rep=dias_rep, hora_rep=hora_rep)
+                if "Airbnb" in tipo_caza and src != "airbnb":
+                    st.warning("⚠️ Detectamos que la URL no parece ser de Airbnb. Revisala para evitar errores.")
+
+                # Guardado directo (los reportes se manejan desde Perfil ahora)
+                res = guardar_caza_supabase(
+                    user_id, n_key, url_limpia, precio_max_int, 
+                    n_freq, tipo_db, plan, src
+                )
                 
                 if res is True:
                     if es_solo_monitor:
@@ -2381,10 +2427,10 @@ if total_ocupado < limite_plan:
                         if res_caza.data:
                             upsert_monitor_rule(user_id, res_caza.data[0]["id"], n_key, url_limpia, src, n_min, n_min, n_max)
                     
-                    st.success("✅ Caza creada correctamente.")
+                    st.success(f"✅ ¡{tipo_caza} agregada correctamente!")
                     time.sleep(1); st.rerun()
 
-st.divider() # Mantiene la separación con el listado de abajo
+st.divider()
 
 # ==========================================================
 # 2. BOTÓN MASIVO Y LISTADO (CENTRO DE CONTROL)
@@ -2433,7 +2479,8 @@ if st.session_state.get("busquedas"):
             with c_btns:
                 b_cols = st.columns(3)
                 if b_cols[0].button("🐺", key=f"olf_f_{rid}", width="stretch"):
-                    res_ind = hunt_offers(url, kw, p_max, es_pro=("business" in familia_raw.lower()), headless=FORCE_HEADLESS)
+                    # CAMBIO CLAVE: Usamos el dispatcher en lugar de hunt_offers directo
+                    res_ind = run_manual_hunt(b, headless=FORCE_HEADLESS) 
                     st.session_state[f"last_res_{rid}"] = res_ind
                     st.rerun()
                 if b_cols[1].button("✏️", key=f"edit_f_{rid}", width="stretch"):

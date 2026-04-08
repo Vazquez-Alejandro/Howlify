@@ -2236,32 +2236,94 @@ es_solo_monitor = (plan_para_el_form == "business_monitor")
 
 # ==========================================================
 # 1. ZONA DE CONFIGURACIÓN (UNIFICADA)
-# ==========================================================
-# --- 📲 EXPANDER DE NOTIFICACIONES (RESTAURADO E INTEGRADO) ---
+# ==========================================================# 
+# --- 📲 EXPANDER DE NOTIFICACIONES (REPORTE DIARIO AL PRINCIPIO) ---
 with st.expander("📲 Configurar Notificaciones", expanded=False):
-    st.markdown("Gestioná tus canales de alerta para no perder ninguna presa.")
+    st.markdown("Gestioná el reporte de salud de la jauría y tus canales de alerta.")
     
     # 1. Carga de datos de perfil
     try:
-        res_prof = supabase.table("profiles").select("telegram_id", "whatsapp_number", "email_notifications").eq("user_id", user_id).execute()
+        res_prof = supabase.table("profiles").select(
+            "telegram_id", "whatsapp_number", "email_notifications", 
+            "report_enabled", "report_time", "report_days"
+        ).eq("user_id", user_id).execute()
+        
         prof_data = res_prof.data[0] if res_prof.data else {}
         t_id = prof_data.get("telegram_id")
         ws_actual = prof_data.get("whatsapp_number")
         mail_active = prof_data.get("email_notifications", True)
+        
+        # Datos del reporte
+        rep_enabled = prof_data.get("report_enabled", True)
+        rep_time_db = prof_data.get("report_time", "09:00:00")
+        rep_days_db = prof_data.get("report_days", ["Lunes", "Miércoles", "Viernes"])
     except Exception as e_prof:
         st.error(f"Error al cargar perfil: {e_prof}")
         t_id, ws_actual, mail_active = None, None, True
+        rep_enabled, rep_time_db, rep_days_db = True, "09:00:00", []
 
-    # Traemos las reglas del plan para validar permisos
-    rules = get_effective_plan_rules(plan)
-    # Usamos las variables que ya tenés en tu lógica para planes
-    # (Ajustalas si tus llaves de rules se llaman distinto, ej: rules['can_use_telegram'])
+    # --- 📅 1. SECCIÓN REPORTE DIARIO (PROTAGONISTA) ---
+    st.markdown("#### 📅 Reporte Diario de Salud")
+    st.caption("Recibí un resumen matutino de todas tus cacerías activas directamente en Telegram.")
     
-    # --- 📧 SECCIÓN EMAIL (Para todos los planes) ---
+    col_rep1, col_rep2 = st.columns([2, 1])
+    with col_rep1:
+        nuevos_dias = st.multiselect(
+            "Días de envío:",
+            ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"],
+            default=rep_days_db if rep_days_db else ["Lunes"],
+            key="ms_report_days_profile"
+        )
+    with col_rep2:
+        hora_actual_formato = rep_time_db[:5] if rep_time_db else "09:00"
+        lista_horas = [f"{h:02d}:00" for h in range(24)]
+        idx_hora = lista_horas.index(hora_actual_formato) if hora_actual_formato in lista_horas else 9
+        nueva_hora = st.selectbox("Hora:", lista_horas, index=idx_hora, key="sb_report_time_profile")
+    
+    col_tgl, col_btn_rep = st.columns([1, 2])
+    with col_tgl:
+        activar_rep = st.toggle("Activar Reporte", value=rep_enabled, key="tg_report_enabled")
+    with col_btn_rep:
+        if st.button("💾 Guardar Agenda de Reporte", width="stretch", key="btn_save_report_vfinal"):
+            updates = {
+                "report_enabled": activar_rep,
+                "report_days": nuevos_dias,
+                "report_time": f"{nueva_hora}:00"
+            }
+            supabase.table("profiles").update(updates).eq("user_id", user_id).execute()
+            st.success("✅ Agenda del Lobo actualizada.")
+            time.sleep(1); st.rerun()
+
+    st.divider()
+
+    # --- 🟦 2. SECCIÓN TELEGRAM ---
+    st.markdown("#### 🟦 Telegram")
+    if "pro" in plan.lower() or "business" in plan.lower():
+        if not t_id:
+            url_bot = f"https://t.me/howlify_bot?start={user_id}" 
+            st.link_button("🐺 Vincular Telegram ahora", url_bot, width="stretch")
+            if st.button("🔄 Verificar Vinculación", key="btn_verify_tg_vfinal"): st.rerun()
+        else:
+            st.success(f"✅ Vinculado (ID: {t_id})")
+            col_tel1, col_tel2 = st.columns(2)
+            with col_tel1:
+                if st.button("🧪 Probar Alerta", width="stretch", key="btn_test_tg_vfinal"): 
+                    exito = enviar_telegram(t_id, "¡Aullido de prueba exitoso! 🐺")
+                    if exito: st.toast("✅ ¡Mensaje enviado!")
+            with col_tel2:
+                if st.button("🗑️ Desvincular", width="stretch", key="btn_unlink_tg"):
+                    supabase.table("profiles").update({"telegram_id": None}).eq("user_id", user_id).execute()
+                    st.rerun()
+    else:
+        st.warning("🔒 Telegram disponible en planes **Pro** y **Business**.")
+
+    st.divider()
+
+    # --- 📧 3. SECCIÓN EMAIL ---
     st.markdown("#### 📧 Correo Electrónico")
     col_m1, col_m2 = st.columns([3, 1])
     with col_m1:
-        st.info(f"Las alertas se enviarán a: **{st.session_state.get('user_email', 'tu email de registro')}**")
+        st.info(f"Alertas enviadas a: **{st.session_state.get('user_email', 'tu email')}**")
     with col_m2:
         nuevo_estado_mail = st.toggle("Activar", value=mail_active, key="tg_mail_notif")
         
@@ -2271,56 +2333,22 @@ with st.expander("📲 Configurar Notificaciones", expanded=False):
 
     st.divider()
 
-    # --- 🟦 SECCIÓN TELEGRAM (Solo Pro y Business) ---
-    st.markdown("#### 🟦 Telegram")
-    # Verificamos si el plan permite Telegram (Pro o Business)
-    if "pro" in plan.lower() or "business" in plan.lower():
-        if not t_id:
-            url_bot = f"https://t.me/howlify_bot?start={user_id}" 
-            st.link_button("🐺 Vincular Telegram ahora", url_bot, width="stretch")
-            if st.button("🔄 Verificar Vinculación", key="btn_verify_tg_vfinal"): 
-                st.rerun()
-        else:
-            st.success(f"✅ Vinculado (ID: {t_id})")
-            col_tel1, col_tel2 = st.columns(2)
-            with col_tel1:
-                if st.button("🧪 Probar Alerta", width="stretch", key="btn_test_tg_vfinal"): 
-                    with st.spinner("Enviando..."):
-                        exito = enviar_telegram(t_id, "¡Aullido de prueba exitoso! 🐺")
-                        if exito: st.toast("✅ ¡Mensaje enviado!")
-                        else: st.error("❌ Falló el envío.")
-            with col_tel2:
-                if st.button("🗑️ Desvincular", width="stretch", key="btn_unlink_tg"):
-                    supabase.table("profiles").update({"telegram_id": None}).eq("user_id", user_id).execute()
-                    st.warning("Cuenta desvinculada.")
-                    time.sleep(1); st.rerun()
-    else:
-        st.warning("🔒 Telegram disponible en planes **Pro** y **Business**.")
-
-    st.divider()
-    # --- 🟩 SECCIÓN WHATSAPP (Pro y Business) ---
+    # --- 🟩 4. SECCIÓN WHATSAPP ---
     st.markdown("#### 🟩 WhatsApp")
-    
-    # Definimos qué planes tienen acceso (Pro y cualquier versión de Business)
-    planes_con_whatsapp = ["pro", "business_reseller", "business_monitor"]
-    
-    if plan.lower() in planes_con_whatsapp:
+    if plan.lower() in ["pro", "business_reseller", "business_monitor"]:
         ws_num = st.text_input("Número (ej: 54911...)", value=ws_actual if ws_actual else "", key="ws_input_vfinal")
-        
-        if st.button("💾 Guardar WhatsApp", use_container_width=True, key="btn_save_ws_vfinal"):
-            # Limpieza: dejamos solo dígitos
+        if st.button("💾 Guardar WhatsApp", width="stretch", key="btn_save_ws_vfinal"):
             ws_limpio = "".join(filter(str.isdigit, ws_num))
-            
-            if len(ws_limpio) >= 10: # Validación mínima de largo
+            if len(ws_limpio) >= 10:
                 supabase.table("profiles").update({"whatsapp_number": ws_limpio}).eq("user_id", user_id).execute()
-                st.success(f"✅ WhatsApp {ws_limpio} vinculado con éxito.")
+                st.success(f"✅ WhatsApp {ws_limpio} vinculado.")
                 time.sleep(1); st.rerun()
             else:
-                st.error("⚠️ El número es demasiado corto. Incluí código de país y área.")
+                st.error("⚠️ El número es demasiado corto.")
     else:
-        st.info("💡 **Tip de Ahorro:** Pasate al plan **Pro** o **Business** para recibir alertas de vuelos y ofertas directo en tu WhatsApp.")
+        st.info("💡 **Tip:** WhatsApp disponible en planes **Pro** o **Business**.")
 
-# --- ➕ NUEVA CACERÍA (BLOQUE CONSOLIDADO) ---
+# --- ➕ NUEVA CACERÍA (LIMPIO - SIN REPORTE) ---
 total_ocupado = cazas_activas
 if total_ocupado < limite_plan:
     with st.expander("➕ Configurar nueva cacería", expanded=False):
@@ -2341,7 +2369,6 @@ if total_ocupado < limite_plan:
         with col_url:
             n_url = st.text_input("URL", placeholder="Pegá el link aquí...", key="new_hunt_url_final")
         with col_kw:
-            # Placeholder dinámico para la Keyword (Etiqueta)
             p_holder = "Ej: 2 pers, 4 noches" if "Airbnb" in tipo_caza else "Ej: Lavarropas Inverter..."
             n_key = st.text_input("Palabra clave / Etiqueta", placeholder=p_holder, key="new_hunt_key_final")
 
@@ -2372,34 +2399,11 @@ if total_ocupado < limite_plan:
                 tipo_db = "descuento"
             n_min, n_max = 0, 0 
 
-        # --- FRECUENCIA Y REPORTES (UNIFICADO) ---
+        # --- FRECUENCIA ---
         st.divider()
         n_freq = st.selectbox("Frecuencia de rastreo del Sabueso:", rules["freq_options"], key="freq_sel_final")
 
-        if "business" in familia_raw.lower():
-            st.markdown("#### 📅 Configuración de Reporte de Salud")
-            st.caption("Recibí un resumen del estado de tus links y alertas en tu horario preferido.")
-            
-            c_dias, c_hora = st.columns([2, 1])
-            with c_dias:
-                dias_rep = st.multiselect(
-                    "Días de envío:",
-                    ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"],
-                    default=["Lunes", "Miércoles", "Viernes"],
-                    key="dias_rep_new_caza"
-                )
-            with c_hora:
-                hora_rep = st.selectbox(
-                    "Hora:",
-                    [f"{h:02d}:00" for h in range(24)],
-                    index=9, # 09:00 AM
-                    key="hora_rep_new_caza"
-                )
-        else:
-            # Para Starter/Pro seteamos valores vacíos
-            dias_rep, hora_rep = [], None
-
-        # --- BOTÓN LANZAR (DISPARADOR ÚNICO) ---
+        # --- BOTÓN LANZAR ---
         if st.button("Lanzar", width="stretch", key="btn_lanzar_caza_final"):
             if not n_url.strip() or not n_key.strip():
                 st.error("Completá URL y Palabra clave / Etiqueta.")
@@ -2408,15 +2412,13 @@ if total_ocupado < limite_plan:
                 precio_max_int = parse_price_to_int(n_price)
                 src = infer_source_from_url(url_limpia) or DEFAULT_SOURCE
                 
-                # Validación cruzada para Airbnb
                 if "Airbnb" in tipo_caza and src != "airbnb":
                     st.warning("⚠️ Detectamos que la URL no parece ser de Airbnb. Revisala para evitar errores.")
 
-                # Guardado en Supabase
+                # Guardado directo (los reportes se manejan desde Perfil ahora)
                 res = guardar_caza_supabase(
                     user_id, n_key, url_limpia, precio_max_int, 
-                    n_freq, tipo_db, plan, src, 
-                    dias_rep=dias_rep, hora_rep=hora_rep
+                    n_freq, tipo_db, plan, src
                 )
                 
                 if res is True:
@@ -2428,7 +2430,7 @@ if total_ocupado < limite_plan:
                     st.success(f"✅ ¡{tipo_caza} agregada correctamente!")
                     time.sleep(1); st.rerun()
 
-st.divider() # Separador con el listado
+st.divider()
 
 # ==========================================================
 # 2. BOTÓN MASIVO Y LISTADO (CENTRO DE CONTROL)
