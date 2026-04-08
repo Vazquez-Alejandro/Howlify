@@ -1157,7 +1157,6 @@ def save_user_whatsapp(user_id: str, whatsapp_number: str) -> bool:
 # ==========================================================
 # CAZAS
 # ==========================================================
-
 def guardar_caza_supabase(
     user_id: str,
     producto: str,
@@ -1167,6 +1166,8 @@ def guardar_caza_supabase(
     tipo_alerta: str,
     plan: str,
     source: str | None = None,
+    dias_rep: list = [],    # 🆕 Nuevo
+    hora_rep: str = None    # 🆕 Nuevo
 ):
     try:
         if not user_id:
@@ -1182,6 +1183,7 @@ def guardar_caza_supabase(
 
         precio_int = parse_price_to_int(precio_max)
 
+        # 🐺 ARMADO DEL PAYLOAD PARA SUPABASE
         payload = {
             "user_id": user_id,
             "producto": (producto or "").strip(),
@@ -1193,6 +1195,9 @@ def guardar_caza_supabase(
             "estado": "activa",
             "source": source,
             "last_check": None,
+            "report_days": dias_rep,   # 🆕 Se guarda como text[]
+            "report_time": hora_rep,   # 🆕 Se guarda como time
+            "link_status": "ok"        # 🆕 Estado inicial por defecto
         }
 
         ins = supabase.table("cazas").insert(payload).execute()
@@ -2250,34 +2255,72 @@ es_solo_monitor = (plan_para_el_form == "business_monitor")
 # ==========================================================
 # 1. ZONA DE CONFIGURACIÓN (UNIFICADA)
 # ==========================================================
-
-# --- 📲 EXPANDER DE NOTIFICACIONES (RESTAURADO) ---
+# --- 📲 EXPANDER DE NOTIFICACIONES (RESTAURADO E INTEGRADO) ---
 with st.expander("📲 Configurar Notificaciones", expanded=False):
     st.markdown("Gestioná tus canales de alerta para no perder ninguna presa.")
+    
+    # 1. Carga de datos de perfil
     try:
-        res_prof = supabase.table("profiles").select("telegram_id", "whatsapp_number").eq("user_id", user_id).execute()
+        res_prof = supabase.table("profiles").select("telegram_id", "whatsapp_number", "email_notifications").eq("user_id", user_id).execute()
         prof_data = res_prof.data[0] if res_prof.data else {}
         t_id = prof_data.get("telegram_id")
         ws_actual = prof_data.get("whatsapp_number")
+        mail_active = prof_data.get("email_notifications", True)
     except Exception as e_prof:
         st.error(f"Error al cargar perfil: {e_prof}")
-        t_id, ws_actual = None, None
+        t_id, ws_actual, mail_active = None, None, True
 
-    st.markdown("#### 🟦 Telegram")
-    if not t_id:
-        url_bot = f"https://t.me/HowlifyBot?start={user_id}" 
-        st.link_button("🐺 Vincular Telegram ahora", url_bot, width="stretch")
-        if st.button("🔄 Verificar Vinculación", key="btn_verify_tg_vfinal"): 
-            st.rerun()
-    else:
-        st.success(f"✅ Vinculado (ID: {t_id})")
-        if st.button("🧪 Probar Alerta Telegram", width="stretch", key="btn_test_tg_vfinal"): 
-            st.toast("Enviando...")
+    # Traemos las reglas del plan para validar permisos
+    rules = get_effective_plan_rules(plan)
+    # Usamos las variables que ya tenés en tu lógica para planes
+    # (Ajustalas si tus llaves de rules se llaman distinto, ej: rules['can_use_telegram'])
+    
+    # --- 📧 SECCIÓN EMAIL (Para todos los planes) ---
+    st.markdown("#### 📧 Correo Electrónico")
+    col_m1, col_m2 = st.columns([3, 1])
+    with col_m1:
+        st.info(f"Las alertas se enviarán a: **{st.session_state.get('user_email', 'tu email de registro')}**")
+    with col_m2:
+        nuevo_estado_mail = st.toggle("Activar", value=mail_active, key="tg_mail_notif")
+        
+    if nuevo_estado_mail != mail_active:
+        supabase.table("profiles").update({"email_notifications": nuevo_estado_mail}).eq("user_id", user_id).execute()
+        st.toast("Preferencia de Email actualizada")
 
     st.divider()
+
+    # --- 🟦 SECCIÓN TELEGRAM (Solo Pro y Business) ---
+    st.markdown("#### 🟦 Telegram")
+    # Verificamos si el plan permite Telegram (Pro o Business)
+    if "pro" in plan.lower() or "business" in plan.lower():
+        if not t_id:
+            url_bot = f"https://t.me/howlify_bot?start={user_id}" 
+            st.link_button("🐺 Vincular Telegram ahora", url_bot, width="stretch")
+            if st.button("🔄 Verificar Vinculación", key="btn_verify_tg_vfinal"): 
+                st.rerun()
+        else:
+            st.success(f"✅ Vinculado (ID: {t_id})")
+            col_tel1, col_tel2 = st.columns(2)
+            with col_tel1:
+                if st.button("🧪 Probar Alerta", width="stretch", key="btn_test_tg_vfinal"): 
+                    with st.spinner("Enviando..."):
+                        exito = enviar_telegram(t_id, "¡Aullido de prueba exitoso! 🐺")
+                        if exito: st.toast("✅ ¡Mensaje enviado!")
+                        else: st.error("❌ Falló el envío.")
+            with col_tel2:
+                if st.button("🗑️ Desvincular", width="stretch", key="btn_unlink_tg"):
+                    supabase.table("profiles").update({"telegram_id": None}).eq("user_id", user_id).execute()
+                    st.warning("Cuenta desvinculada.")
+                    time.sleep(1); st.rerun()
+    else:
+        st.warning("🔒 Telegram disponible en planes **Pro** y **Business**.")
+
+    st.divider()
+
+    # --- 🟩 SECCIÓN WHATSAPP (Solo Business) ---
     st.markdown("#### 🟩 WhatsApp")
-    # Lógica de WhatsApp basada en el plan simulado/real
-    if es_solo_monitor or "pro" in familia_raw.lower() or "business" in familia_raw.lower():
+    # Según tu lógica anterior, solo para Business
+    if "business" in plan.lower():
         ws_num = st.text_input("Número (ej: 54911...)", value=ws_actual if ws_actual else "", key="ws_input_vfinal")
         if st.button("💾 Guardar WhatsApp", width="stretch", key="btn_save_ws_vfinal"):
             if ws_num.strip():
@@ -2285,8 +2328,8 @@ with st.expander("📲 Configurar Notificaciones", expanded=False):
                 st.success("✅ Guardado.")
                 time.sleep(1); st.rerun()
     else:
-        st.warning("🔒 WhatsApp solo disponible en planes Pro y Business.")
-
+        st.warning("🔒 WhatsApp solo disponible en plan **Business Monitor**.")
+        
 # --- ➕ NUEVA CACERÍA ---
 total_ocupado = cazas_activas
 if total_ocupado < limite_plan:
@@ -2367,7 +2410,7 @@ if total_ocupado < limite_plan:
                 
                 # 🐺 NOTA: Aquí deberás actualizar guardar_caza_supabase 
                 # para que acepte dias_rep y hora_rep más adelante.
-                res = guardar_caza_supabase(user_id, n_key, url_limpia, precio_max_int, n_freq, tipo_db, plan, src)
+                res = guardar_caza_supabase(user_id, n_key, url_limpia, precio_max_int, n_freq, tipo_db, plan, src, dias_rep=dias_rep, hora_rep=hora_rep)
                 
                 if res is True:
                     if es_solo_monitor:

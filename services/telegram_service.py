@@ -7,28 +7,30 @@ load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 def enviar_telegram(chat_id, mensaje, parse_mode="Markdown"):
-    """Función base para enviar CUALQUIER cosa por Telegram"""
-    if not TELEGRAM_TOKEN or not chat_id:
-        print("⚠ Telegram no configurado (Token o Chat ID ausente)")
+    # 🐺 IMPORTANTE: Usá el nombre EXACTO que tenés en el .env
+    # En tu .env pusiste TELEGRAM_TOKEN, así que acá va ese.
+    token = os.getenv("TELEGRAM_TOKEN") 
+    
+    if not token or not chat_id:
+        # Este print saldrá en tu terminal de Linux Mint si algo falla
+        print(f"⚠ Telegram Error. Token: {'OK' if token else 'FALTA'}, Chat ID: {chat_id}")
         return False
 
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,
         "text": mensaje,
         "parse_mode": parse_mode,
         "disable_web_page_preview": False
     }
-
+    
     try:
-        r = requests.post(url, json=payload, timeout=15)
-        if not r.ok:
-            print(f"❌ Error API Telegram: {r.text}")
-        return r.ok
+        r = requests.post(url, json=payload, timeout=10)
+        return r.status_code == 200
     except Exception as e:
-        print(f"❌ Error de conexión Telegram: {e}")
+        print(f"❌ Error conexión: {e}")
         return False
-
+    
 def enviar_alerta_oferta(chat_id, oferta, caza_nombre=""):
     """Específico para productos (tu lógica original mejorada)"""
     titulo = oferta.get("title") or "Oferta encontrada"
