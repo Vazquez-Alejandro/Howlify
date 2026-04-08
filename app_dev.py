@@ -9,6 +9,7 @@ import altair as alt
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
+
 import streamlit as st
 import streamlit.components.v1 as components
 from dotenv import load_dotenv
@@ -42,6 +43,7 @@ from services.business_service import obtener_top_oportunidades
 from services.whatsapp_service import enviar_whatsapp
 from services.telegram_service import enviar_telegram
 from utils.affiliate import get_affiliate_url
+from services.database_service import guardar_caza_supabase
 # 1. Las funciones de Base de Datos se quedan en db.database
 from db.database import (
     obtener_cazas, 
@@ -1157,61 +1159,6 @@ def save_user_whatsapp(user_id: str, whatsapp_number: str) -> bool:
 # ==========================================================
 # CAZAS
 # ==========================================================
-def guardar_caza_supabase(
-    user_id: str,
-    producto: str,
-    url: str,
-    precio_max,
-    frecuencia: str,
-    tipo_alerta: str,
-    plan: str,
-    source: str | None = None,
-    dias_rep: list = [],    # 🆕 Nuevo
-    hora_rep: str = None    # 🆕 Nuevo
-):
-    try:
-        if not user_id:
-            return False
-
-        rules = get_effective_plan_rules(plan)
-        max_cazas = int(rules["max_cazas_activas"])
-        source = (source or DEFAULT_SOURCE).strip().lower()
-
-        activas = contar_cazas_activas(user_id)
-        if activas >= max_cazas:
-            return "limite"
-
-        precio_int = parse_price_to_int(precio_max)
-
-        # 🐺 ARMADO DEL PAYLOAD PARA SUPABASE
-        payload = {
-            "user_id": user_id,
-            "producto": (producto or "").strip(),
-            "link": (url or "").strip(),
-            "precio_max": precio_int,
-            "frecuencia": (frecuencia or "").strip(),
-            "tipo_alerta": (tipo_alerta or "piso").strip().lower(),
-            "plan": rules["plan_key"],
-            "estado": "activa",
-            "source": source,
-            "last_check": None,
-            "report_days": dias_rep,   # 🆕 Se guarda como text[]
-            "report_time": hora_rep,   # 🆕 Se guarda como time
-            "link_status": "ok"        # 🆕 Estado inicial por defecto
-        }
-
-        ins = supabase.table("cazas").insert(payload).execute()
-
-        if getattr(ins, "data", None):
-            print("[guardar_caza_supabase] insert ok:", ins.data)
-            return True
-
-        print("[guardar_caza_supabase] insert sin data:", ins)
-        return False
-
-    except Exception as e:
-        print("[guardar_caza_supabase] error:", e)
-        return False
     
 def run_manual_hunt(b, headless=True):
     url = b.get("url") or b.get("link") or ""
@@ -2329,7 +2276,7 @@ with st.expander("📲 Configurar Notificaciones", expanded=False):
                 time.sleep(1); st.rerun()
     else:
         st.warning("🔒 WhatsApp solo disponible en plan **Business Monitor**.")
-        
+
 # --- ➕ NUEVA CACERÍA ---
 total_ocupado = cazas_activas
 if total_ocupado < limite_plan:

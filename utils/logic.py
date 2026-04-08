@@ -5,6 +5,7 @@ import requests
 from datetime import datetime, timezone
 
 
+
 # ==========================================================
 # 3. UTILIDADES DE LIMPIEZA Y FORMATO
 # ==========================================================
@@ -163,27 +164,6 @@ def clean_ml_url(url: str) -> str:
 # ==========================================================
 # 5. PERSISTENCIA Y REGLAS (Pegá esto al final de logic.py)
 # ==========================================================
-
-def guardar_caza_supabase(user_id, producto, url, precio_max, frecuencia, tipo_alerta, plan, source):
-    """Inserta una nueva cacería en la tabla principal de Supabase."""
-    from auth.supabase_client import supabase # Import local para evitar líos
-    try:
-        data = {
-            "user_id": user_id,
-            "producto": producto,
-            "link": url,
-            "precio_max": precio_max,
-            "frecuencia": frecuencia,
-            "plan": plan,
-            "tipo_alerta": tipo_alerta,
-            "source": source,
-            "estado": "activa"
-        }
-        res = supabase.table("cazas").insert(data).execute()
-        return True if res.data else False
-    except Exception as e:
-        print(f"❌ Error en guardar_caza_supabase: {e}")
-        return False
 
 def upsert_monitor_rule(user_id, caza_id, product_name, product_url, source, target_price, min_price_allowed, max_price_allowed):
     """Guarda o actualiza las reglas específicas para el Dashboard Business."""
