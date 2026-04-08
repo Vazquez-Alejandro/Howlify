@@ -1675,6 +1675,23 @@ st.markdown(
         margin-bottom: 1rem;
     }
 
+    /* 🎨 EL NUEVO ESTILO PARA LOS DESPLEGABLES */
+    div[data-baseweb="select"] > div {
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        background-color: rgba(255, 255, 255, 0.07) !important;
+        border-radius: 14px !important; /* Para que combine con tus inputs */
+    }
+
+    /* Efecto al pasar el mouse */
+    div[data-baseweb="select"]:hover > div {
+        border-color: #ff4b4b !important;
+    }
+    
+    /* Estilo para el texto dentro del select */
+    div[data-testid="stSelectbox"] label {
+        color: #ddd !important;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -2303,12 +2320,30 @@ with st.expander("📲 Configurar Notificaciones", expanded=False):
     else:
         st.info("💡 **Tip de Ahorro:** Pasate al plan **Pro** o **Business** para recibir alertas de vuelos y ofertas directo en tu WhatsApp.")
 
-# --- ➕ NUEVA CACERÍA ---
+# --- ➕ NUEVA CACERÍA (BLOQUE CONSOLIDADO) ---
 total_ocupado = cazas_activas
 if total_ocupado < limite_plan:
     with st.expander("➕ Configurar nueva cacería", expanded=False):
-        n_url = st.text_input("URL", placeholder="Pegá el link de Mercado Libre...", key="new_hunt_url_final")
-        n_key = st.text_input("Palabra clave", placeholder="Ej: Lavarropas Inverter...", key="new_hunt_key_final")
+        # 1. Selección de Nicho para guiar al usuario
+        tipo_caza = st.selectbox(
+            "¿Qué vamos a olfatear?",
+            ["🛒 Producto (ML, Tiendas)", "✈️ Vuelo (Despegar)", "🏠 Alojamiento (Airbnb)"],
+            key="tipo_caza_selector"
+        )
+
+        # 2. Ayuda contextual según la selección
+        if "Airbnb" in tipo_caza:
+            st.info("💡 **Guía Pro:** Configurá tus fechas y huéspedes directamente en la web de Airbnb. Una vez que tengas los resultados, pegá la URL aquí. El Lobo vigilará el precio total de esa búsqueda exacta.")
+        elif "Vuelo" in tipo_caza:
+            st.info("💡 **Guía Pro:** Usá la URL de Despegar con tus fechas ya elegidas. El Lobo rastreará el precio para ese tramo y cantidad de pasajeros.")
+
+        col_url, col_kw = st.columns([2, 1])
+        with col_url:
+            n_url = st.text_input("URL", placeholder="Pegá el link aquí...", key="new_hunt_url_final")
+        with col_kw:
+            # Placeholder dinámico para la Keyword (Etiqueta)
+            p_holder = "Ej: 2 pers, 4 noches" if "Airbnb" in tipo_caza else "Ej: Lavarropas Inverter..."
+            n_key = st.text_input("Palabra clave / Etiqueta", placeholder=p_holder, key="new_hunt_key_final")
 
         if es_solo_monitor:
             # --- VISTA MONITOR (MAP) ---
@@ -2337,16 +2372,10 @@ if total_ocupado < limite_plan:
                 tipo_db = "descuento"
             n_min, n_max = 0, 0 
 
-        # ==========================================================
-        # 🐺 SECCIÓN DE FRECUENCIA Y REPORTE DIARIO
-        # ==========================================================
+        # --- FRECUENCIA Y REPORTES (UNIFICADO) ---
         st.divider()
-        
-        # 1. FRECUENCIA DE RASTREO (Para todos los planes)
         n_freq = st.selectbox("Frecuencia de rastreo del Sabueso:", rules["freq_options"], key="freq_sel_final")
 
-        # 2. CONFIGURACIÓN DE REPORTE (Solo Business Monitor y Reseller)
-        # Usamos familia_raw que ya definimos arriba del bloque
         if "business" in familia_raw.lower():
             st.markdown("#### 📅 Configuración de Reporte de Salud")
             st.caption("Recibí un resumen del estado de tus links y alertas en tu horario preferido.")
@@ -2363,27 +2392,32 @@ if total_ocupado < limite_plan:
                 hora_rep = st.selectbox(
                     "Hora:",
                     [f"{h:02d}:00" for h in range(24)],
-                    index=9, # 09:00 AM por defecto
+                    index=9, # 09:00 AM
                     key="hora_rep_new_caza"
                 )
         else:
-            # Para Starter/Pro seteamos valores vacíos para no romper la función de guardado
+            # Para Starter/Pro seteamos valores vacíos
             dias_rep, hora_rep = [], None
 
-        # ==========================================================
-        # BOTÓN LANZAR
-        # ==========================================================
+        # --- BOTÓN LANZAR (DISPARADOR ÚNICO) ---
         if st.button("Lanzar", width="stretch", key="btn_lanzar_caza_final"):
             if not n_url.strip() or not n_key.strip():
-                st.error("Completá URL y Palabra clave.")
+                st.error("Completá URL y Palabra clave / Etiqueta.")
             else:
                 url_limpia = clean_ml_url(n_url)
                 precio_max_int = parse_price_to_int(n_price)
                 src = infer_source_from_url(url_limpia) or DEFAULT_SOURCE
                 
-                # 🐺 NOTA: Aquí deberás actualizar guardar_caza_supabase 
-                # para que acepte dias_rep y hora_rep más adelante.
-                res = guardar_caza_supabase(user_id, n_key, url_limpia, precio_max_int, n_freq, tipo_db, plan, src, dias_rep=dias_rep, hora_rep=hora_rep)
+                # Validación cruzada para Airbnb
+                if "Airbnb" in tipo_caza and src != "airbnb":
+                    st.warning("⚠️ Detectamos que la URL no parece ser de Airbnb. Revisala para evitar errores.")
+
+                # Guardado en Supabase
+                res = guardar_caza_supabase(
+                    user_id, n_key, url_limpia, precio_max_int, 
+                    n_freq, tipo_db, plan, src, 
+                    dias_rep=dias_rep, hora_rep=hora_rep
+                )
                 
                 if res is True:
                     if es_solo_monitor:
@@ -2391,10 +2425,10 @@ if total_ocupado < limite_plan:
                         if res_caza.data:
                             upsert_monitor_rule(user_id, res_caza.data[0]["id"], n_key, url_limpia, src, n_min, n_min, n_max)
                     
-                    st.success("✅ Caza creada correctamente.")
+                    st.success(f"✅ ¡{tipo_caza} agregada correctamente!")
                     time.sleep(1); st.rerun()
 
-st.divider() # Mantiene la separación con el listado de abajo
+st.divider() # Separador con el listado
 
 # ==========================================================
 # 2. BOTÓN MASIVO Y LISTADO (CENTRO DE CONTROL)
