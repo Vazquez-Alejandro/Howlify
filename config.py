@@ -1,40 +1,58 @@
 # howlify/config.py
 
-PLANS_PUBLIC = ["revendedor", "empresa"]  # lo que ve el usuario
-PLAN_DEFAULT = "trial"  # para nuevos usuarios (si querés)
+# Estos nombres deben coincidir con los que guardás en la columna 'plan' de tu tabla 'profiles'
+PLANS_PUBLIC = ["starter", "pro", "business_reseller", "business_monitor"]  
+PLAN_DEFAULT = "starter" 
 
 PLAN_LIMITS = {
-    # interno / beta
-    "trial": {
+    "starter": {
         "max_cazas_activas": 5,
-        "min_interval_minutes": 12 * 60,
+        "min_interval_minutes": 100,
         "stores": ["mercadolibre", "generic"],
         "features": {
-            "dashboard_empresa": False,
+            "whatsapp": False,
+            "telegram": True,
+            "vuelos_anuales": False,
+            "reporte_diario": False,
             "export_csv": False,
-            "multi_store_same_hunt": False,
         },
     },
-    # Plan 1
-    "revendedor": {
-        "max_cazas_activas": 100,
-        "min_interval_minutes": 60,  # 60 min (ajustable)
-        "stores": ["mercadolibre", "generic"],
+    "pro": {
+        "max_cazas_activas": 15,
+        "min_interval_minutes": 30,
+        "stores": ["mercadolibre", "generic", "duffel", "despegar", "airbnb"],
         "features": {
-            "dashboard_empresa": False,
+            "whatsapp": True,
+            "telegram": True,
+            "vuelos_anuales": True,
+            "reporte_diario": False,
+            "export_csv": True,
+        },
+    },
+    "business_reseller": {
+        "max_cazas_activas": 40,
+        "min_interval_minutes": 10,
+        "stores": ["mercadolibre", "generic", "duffel", "despegar", "airbnb"],
+        "features": {
+            "whatsapp": True,
+            "telegram": True,
+            "vuelos_anuales": True,
+            "reporte_diario": True,
             "export_csv": True,
             "multi_store_same_hunt": True,
         },
     },
-    # Plan 2
-    "empresa": {
-        # acá el core no son "cazas", pero igual ponemos un tope por seguridad
-        "max_cazas_activas": 300,
-        "min_interval_minutes": 30,
-        "stores": ["mercadolibre", "generic"],
+    "business_monitor": {
+        "max_cazas_activas": 100,
+        "min_interval_minutes": 10,
+        "stores": ["mercadolibre", "generic", "duffel", "despegar", "airbnb"],
         "features": {
-            "dashboard_empresa": True,
+            "whatsapp": True,
+            "telegram": True,
+            "vuelos_anuales": True,
+            "reporte_diario": True,
             "export_csv": True,
+            "dashboard_empresa": True,
             "multi_store_same_hunt": True,
         },
     },

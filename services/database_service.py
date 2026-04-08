@@ -23,22 +23,30 @@ ALERT_COOLDOWN_MINUTES = 60
 
 def guardar_caza_supabase(
     user_id: str, producto: str, url: str, precio_max, frecuencia: str,
-    tipo_alerta: str, plan: str, source: str | None = None, moneda: str = "ARS"
+    tipo_alerta: str, plan: str, source: str | None = None, moneda: str = "ARS",
+    dias_rep: str | None = None, hora_rep: int | None = None
 ):
     try:
-        if not user_id: return False
+        if not user_id: 
+            return False
 
-        # Validación de límites de plan
+        # 1. Validación de límites de plan
         rules = get_effective_plan_rules(plan)
         max_cazas = int(rules["max_cazas_activas"])
-        source = (source or DEFAULT_SOURCE).strip().lower()
+        
+        # Usamos el source por defecto si viene vacío
+        # (Asegurate que DEFAULT_SOURCE esté definido en tu config o scope)
+        source_final = (source or "generic").strip().lower()
 
+        # 2. Control de cantidad de cazas
         activas = contar_cazas_activas(user_id)
         if activas >= max_cazas:
             return "limite"
 
+        # 3. Limpieza de precio
         precio_int = parse_price_to_int(precio_max)
 
+        # 4. Construcción del payload incluyendo los nuevos campos de reporte
         payload = {
             "user_id": user_id,
             "producto": (producto or "").strip(),
@@ -46,22 +54,26 @@ def guardar_caza_supabase(
             "precio_max": precio_int,
             "frecuencia": (frecuencia or "").strip(),
             "tipo_alerta": (tipo_alerta or "piso").strip().lower(),
-            "plan": rules["plan_key"],
+            "plan": rules.get("plan_key", plan),
             "estado": "activa",
-            "source": source,
+            "source": source_final,
             "last_check": None,
             "currency": moneda.strip().upper(),
+            "dias_rep": dias_rep,  # Guardamos los días seleccionados (ej: "Lunes, Miércoles")
+            "hora_rep": hora_rep    # Guardamos la hora (ej: 9)
         }
 
+        # 5. Inserción en la base de datos
         ins = supabase.table("cazas").insert(payload).execute()
 
         if getattr(ins, "data", None):
-            print(f"[guardar_caza_supabase] insert ok ({moneda}):", ins.data)
+            print(f"✅ [guardar_caza_supabase] insert ok ({moneda}):", ins.data)
             return True
+            
         return False
 
     except Exception as e:
-        print("[guardar_caza_supabase] error:", e)
+        print(f"❌ [guardar_caza_supabase] error fatal: {e}")
         return False
 
 def run_manual_hunt(b, headless=True):

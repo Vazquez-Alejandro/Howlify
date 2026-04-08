@@ -2279,19 +2279,27 @@ with st.expander("📲 Configurar Notificaciones", expanded=False):
         st.warning("🔒 Telegram disponible en planes **Pro** y **Business**.")
 
     st.divider()
-
-    # --- 🟩 SECCIÓN WHATSAPP (Solo Business) ---
+    # --- 🟩 SECCIÓN WHATSAPP (Pro y Business) ---
     st.markdown("#### 🟩 WhatsApp")
-    # Según tu lógica anterior, solo para Business
-    if "business" in plan.lower():
+    
+    # Definimos qué planes tienen acceso (Pro y cualquier versión de Business)
+    planes_con_whatsapp = ["pro", "business_reseller", "business_monitor"]
+    
+    if plan.lower() in planes_con_whatsapp:
         ws_num = st.text_input("Número (ej: 54911...)", value=ws_actual if ws_actual else "", key="ws_input_vfinal")
-        if st.button("💾 Guardar WhatsApp", width="stretch", key="btn_save_ws_vfinal"):
-            if ws_num.strip():
-                supabase.table("profiles").update({"whatsapp_number": ws_num.strip()}).eq("user_id", user_id).execute()
-                st.success("✅ Guardado.")
+        
+        if st.button("💾 Guardar WhatsApp", use_container_width=True, key="btn_save_ws_vfinal"):
+            # Limpieza: dejamos solo dígitos
+            ws_limpio = "".join(filter(str.isdigit, ws_num))
+            
+            if len(ws_limpio) >= 10: # Validación mínima de largo
+                supabase.table("profiles").update({"whatsapp_number": ws_limpio}).eq("user_id", user_id).execute()
+                st.success(f"✅ WhatsApp {ws_limpio} vinculado con éxito.")
                 time.sleep(1); st.rerun()
+            else:
+                st.error("⚠️ El número es demasiado corto. Incluí código de país y área.")
     else:
-        st.warning("🔒 WhatsApp solo disponible en plan **Business Monitor**.")
+        st.info("💡 **Tip de Ahorro:** Pasate al plan **Pro** o **Business** para recibir alertas de vuelos y ofertas directo en tu WhatsApp.")
 
 # --- ➕ NUEVA CACERÍA ---
 total_ocupado = cazas_activas

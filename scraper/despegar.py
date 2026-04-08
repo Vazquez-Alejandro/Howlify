@@ -2,6 +2,7 @@ import os
 import re
 import time
 import requests
+from datetime import datetime, timedelta
 from dotenv import load_dotenv 
 load_dotenv()
 from playwright.sync_api import sync_playwright
@@ -28,6 +29,18 @@ def _looks_blocked(html_lower: str) -> bool:
     ]
     return any(x in html_lower for x in needles)
 
+def generar_fechas_busqueda(meses_adelante=12):
+    """Genera una lista de tuplas (ida, vuelta) para los próximos meses."""
+    fechas = []
+    hoy = datetime.now()
+    for i in range(1, meses_adelante + 1):
+        # Buscamos el día 15 de cada mes para estandarizar la búsqueda
+        fecha_base = hoy + timedelta(days=30 * i)
+        ida = fecha_base.replace(day=15).strftime("%Y-%m-%d")
+        vuelta = fecha_base.replace(day=25).strftime("%Y-%m-%d")
+        fechas.append((ida, vuelta))
+    return fechas
+
 def hunt_vuelos_api(dest_iata: str, max_price: int = 0, url: str = ""):
     if not DUFFEL_TOKEN:
         print("⚠️ [Duffel] No se encontró DUFFEL_ACCESS_TOKEN en el .env")
@@ -40,79 +53,74 @@ def hunt_vuelos_api(dest_iata: str, max_price: int = 0, url: str = ""):
     }
 
     try:
-        print(f"🚀 [API] Buscando vuelos EZE -> {dest_iata}...")
-        
-        payload = {
-            "data": {
-                "slices": [
-                    {"origin": "EZE", "destination": dest_iata, "departure_date": "2026-06-15"},
-                    {"origin": dest_iata, "destination": "EZE", "departure_date": "2026-06-25"}
-                ],
-                "passengers": [{"type": "adult"}]
-            }
-        }
-        
-        res = requests.post("https://api.duffel.com/air/offer_requests", json=payload, headers=headers)
-        res_data = res.json()
-        
-        if "errors" in res_data:
-            print(f"❌ Error API: {res_data['errors'][0]['message']}")
-            return []
-
-        offers = res_data["data"].get("offers", [])
-        results = []
+        print(f"🚀 [API] Buscando vuelos EZE -> {dest_iata} para los próximos 12 meses...")
+        ventanas = generar_fechas_busqueda(12)
+        all_results = []
         
         cotizacion = get_dolar_tarjeta()
         print(f"💵 Cotización Dólar Tarjeta: ${cotizacion}")
 
-        for o in offers:
-            price_usd = float(o["total_amount"])
-            price_ars = int(price_usd * cotizacion)
+        for ida, vuelta in ventanas:
+            payload = {
+                "data": {
+                    "slices": [
+                        {"origin": "EZE", "destination": dest_iata, "departure_date": ida},
+                        {"origin": dest_iata, "destination": "EZE", "departure_date": vuelta}
+                    ],
+                    "passengers": [{"type": "adult"}]
+                }
+            }
             
-            if max_price > 0 and price_ars > max_price:
-                continue
+            res = requests.post("https://api.duffel.com/air/offer_requests", json=payload, headers=headers)
+            res_data = res.json()
             
-            is_ganga = False
-            if price_usd < 450:
-                is_ganga = True
-            elif price_usd < 950:
-                is_ganga = True
+            if "errors" in res_data:
+                continue # Si un mes falla, seguimos con el siguiente
 
-            owner = o.get("owner", {})
-            airline_name = owner.get("name", "Aerolínea")
-            logo_url = owner.get("logo_symbol_url")
+            offers = res_data["data"].get("offers", [])
 
-            display_title = f"Vuelo EZE ✈️ {dest_iata}"
-            if is_ganga:
-                display_title += " 🔥 ¡OFERTA REAL!"
+            for o in offers:
+                price_usd = float(o["total_amount"])
+                price_ars = int(price_usd * cotizacion)
+                
+                if max_price > 0 and price_ars > max_price:
+                    continue
+                
+                is_ganga = price_usd < 450 or (price_usd < 950 and "EUROPA" in url.upper())
 
-            results.append({
-                "title": display_title,
-                "price": price_ars,
-                "price_usd": price_usd,
-                "airline": airline_name,
-                "logo": logo_url,
-                "is_ganga": is_ganga,
-                "url": url,
-                "source": "duffel"
-            })
+                owner = o.get("owner", {})
+                airline_name = owner.get("name", "Aerolínea")
+                logo_url = owner.get("logo_symbol_url")
+
+                display_title = f"Vuelo EZE ✈️ {dest_iata} ({ida})"
+                if is_ganga:
+                    display_title += " 🔥 ¡OFERTA!"
+
+                all_results.append({
+                    "title": display_title,
+                    "price": price_ars,
+                    "price_usd": price_usd,
+                    "airline": airline_name,
+                    "logo": logo_url,
+                    "is_ganga": is_ganga,
+                    "url": url,
+                    "source": "duffel",
+                    "date": ida
+                })
             
-        return sorted(results, key=lambda x: x["price"])[:10]
+        return sorted(all_results, key=lambda x: x["price"])[:10]
 
     except Exception as e:
         print(f"❌ Error fatal en Duffel: {e}")
         return []
 
-
-
 # --- FUNCIONES DE SOPORTE ---
 
 def _scrape_monthly_matrix(url, max_price=0):
-    print("👀 MODO HUMANO: Abriendo ventana para saltar bloqueos...")
+    print("👀 MODO HUMANO: Buscando precios con espera inteligente...")
     mejores_ofertas = []
     
     with sync_playwright() as p:
-        # headless=False abre la ventana para que veas qué pasa
         browser = p.chromium.launch(headless=False) 
         context = browser.new_context(
             viewport={'width': 1280, 'height': 800},
@@ -121,13 +129,17 @@ def _scrape_monthly_matrix(url, max_price=0):
         page = context.new_page()
         
         try:
-            page.goto(url, wait_until="domcontentloaded")
-            print("⏳ Esperando 10 segundos... Si ves un captcha, resolvelo.")
-            time.sleep(10) # Te damos tiempo para que cargue la grilla
+            # Esperamos a que la red esté inactiva (cargo todo)
+            page.goto(url, wait_until="networkidle", timeout=60000)
+            
+            # Esperamos a que aparezca al menos un signo de pesos o dólar
+            page.wait_for_selector("text=/$ /", timeout=20000)
+            
+            # Scroll suave para disparar el lazy loading de la grilla
+            page.mouse.wheel(0, 1000)
+            time.sleep(3) 
 
-            # Buscamos por texto directamente en la pantalla
             content = page.content()
-            # Buscamos patrones de precios (ej: USD 950 o $ 850.000)
             precios_encontrados = re.findall(r'(?:USD|\$)\s?(\d[\d\.,]*)', content)
             
             for p_raw in precios_encontrados:
@@ -135,7 +147,7 @@ def _scrape_monthly_matrix(url, max_price=0):
                 if precio and precio > 300:
                     if max_price == 0 or precio <= max_price:
                         mejores_ofertas.append({
-                            "title": "Vuelo detectado en Grilla",
+                            "title": "Vuelo detectado en Calendario",
                             "price": precio,
                             "url": url,
                             "source": "visual_hunt"
@@ -154,48 +166,42 @@ def hunt_despegar_vuelos(url, keyword="", max_price=0, es_pro=False, headless=Tr
     url_l = url.lower()
     kw_l = str(keyword or "").lower().strip()
     
-    # 1. Mapeo para comparar
     destinos_dict = {
         "barcelona": "BCN", "madrid": "MAD", "miami": "MIA", 
         "roma": "FCO", "cancun": "CUN", "rio": "GIG"
     }
     iata_esperado = destinos_dict.get(kw_l, kw_l.upper() if len(kw_l) == 3 else "")
 
-    # 2. DETECTOR DE IATA REAL (Lo que dice la URL)
     iata_url = ""
     deep_match = re.search(r'/(?P<orig>[a-z]{3})/(?P<dest>[a-z]{3})(?:/|\?|$)', url_l)
     if deep_match:
         iata_url = deep_match.group("dest").upper()
 
-    # 3. VALIDACIÓN DE DISCREPANCIA (Aviso sin bloqueo)
     alerta_match = ""
     if iata_url and iata_esperado and iata_url != iata_esperado:
         alerta_match = f"⚠️ (Link a {iata_url}, no {iata_esperado})"
-        print(f"🚩 AVISO: Discrepancia detectada {iata_url} vs {iata_esperado}")
 
-    # --- 4. MODO MENSUAL (PRO) ---
+    # --- MODO MENSUAL (PRO) ---
     if es_pro and ("flexible" in url_l or "calendar" in url_l or "vuelos-a-" in url_l):
         return _scrape_monthly_matrix(url, max_price)
 
-    # --- 5. EJECUCIÓN: PRIORIDAD URL ---
+    # --- PRIORIDAD URL / API ---
     destino_final = iata_url or iata_esperado
     
     if destino_final and len(destino_final) == 3:
-        print(f"🚀 Buscando por IATA: {destino_final}")
         res = hunt_vuelos_api(destino_final, max_price, url=url)
         for r in res:
-            r["title"] = f"Vuelo a {destino_final} {alerta_match}".strip()
+            r["title"] = f"{r['title']} {alerta_match}".strip()
         return res
     
-    # --- 6. SCRAPER LENTO (Fallback) ---
-    print(f"🕵️ Iniciando Scraper...")
+    # --- SCRAPER FALLBACK ---
+    print(f"🕵️ Iniciando Scraper de respaldo...")
     presas = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
         try:
-            page.goto(url, wait_until="domcontentloaded", timeout=60000)
-            time.sleep(5)
+            page.goto(url, wait_until="networkidle", timeout=60000)
             if _looks_blocked(page.content().lower()):
                 return [{"source": "vuelos", "blocked": True, "url": url}]
 
