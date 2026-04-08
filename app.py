@@ -35,7 +35,7 @@ load_dotenv()
 # ==========================================================
 print("🚀 APP REINICIADA - IMPORTANDO MÓDULOS...")
 
-from auth.supabase_client import supabase # Importante que esté después de load_dotenv()
+from auth.supabase_client import supabase 
 from auth.auth_supabase import supa_signup, supa_login, supa_reset_password
 from scraper.scraper_pro import hunt_offers
 from config import PLAN_LIMITS
@@ -43,17 +43,20 @@ from services.business_service import obtener_top_oportunidades
 from services.whatsapp_service import enviar_whatsapp
 from services.telegram_service import enviar_telegram
 from utils.affiliate import get_affiliate_url
+
+# --- 🛠️ SERVICIOS DE BASE DE DATOS ---
+# Centralizamos guardar_caza_supabase aquí, que es donde vive ahora
 from services.database_service import guardar_caza_supabase
-# 1. Las funciones de Base de Datos se quedan en db.database
+
 from db.database import (
     obtener_cazas, 
     save_user_telegram, 
     get_user_profile
 )
 
-# 2. Las funciones de Lógica se quedan en utils.logic
+# --- 🧠 UTILIDADES Y LÓGICA ---
+# Borramos guardar_caza_supabase de aquí porque ya no existe en este archivo
 from utils.logic import (
-    guardar_caza_supabase, 
     normalize_plan_family,
     clean_ml_url, 
     upsert_monitor_rule 
@@ -1591,43 +1594,57 @@ st.markdown(
         margin-bottom: 1rem;
     }
 
+    /* --- MODIFICACIÓN DE CARDS --- */
     .oh-card {
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
         border-radius: 20px;
-        padding: 22px 22px 18px 22px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.22);
-        min-height: 265px;
-        transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+        padding: 24px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        
+        /* Esto hace que todas midan lo mismo */
+        min-height: 380px; 
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        
+        transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
     }
 
     .oh-card:hover {
-        transform: translateY(-4px);
-        border-color: rgba(255,255,255,0.24);
-        box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+        transform: translateY(-8px);
+        border-color: #ff4b4b; /* Color que combina con tus botones */
+        box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        background: rgba(255,255,255,0.07);
     }
 
     .oh-card h3 {
         margin-top: 0;
-        margin-bottom: 0.6rem;
-        font-size: 1.2rem;
+        margin-bottom: 0.8rem;
+        font-size: 1.4rem;
+        color: #ffffff;
     }
 
     .oh-card p {
-        opacity: 0.94;
-        line-height: 1.5;
-        margin-bottom: 0.5rem;
+        opacity: 0.9;
+        line-height: 1.6;
+        margin-bottom: 0.8rem;
+        font-size: 0.95rem;
     }
 
     .oh-badge {
         display: inline-block;
-        font-size: 0.72rem;
-        font-weight: 600;
-        padding: 5px 10px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 6px 12px;
         border-radius: 999px;
-        background: rgba(255,255,255,0.12);
-        margin-bottom: 10px;
+        background: linear-gradient(90deg, #333, #444);
+        color: #eee;
+        margin-bottom: 15px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
+    /* ---------------------------- */
 
     div[data-baseweb="tab-list"] {
         gap: 10px;
@@ -1661,7 +1678,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-
 # ==========================================================
 # AUTH UI HELPERS
 # ==========================================================
@@ -1678,8 +1694,8 @@ def mostrar_selector_producto():
             <div class="oh-card">
                 <span class="oh-badge">Uso personal</span>
                 <h3>Howlify</h3>
-                <p>Encontrá ofertas, configurá cacerías y recibí alertas automáticas.</p>
-                <p>Ideal para usuarios que quieren comprar mejor y detectar oportunidades sin complicarse.</p>
+                <p><b>✈️ Tu radar de Vuelos, Hoteles y Airbnb.</b></p>
+                <p>Encontrá pasajes baratos, paquetes y productos de uso diario al mejor precio. Configurá tu cacería y recibí alertas automáticas cuando bajan.</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1694,8 +1710,8 @@ def mostrar_selector_producto():
             <div class="oh-card">
                 <span class="oh-badge">Negocio</span>
                 <h3>Howlify Business</h3>
-                <p>Monitoreá precios, detectá oportunidades y analizá mercados.</p>
-                <p>Ideal para revendedores, marcas y empresas que necesitan inteligencia de precios.</p>
+                <p><b>🎯 Price Intelligence & Control de Mercado.</b></p>
+                <p>Monitoreo profesional de rangos de precio, detección de oportunidades de reventa y reportes diarios programados para tu empresa.</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1720,9 +1736,9 @@ def mostrar_planes_consumer():
                 <span class="oh-badge">Entrada</span>
                 <h3>Starter</h3>
                 <p><strong>USD 9 / mes</strong></p>
-                <p>✅ 5 cazas activas<br>
-                ✅ Frecuencia mínima 1 hora<br>
-                ✅ MercadoLibre + generic<br>
+                <p>✅ 5 productos en radar<br>
+                ✅ <b>🛒 ML + Tiendas generales</b><br>
+                ✅ Ideal para compras diarias<br>
                 ✅ Alertas por email</p>
             </div>
             """,
@@ -1739,9 +1755,9 @@ def mostrar_planes_consumer():
                 <span class="oh-badge">Más elegido</span>
                 <h3>Pro</h3>
                 <p><strong>USD 15 / mes</strong></p>
-                <p>✅ 15 cazas activas<br>
-                ✅ Frecuencia mínima 15 min<br>
-                ✅ MercadoLibre + generic<br>
+                <p>✅ 15 productos en radar<br>
+                ✅ <b>✈️ Especialista en Viajes (Airbnb + Despegar)</b><br>
+                ✅ ⚡ Monitoreo cada 15 min<br>
                 ✅ Alertas por WhatsApp</p>
             </div>
             """,
@@ -1767,10 +1783,10 @@ def mostrar_planes_business():
                 <span class="oh-badge">Reventa</span>
                 <h3>Business Reseller</h3>
                 <p><strong>USD 39 / mes</strong></p>
-                <p>✅ Detección de oportunidades<br>
-                ✅ Historial de precios<br>
-                ✅ Alertas avanzadas<br>
-                ✅ Enfoque en reventa</p>
+                <p>✅ <b>🚀 Detección de Oportunidades</b><br>
+                ✅ Alertas de stock y quiebre de precio<br>
+                ✅ Historial para análisis de margen<br>
+                ✅ 📲 Alertas prioritarias (WhatsApp/Telegram)</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1786,10 +1802,10 @@ def mostrar_planes_business():
                 <span class="oh-badge">Monitoreo</span>
                 <h3>Business Monitor</h3>
                 <p><strong>USD 79 / mes</strong></p>
-                <p>✅ Monitoreo de precios<br>
-                ✅ Ranking de oportunidades<br>
-                ✅ Seguimiento de mercado<br>
-                ✅ Enfoque en marcas y empresas</p>
+                <p>✅ <b>🎯 Price Intelligence 24/7</b><br>
+                ✅ Control de rangos y variaciones<br>
+                ✅ 📊 Reportes programados (Días/Horas)<br>
+                ✅ 📲 WhatsApp Premium</p>
             </div>
             """,
             unsafe_allow_html=True,
