@@ -43,6 +43,7 @@ from services.business_service import obtener_top_oportunidades
 from services.whatsapp_service import enviar_whatsapp
 from services.telegram_service import enviar_telegram
 from utils.affiliate import get_affiliate_url
+from scraper.airbnb import hunt_airbnb
 
 # --- 🛠️ SERVICIOS DE BASE DE DATOS ---
 # Centralizamos guardar_caza_supabase aquí, que es donde vive ahora
@@ -515,24 +516,18 @@ def domain_from_url(url: str) -> str:
 
 def infer_source_from_url(url: str) -> str:
     d = domain_from_url(url)
-    if "mercadolibre" in d:
-        return "mercadolibre"
-    if "fravega" in d:
-        return "fravega"
-    if "garbarino" in d:
-        return "garbarino"
-    if "tiendamia" in d:
-        return "tiendamia"
-    if "temu" in d:
-        return "temu"
-    if "tripstore" in d:
-        return "tripstore"
-    if "carrefour" in d:
-        return "carrefour"
-    if "despegar" in d:
-        return "despegar"
+    if "mercadolibre" in d: return "mercadolibre"
+    if "fravega" in d: return "fravega"
+    if "garbarino" in d: return "garbarino"
+    if "tiendamia" in d: return "tiendamia"
+    if "temu" in d: return "temu"
+    if "tripstore" in d: return "tripstore"
+    if "carrefour" in d: return "carrefour"
+    if "despegar" in d: return "despegar"
+    # --- AGREGADO ---
+    if "airbnb" in d: return "airbnb" 
+    # ----------------
     return "unknown"
-
 
 def parse_price_to_int(value) -> int:
     if value is None:
@@ -1164,18 +1159,25 @@ def save_user_whatsapp(user_id: str, whatsapp_number: str) -> bool:
 # ==========================================================
     
 def run_manual_hunt(b, headless=True):
+    # ESTO TIENE QUE APARECER EN TU TERMINAL
+    print("\n[!!!] EJECUTANDO DISPATCHER DE LA JAURÍA") 
+    
     url = b.get("url") or b.get("link") or ""
-    kw = b.get("keyword") or b.get("producto") or ""
     precio = b.get("precio_max") or 0
+    src = infer_source_from_url(url).strip().lower()
     
-    # 🔥 CAMBIO CLAVE: Usamos 'plan_vista' (el del radio button) en vez del plan de la DB
-    plan_str = plan_vista.lower() 
-    
-    # Definimos si es pro/business basándonos en la vista actual
-    es_pro_simulado = (plan_str in ["pro", "business_monitor", "business_reseller"])
+    print(f"[!!!] FUENTE DETECTADA: '{src}'")
 
-    # Pasamos el plan y el flag a hunt_offers para que el scraper sepa que debe sacar fotos
-    return hunt_offers(url, kw, precio, es_pro=es_pro_simulado, plan=plan_str, headless=headless)
+    if src == "airbnb":
+        print("🏠 [Dispatcher] Airbnb detectado. Saltando a hunt_airbnb...")
+        return hunt_airbnb(url, precio)
+    
+    # Si llega acá, es porque no entró al if de arriba
+    print(f"🌐 [Dispatcher] No es Airbnb. Derivando a hunt_offers para {src}...")
+    
+    plan_str = plan_vista.lower() 
+    es_pro_simulado = (plan_str in ["pro", "business_monitor", "business_reseller"])
+    return hunt_offers(url, b.get("keyword", ""), precio, es_pro=es_pro_simulado, plan=plan_str, headless=headless)
   
 
 def es_plan_business(plan: str) -> bool:
@@ -2441,7 +2443,8 @@ if st.session_state.get("busquedas"):
             with c_btns:
                 b_cols = st.columns(3)
                 if b_cols[0].button("🐺", key=f"olf_f_{rid}", width="stretch"):
-                    res_ind = hunt_offers(url, kw, p_max, es_pro=("business" in familia_raw.lower()), headless=FORCE_HEADLESS)
+                    # CAMBIO CLAVE: Usamos el dispatcher en lugar de hunt_offers directo
+                    res_ind = run_manual_hunt(b, headless=FORCE_HEADLESS) 
                     st.session_state[f"last_res_{rid}"] = res_ind
                     st.rerun()
                 if b_cols[1].button("✏️", key=f"edit_f_{rid}", width="stretch"):
