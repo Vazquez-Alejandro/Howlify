@@ -5,14 +5,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-
-def enviar_telegram(chat_id, mensaje, parse_mode="Markdown"):
-    # 🐺 IMPORTANTE: Usá el nombre EXACTO que tenés en el .env
-    # En tu .env pusiste TELEGRAM_TOKEN, así que acá va ese.
+def enviar_telegram(chat_id, mensaje, parse_mode="HTML"):
+    # El token lo saca de tu .env de la ThinkPad
     token = os.getenv("TELEGRAM_TOKEN") 
     
     if not token or not chat_id:
-        # Este print saldrá en tu terminal de Linux Mint si algo falla
         print(f"⚠ Telegram Error. Token: {'OK' if token else 'FALTA'}, Chat ID: {chat_id}")
         return False
 
@@ -21,14 +18,16 @@ def enviar_telegram(chat_id, mensaje, parse_mode="Markdown"):
         "chat_id": chat_id,
         "text": mensaje,
         "parse_mode": parse_mode,
-        "disable_web_page_preview": False
+        "disable_web_page_preview": False # Esto permite ver la miniatura de Airbnb/ML
     }
     
     try:
         r = requests.post(url, json=payload, timeout=10)
+        if r.status_code != 200:
+            print(f"❌ Telegram API Error: {r.text}")
         return r.status_code == 200
     except Exception as e:
-        print(f"❌ Error conexión: {e}")
+        print(f"❌ Error conexión Telegram: {e}")
         return False
     
 def enviar_alerta_oferta(chat_id, oferta, caza_nombre=""):

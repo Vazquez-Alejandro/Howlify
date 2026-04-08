@@ -413,3 +413,36 @@ def subir_evidencia_storage(file_path, file_name):
         return None
     
     
+def notificar_presa(caza, precio_anterior, precio_nuevo, telegram_id):
+    """
+    Envía una notificación enriquecida a Telegram cuando se detecta una baja de precio.
+    """
+    # 1. Cálculo del porcentaje de ahorro
+    try:
+        porcentaje = int((1 - precio_nuevo / precio_anterior) * 100)
+    except ZeroDivisionError:
+        porcentaje = 0
+
+    # 2. Construcción del mensaje con formato HTML
+    # Usamos f-string multilínea para que sea más legible en el código
+    mensaje = (
+        f"🚨 <b>¡PRESA DETECTADA!</b> 🐺\n"
+        f"───────────────────\n"
+        f"📌 <b>{caza.get('keyword', 'Producto')}</b>\n"
+        f"💰 Precio: <s>${precio_anterior:,.0f}</s> → <b>${precio_nuevo:,.0f}</b>\n"
+        f"📉 ¡Bajó un <b>{porcentaje}%</b>!\n\n"
+        f"🔗 <a href='{caza.get('url', '#')}'>IR A LA OFERTA</a>"
+    )
+
+    # 3. Importación local para evitar Circular Imports y envío
+    try:
+        # Intentamos la ruta completa desde la raíz del proyecto
+        from services.telegram_service import enviar_telegram
+        enviar_telegram(telegram_id, mensaje)
+    except Exception as e:
+        # Si falla, probamos importación relativa simple por si las dudas
+        try:
+            from telegram_service import enviar_telegram
+            enviar_telegram(telegram_id, mensaje)
+        except Exception as e_inner:
+            print(f"❌ Error crítico al notificar presa: {e_inner}")
