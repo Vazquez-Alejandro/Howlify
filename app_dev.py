@@ -2347,7 +2347,6 @@ with st.expander("📲 Configurar Notificaciones", expanded=False):
                 st.error("⚠️ El número es demasiado corto.")
     else:
         st.info("💡 **Tip:** WhatsApp disponible en planes **Pro** o **Business**.")
-
 # --- ➕ NUEVA CACERÍA (LIMPIO - SIN REPORTE) ---
 total_ocupado = cazas_activas
 if total_ocupado < limite_plan:
@@ -2361,16 +2360,19 @@ if total_ocupado < limite_plan:
 
         # 2. Ayuda contextual según la selección
         if "Airbnb" in tipo_caza:
-            st.info("💡 **Guía Pro:** Configurá tus fechas y huéspedes directamente en la web de Airbnb. Una vez que tengas los resultados, pegá la URL aquí. El Lobo vigilará el precio total de esa búsqueda exacta.")
+            st.info("💡 **Guía:** Configurá tus fechas y huéspedes directamente en la web de Airbnb. Una vez que tengas los resultados, pegá la URL aquí. El Lobo vigilará el precio total de esa búsqueda exacta.")
         elif "Vuelo" in tipo_caza:
-            st.info("💡 **Guía Pro:** Usá la URL de Despegar con tus fechas ya elegidas. El Lobo rastreará el precio para ese tramo y cantidad de pasajeros.")
+            st.info("💡 **Guía:** Usá la URL de Despegar con tus fechas ya elegidas. El Lobo rastreará el precio para ese tramo y cantidad de pasajeros.")
+        elif "Producto" in tipo_caza:
+            st.info("💡 **Guía:** Andá a Mercado Libre, aplicá los filtros (ej: Usados, Envío Gratis) y pegá la URL acá para que el Lobo respete tu búsqueda exacta.")
 
         col_url, col_kw = st.columns([2, 1])
         with col_url:
-            n_url = st.text_input("URL", placeholder="Pegá el link aquí...", key="new_hunt_url_final")
+            n_url = st.text_input("URL con filtros aplicados", placeholder="Pegá el link completo de la búsqueda aquí...", key="new_hunt_url_final")
         with col_kw:
-            p_holder = "Ej: 2 pers, 4 noches" if "Airbnb" in tipo_caza else "Ej: Lavarropas Inverter..."
-            n_key = st.text_input("Palabra clave / Etiqueta", placeholder=p_holder, key="new_hunt_key_final")
+            # Ahora este campo es solo una etiqueta para que el usuario identifique su cacería
+            p_holder = "Ej: Viaje" if "Airbnb" in tipo_caza else "Ej: Aspiradora"
+            n_key = st.text_input("Nombre de la cacería / Etiqueta", placeholder=p_holder, key="new_hunt_key_final")
 
         if es_solo_monitor:
             # --- VISTA MONITOR (MAP) ---
@@ -2406,7 +2408,7 @@ if total_ocupado < limite_plan:
         # --- BOTÓN LANZAR ---
         if st.button("Lanzar", width="stretch", key="btn_lanzar_caza_final"):
             if not n_url.strip() or not n_key.strip():
-                st.error("Completá URL y Palabra clave / Etiqueta.")
+                st.error("Completá URL y el Nombre de la cacería.")
             else:
                 url_limpia = clean_ml_url(n_url)
                 precio_max_int = parse_price_to_int(n_price)
@@ -2415,7 +2417,7 @@ if total_ocupado < limite_plan:
                 if "Airbnb" in tipo_caza and src != "airbnb":
                     st.warning("⚠️ Detectamos que la URL no parece ser de Airbnb. Revisala para evitar errores.")
 
-                # Guardado directo (los reportes se manejan desde Perfil ahora)
+                # Guardado directo
                 res = guardar_caza_supabase(
                     user_id, n_key, url_limpia, precio_max_int, 
                     n_freq, tipo_db, plan, src
@@ -2430,7 +2432,6 @@ if total_ocupado < limite_plan:
                     st.success(f"✅ ¡{tipo_caza} agregada correctamente!")
                     time.sleep(1); st.rerun()
 
-st.divider()
 # ==========================================================
 # 2. BOTÓN MASIVO Y LISTADO (CENTRO DE CONTROL)
 # ==========================================================

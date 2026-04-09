@@ -147,7 +147,7 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
     # 🔥 DEFINIMOS ES_PRO ACÁ PARA QUE TODO EL MUNDO LA CONOZCA
     es_pro = plan.lower() in ["pro", "business", "business_monitor", "business_reseller"]
 
-# =========================================================
+    # =========================================================
     # RUTA A: LINK DIRECTO (CON DISFRAZ NINJA Y PERSISTENCIA)
     # =========================================================
     es_producto_directo = bool(url_input and url_input.startswith("http") and "listado." not in url_input)
@@ -264,14 +264,15 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
         return presas
     
     # =========================================================
-    # RUTA B: BÚSQUEDA POR KEYWORD O LISTADO
+    # RUTA B: BÚSQUEDA POR KEYWORD O LISTADO (CON FILTROS)
     # =========================================================
+    # Si el usuario pega una URL de listado (con filtros ya puestos), la usa tal cual.
+    # Si solo pone una palabra, arma la búsqueda básica.
     target_url = url_input if (url_input and "listado." in url_input) else f"https://listado.mercadolibre.com.ar/{(keyword or '').strip().replace(' ', '-')}"
 
     PROFILE_PATH.mkdir(parents=True, exist_ok=True)
     DEBUG_SHOT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    # FIX: Volvemos al context manager estándar de Playwright
     with sync_playwright() as p:
         try:
             context = p.chromium.launch_persistent_context(
@@ -284,7 +285,7 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
             )
             page = context.pages[0] if context.pages else context.new_page()
 
-            # 🐺 CAPA DE CAMUFLAJE (A prueba de errores de versión)
+            # 🐺 CAPA DE CAMUFLAJE
             try:
                 if hasattr(playwright_stealth, 'stealth_sync'):
                     playwright_stealth.stealth_sync(page)
@@ -293,13 +294,14 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
             except Exception as e:
                 print(f"⚠️ Aviso: No se pudo aplicar camuflaje en Ruta B ({e}), siguiendo...")
 
+            # Vamos a la URL (que ya puede tener los filtros aplicados por el usuario)
             page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
             _human_touch(page)
 
-            # Esperamos las cards
+            # Esperamos las cards (el diseño nuevo usa 'poly-card')
             try:
-                page.wait_for_selector("div.poly-card, .ui-search-result__wrapper", timeout=15000)
-                cards = page.locator("div.poly-card, .ui-search-result__wrapper")
+                page.wait_for_selector("div.poly-card, .ui-search-result__wrapper, .andes-card", timeout=15000)
+                cards = page.locator("div.poly-card, .ui-search-result__wrapper, .andes-card")
             except:
                 context.close()
                 return []
@@ -310,28 +312,33 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                 try:
                     card = cards.nth(i)
                     
-                    # 🔗 Link
+                    # 🔗 LINK: Buscamos el anchor del título
                     link = None
+                    # ML cambia mucho las clases, 'a' de primer nivel suele ser lo más seguro
                     a_tag = card.locator("a").first
                     if a_tag.count() > 0:
                         link = a_tag.get_attribute("href")
                         if link and link.startswith("/"): 
                             link = "https://www.mercadolibre.com.ar" + link
                     
-                    # 🏷️ Título
-                    title = (card.locator("h2").first.inner_text() or "Producto").strip()
+                    # 🏷️ TÍTULO: Selector reforzado
+                    title_loc = card.locator("h2, .poly-component__title").first
+                    title = title_loc.inner_text().strip() if title_loc.count() > 0 else "Producto ML"
                     
-                    # 💰 Precio
+                    # 💰 PRECIO: Extracción elástica
                     precio = None
-                    ploc = card.locator("span.andes-money-amount__fraction").first
+                    # Buscamos la fracción (el número grande)
+                    ploc = card.locator(".andes-money-amount__fraction").first
                     if ploc.count() > 0:
-                        raw = (ploc.inner_text() or "").replace(".", "").replace(",", "")
-                        if raw.isdigit(): precio = int(raw)
+                        raw = (ploc.inner_text() or "").replace(".", "").replace(",", "").strip()
+                        if raw.isdigit(): 
+                            precio = int(raw)
 
+                    # Si no hay precio o supera el máximo, seguimos
                     if not precio or (max_price_i > 0 and precio > max_price_i):
                         continue
 
-                    # 📸 Screenshot (Solo si es PRO)
+                    # 📸 SCREENSHOT (Solo si es PRO)
                     foto_path = None
                     if es_pro:
                         try:
