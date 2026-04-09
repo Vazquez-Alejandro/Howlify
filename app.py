@@ -75,7 +75,7 @@ LOGO_PATH = os.path.join(BASE_DIR, "assets", "img", "logo.png")
 
 # Configuración Scraper
 DEFAULT_SOURCE = "generic"
-FORCE_HEADLESS = True
+FORCE_HEADLESS = False
 
 # Debug Log
 if DEBUG:
@@ -2431,7 +2431,6 @@ if total_ocupado < limite_plan:
                     time.sleep(1); st.rerun()
 
 st.divider()
-
 # ==========================================================
 # 2. BOTÓN MASIVO Y LISTADO (CENTRO DE CONTROL)
 # ==========================================================
@@ -2468,6 +2467,8 @@ if st.session_state.get("busquedas"):
         kw = (b.get("producto") or b.get("keyword") or "Sin nombre").upper()
         url = b.get("link") or b.get("url") or ""
         p_max = b.get("precio_max", 0)
+        p_anterior = b.get("last_price", 0)
+
 
         with st.container(border=True):
             c_info, c_btns = st.columns([3, 1])
@@ -2478,15 +2479,31 @@ if st.session_state.get("busquedas"):
                 
             with c_btns:
                 b_cols = st.columns(3)
-                if b_cols[0].button("🐺", key=f"olf_f_{rid}", width="stretch"):
-                    # CAMBIO CLAVE: Usamos el dispatcher en lugar de hunt_offers directo
-                    res_ind = run_manual_hunt(b, headless=FORCE_HEADLESS) 
-                    st.session_state[f"last_res_{rid}"] = res_ind
-                    st.rerun()
-                if b_cols[1].button("✏️", key=f"edit_f_{rid}", width="stretch"):
+                
+                # --- BOTÓN OLFATEAR INDIVIDUAL ---
+                if b_cols[0].button("🐺", key=f"olf_f_{rid}", use_container_width=True, help="Olfatear ahora"):
+                    with st.spinner(""):
+                        res_ind = run_manual_hunt(b, headless=FORCE_HEADLESS) 
+                        st.session_state[f"last_res_{rid}"] = res_ind
+                        
+                        if res_ind:
+                            p_nuevo = min([r.get('price', 99999999) for r in res_ind])
+                            
+                            if p_nuevo < p_anterior and p_anterior > 0:
+                                from services.database_service import notificar_presa
+                                notificar_presa(b, p_anterior, p_nuevo, t_id)
+                                st.toast(f"🚨 ¡Presa detectada para {kw}!")
+
+                            save_price_history(user_id, b.get("id"), res_ind)
+                        st.rerun()
+
+                # --- BOTÓN EDITAR ---
+                if b_cols[1].button("✏️", key=f"edit_f_{rid}", use_container_width=True, help="Editar"):
                     st.session_state["editing_caza"] = b
                     st.rerun()
-                if b_cols[2].button("🗑️", key=f"del_f_{rid}", width="stretch"):
+
+                # --- BOTÓN ELIMINAR ---
+                if b_cols[2].button("🗑️", key=f"del_f_{rid}", use_container_width=True, help="Eliminar"):
                     supabase.table("cazas").delete().eq("id", b["id"]).execute()
                     st.rerun()
 
@@ -2496,8 +2513,7 @@ if st.session_state.get("busquedas"):
                     for r in res[:5]:
                         r1, r2 = st.columns([4, 1])
                         r1.write(f"**{r.get('title')[:65]}** - ${int(r.get('price', 0)):,}")
-                        r2.link_button("Ver", get_affiliate_url(r.get("url")), width="stretch")
-
+                        r2.link_button("Ver", get_affiliate_url(r.get("url")), use_container_width=True)
 # ==========================================================
 # FINAL / SONIDO
 # ==========================================================

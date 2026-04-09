@@ -8,8 +8,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime 
 from pathlib import Path
-
 from playwright.sync_api import sync_playwright
+import playwright_stealth
 
 from .despegar import hunt_despegar_vuelos
 from utils.logic import get_random_user_agent, apply_human_jitter, evaluar_oferta
@@ -147,79 +147,104 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
     # 🔥 DEFINIMOS ES_PRO ACÁ PARA QUE TODO EL MUNDO LA CONOZCA
     es_pro = plan.lower() in ["pro", "business", "business_monitor", "business_reseller"]
 
-    # =========================================================
-    # RUTA A: LINK DIRECTO (CON DISFRAZ DINÁMICO)
+# =========================================================
+    # RUTA A: LINK DIRECTO (CON DISFRAZ NINJA Y PERSISTENCIA)
     # =========================================================
     es_producto_directo = bool(url_input and url_input.startswith("http") and "listado." not in url_input)
     
     if es_producto_directo:
-        # 🎭 1. DISFRAZ ROTATIVO
-        ua_final = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
-        print(f"🐺 [ML] Link directo. Plan: {plan.upper()} | Usando nuevo UA...")
+        # 🎭 1. IDENTIDAD Y PERFIL
+        ua_final = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+        print(f"🐺 [ML] Link directo ROBUSTO. Plan: {plan.upper()} | Usando Sesión + Stealth...")
         
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=headless, args=["--no-sandbox"])
-            context = browser.new_context(user_agent=ua_final, viewport={"width": 1280, "height": 720})
-            page = context.new_page()
-            
-            try:
-                # 🕒 2. PAUSA HUMANA
-                import random
-                wait_time = random.uniform(2, 5)
-                print(f"⏳ El Lobo espera {wait_time:.2f}s para camuflarse...")
-                time.sleep(wait_time)
+        PROFILE_PATH.mkdir(parents=True, exist_ok=True)
 
-                page.goto(url_input, wait_until="domcontentloaded", timeout=45000)
+        with sync_playwright() as p:
+            try:
+                # Lanzamos el contexto persistente para guardar el login para siempre
+                context = p.chromium.launch_persistent_context(
+                    user_data_dir=str(PROFILE_PATH),
+                    headless=headless,
+                    channel="chrome", 
+                    user_agent=ua_final,
+                    viewport={"width": 1280, "height": 720},
+                    args=["--disable-blink-features=AutomationControlled", "--no-sandbox", "--disable-dev-shm-usage"]
+                )
                 
-                # EXTRACCIÓN DE PRECIO
+                page = context.pages[0] if context.pages else context.new_page()
+                
+                # 🐺 CAPA DE CAMUFLAJE
+                try:
+                    if hasattr(playwright_stealth, 'stealth_sync'):
+                        playwright_stealth.stealth_sync(page)
+                    elif hasattr(playwright_stealth, 'stealth_page_sync'):
+                        playwright_stealth.stealth_page_sync(page)
+                except Exception as e:
+                    print(f"⚠️ Aviso: No se pudo aplicar camuflaje ({e}), siguiendo igual...")
+                
+                # 🕒 2. PAUSA HUMANA
+                time.sleep(random.uniform(2.0, 4.0))
+
+                # Navegación
+                page.goto(url_input, wait_until="domcontentloaded", timeout=60000)
+                
+                # 🛡️ GESTIÓN DE LOGIN MANUAL (EL PARACAÍDAS)
+                # Si detecta login y NO estás en headless, te espera 2 minutos
+                if "login" in page.url.lower() or "challenge" in page.url.lower():
+                    print("⚠️ BLOQUEO: ML pide Login/QR. ¡Tenés 2 minutos para loguearte en la ventana!")
+                    if not headless:
+                        try:
+                            # Espera a que la URL deje de decir "login" o "challenge"
+                            page.wait_for_url(lambda url: "login" not in url.lower() and "challenge" not in url.lower(), timeout=120000)
+                            print("✅ ¡Login exitoso! Guardando sesión y continuando...")
+                            # Re-navegamos al producto por las dudas
+                            page.goto(url_input, wait_until="domcontentloaded", timeout=60000)
+                        except:
+                            print("❌ Se acabó el tiempo. No se detectó el login manual.")
+                            return []
+                    else:
+                        print("❌ Error: ML pide login y estás en modo invisible. Cambiá FORCE_HEADLESS a False.")
+                        context.close()
+                        return []
+
+                # 🔍 3. EXTRACCIÓN ELÁSTICA
                 precio = None
+                try:
+                    page.wait_for_selector('.andes-money-amount__fraction', timeout=10000)
+                except: pass
+
+                # Intento 1: Meta
                 meta_p = page.locator('meta[itemprop="price"]').get_attribute("content")
                 if meta_p:
                     try: precio = int(float(meta_p))
                     except: pass
 
+                # Intento 2: Selectores visuales
                 if not precio:
                     p_loc = page.locator('.ui-pdp-price__second-line .andes-money-amount__fraction, .ui-pdp-price .andes-money-amount__fraction').first
                     if p_loc.count() > 0:
                         raw = (p_loc.inner_text() or "").replace(".", "").replace(",", "")
                         if raw.isdigit(): precio = int(raw)
-                
-                # 3. PROCESAMIENTO CON ÉXITO
+
+                # 4. RESULTADOS Y EVIDENCIA
                 if precio:
                     title_loc = page.locator(".ui-pdp-title").first
                     title = title_loc.inner_text() if title_loc.count() > 0 else "Producto ML"
                     
                     foto_path = None
-                    # 📸 LÓGICA DE EVIDENCIA (DEBUG REFORZADO)
                     if es_pro:
                         try:
-                            # Aseguramos ruta absoluta para evitar perder archivos en Linux
                             base_path = os.path.abspath("evidence")
                             os.makedirs(base_path, exist_ok=True)
-                            
                             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
                             filename = f"directo_{ts}.png"
                             full_path = os.path.join(base_path, filename)
-                            
-                            print(f"🕵️ Intentando capturar pantalla en: {full_path}")
-                            
                             page.evaluate("window.scrollTo(0, 0)")
-                            time.sleep(1.5) # Esperamos el renderizado visual
-                            
-                            # Disparo de cámara
+                            time.sleep(1.0) 
                             page.screenshot(path=full_path)
-                            
-                            # Verificación física del archivo
-                            if os.path.exists(full_path):
-                                foto_path = full_path
-                                size = os.path.getsize(full_path)
-                                print(f"✅ ¡ÉXITO! Archivo creado: {size} bytes")
-                            else:
-                                print(f"❌ ERROR: Playwright terminó pero el archivo NO existe en {full_path}")
-                        except Exception as e:
-                            print(f"⚠️ ERROR CRÍTICO EN SCREENSHOT: {e}")
+                            foto_path = full_path if os.path.exists(full_path) else None
+                        except: pass
 
-                    # 4. ARMAMOS EL DICCIONARIO
                     if max_price_i == 0 or precio <= max_price_i:
                         presas.append({
                             "title": title[:120],
@@ -229,16 +254,15 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                             "screenshot": foto_path
                         })
                 else:
-                    content = page.content()
-                    if "rate_limited" in content or "429" in content:
-                        print("🛡️ BLOQUEO DETECTADO: Seguimos en Rate Limit.")
+                    print(f"🛡️ No se detectó precio en: {page.url}")
 
             except Exception as e:
-                print(f"❌ Error en cacería directa: {e}")
+                print(f"❌ Error crítico en cacería: {e}")
             finally:
-                browser.close()
+                context.close()
         
         return presas
+    
     # =========================================================
     # RUTA B: BÚSQUEDA POR KEYWORD O LISTADO
     # =========================================================
@@ -247,18 +271,28 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
     PROFILE_PATH.mkdir(parents=True, exist_ok=True)
     DEBUG_SHOT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
+    # FIX: Volvemos al context manager estándar de Playwright
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            user_data_dir=str(PROFILE_PATH),
-            headless=headless,
-            channel="chrome",
-            locale="es-AR",
-            viewport={"width": 1365, "height": 900},
-            args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
-        )
-        page = context.pages[0] if context.pages else context.new_page()
-
         try:
+            context = p.chromium.launch_persistent_context(
+                user_data_dir=str(PROFILE_PATH),
+                headless=headless,
+                channel="chrome",
+                locale="es-AR",
+                viewport={"width": 1365, "height": 900},
+                args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+            )
+            page = context.pages[0] if context.pages else context.new_page()
+
+            # 🐺 CAPA DE CAMUFLAJE (A prueba de errores de versión)
+            try:
+                if hasattr(playwright_stealth, 'stealth_sync'):
+                    playwright_stealth.stealth_sync(page)
+                elif hasattr(playwright_stealth, 'stealth_page_sync'):
+                    playwright_stealth.stealth_page_sync(page)
+            except Exception as e:
+                print(f"⚠️ Aviso: No se pudo aplicar camuflaje en Ruta B ({e}), siguiendo...")
+
             page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
             _human_touch(page)
 
@@ -267,10 +301,10 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                 page.wait_for_selector("div.poly-card, .ui-search-result__wrapper", timeout=15000)
                 cards = page.locator("div.poly-card, .ui-search-result__wrapper")
             except:
+                context.close()
                 return []
 
             n = min(cards.count(), 20)
-            seen_keys = set()
 
             for i in range(n):
                 try:
@@ -281,7 +315,8 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                     a_tag = card.locator("a").first
                     if a_tag.count() > 0:
                         link = a_tag.get_attribute("href")
-                        if link and link.startswith("/"): link = "https://www.mercadolibre.com.ar" + link
+                        if link and link.startswith("/"): 
+                            link = "https://www.mercadolibre.com.ar" + link
                     
                     # 🏷️ Título
                     title = (card.locator("h2").first.inner_text() or "Producto").strip()
@@ -316,6 +351,9 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                 except: continue
 
             return presas
+        except Exception as e:
+            print(f"❌ Error en Ruta B: {e}")
+            return []
         finally:
             context.close()
 # -------------------------------------------------
