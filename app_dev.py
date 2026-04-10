@@ -762,17 +762,21 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         m_p = float(rule.get("min_price_allowed") or 0.0)
         max_p = float(rule.get("max_price_allowed") or 0.0)
 
-        # 4. SEMÁFORO
+# --- 🐺 NUEVA LÓGICA DE SEMÁFORO DE 4 ESTADOS (PRO) ---
+        tolerancia = 0.05  # 5% de margen para el aviso amarillo
+        
         if curr_p <= 0: 
-            riesgo = "⚪"
-        elif m_p > 0 and curr_p < (m_p - 0.01):
-            riesgo = "🔴" 
-        elif max_p > 0 and curr_p > (max_p + 0.01):
-            riesgo = "🟠"
+            riesgo = "⚪" # SIN DATOS
+        elif (m_p > 0 and curr_p < (m_p - 0.01)) or (max_p > 0 and curr_p > (max_p + 0.01)):
+            riesgo = "🔴" # VIOLACIÓN: Rompió el piso o el techo
+        elif (m_p > 0 and curr_p == m_p) or (max_p > 0 and curr_p == max_p):
+            riesgo = "🟠" # CRÍTICO: Está justo en el límite (la cornisa)
+        elif (m_p > 0 and curr_p <= m_p * (1 + tolerancia)) or (max_p > 0 and curr_p >= max_p * (1 - tolerancia)):
+            riesgo = "🟡" # ADVERTENCIA: A menos del 5% de quebrar reglas
         elif m_p == 0 and max_p == 0:
-            riesgo = "⚪"
+            riesgo = "⚪" # SIN REGLAS CONFIGURADAS
         else:
-            riesgo = "🟢"
+            riesgo = "🟢" # SALUDABLE: En el centro del rango seguro
 
         # 5. PROGRESO
         progreso = 0.0
@@ -868,15 +872,13 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         else:
             st.info("✅ No se detectaron infracciones con evidencia fotográfica por el momento.")
 
+
         # ==========================================================
-        # 3. SELECCIÓN & ANÁLISIS DINÁMICO
-        # ==========================================================
-        # ==========================================================
-        # 3. SELECCIÓN & ANÁLISIS DINÁMICO (RECUPERADO)
+        # 3. SELECCIÓN & ANÁLISIS DINÁMICO (UNIFICADO)
         # ==========================================================
         st.divider()
         
-        # 1. Agregamos un selector manual por si el clic en la tabla falla
+        # 1. Selector manual de producto
         nombres_productos = [row["Producto"] for row in radar_rows]
         producto_elegido = st.selectbox(
             "🔍 Seleccionar producto para configurar/analizar:", 
@@ -884,7 +886,7 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
             help="Elegí un producto para ver su historial y ajustar los límites de precio."
         )
         
-        # 2. Buscamos la fila correspondiente en nuestro DataFrame de radar
+        # 2. Recuperación de datos de la fila seleccionada
         selected_row = next(item for item in radar_rows if item["Producto"] == producto_elegido)
         
         cid = selected_row["full_id"]
@@ -892,7 +894,7 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         curr_price = float(selected_row["Precio"])
         c_row = selected_row["raw_data"]
             
-        # 3. Traemos las reglas actuales de nuestro mapa unificado
+        # 3. Traemos las reglas actuales
         rule = rules_map.get(str(cid)) or {}
         min_p = float(rule.get("min_price_allowed") or 0)
         max_p = float(rule.get("max_price_allowed") or 0)
@@ -907,18 +909,23 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         if not df_hist.empty and min_p > 0:
             compliance_rate = int((len(df_hist[df_hist["price"] >= min_p]) / len(df_hist)) * 100)
 
-        # --- LÓGICA DE SEMÁFORO MEJORADA ---
+        # --- 🐺 LÓGICA DE SEMÁFORO INTELIGENTE (4 ESTADOS) ---
+        tolerancia = 0.05  # 5% de margen para el aviso amarillo
+        
         if curr_price <= 0: 
-            color, txt = "#808080", "SIN DATOS"
-        elif min_p > 0 and curr_price < min_p: 
-            color, txt = "#FF4B4B", "🔴 MAP VIOLADO"
-        elif max_p > 0 and curr_price > max_p: 
-            color, txt = "#FFA500", "🟠 SOBREPRECIO"
+            color, txt = "#808080", "⚪ SIN DATOS"
+        elif (min_p > 0 and curr_price < (min_p - 0.01)) or (max_p > 0 and curr_price > (max_p + 0.01)):
+            color, txt = "#FF4B4B", "🔴 VIOLACIÓN CRÍTICA"
+        elif (min_p > 0 and curr_price == min_p) or (max_p > 0 and curr_price == max_p):
+            color, txt = "#FFA500", "🟠 LÍMITE ALCANZADO"
+        elif (min_p > 0 and curr_price <= min_p * (1 + tolerancia)) or (max_p > 0 and curr_price >= max_p * (1 - tolerancia)):
+            color, txt = "#FFD700", "🟡 RIESGO PRÓXIMO"
         elif min_p == 0 and max_p == 0:
-            color, txt = "#555", "⚪ SIN REGLAS"
+            color, txt = "#555555", "⚪ SIN REGLAS MAP"
         else: 
             color, txt = "#28A745", "🟢 CUMPLIMIENTO OK"
 
+        # --- RENDER DE KPIs ---
         k1, k2, k3, k4 = st.columns(4)
         with k1: st.markdown(f"<small>Precio Actual</small><h3>${int(curr_price):,}</h3>".replace(",", "."), unsafe_allow_html=True)
         with k2: st.markdown(f"<small>Estado</small><h3 style='color:{color}; font-size:18px;'>{txt}</h3>", unsafe_allow_html=True)
@@ -936,7 +943,7 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
                 if not cid:
                     st.error("No se detectó un ID válido.")
                 else:
-                    # Upsert limpio: borramos y creamos
+                    # Upsert limpio
                     supabase.table("monitor_rules").delete().filter("caza_id", "eq", int(cid)).execute()
                 
                     nueva_regla = {
@@ -969,8 +976,6 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
                 chart += rule_line
             
             st.altair_chart(chart.interactive(), use_container_width=True)
-    else:
-        st.info("Esperando datos de los rastreadores...")
 
             
 def render_business_dashboard(plan: str, plan_label_text: str, user_id: str, busquedas: list):

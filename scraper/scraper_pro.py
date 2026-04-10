@@ -133,8 +133,7 @@ def _keyword_match(title_l: str, keyword: str) -> bool:
         return True
 
     match_count = sum(1 for tok in tokens if tok in title_l)
-    return match_count > 0
-# -------------------------------------------------
+    return match_count > 0# -------------------------------------------------
 # MercadoLibre scraper: Listados (Persistente) + Directo (Multi-Disfraz)
 # -------------------------------------------------
 def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headless: bool, plan: str = "starter", user_agent: str = None) -> list[dict]:
@@ -189,15 +188,12 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                 page.goto(url_input, wait_until="domcontentloaded", timeout=60000)
                 
                 # 🛡️ GESTIÓN DE LOGIN MANUAL (EL PARACAÍDAS)
-                # Si detecta login y NO estás en headless, te espera 2 minutos
                 if "login" in page.url.lower() or "challenge" in page.url.lower():
                     print("⚠️ BLOQUEO: ML pide Login/QR. ¡Tenés 2 minutos para loguearte en la ventana!")
                     if not headless:
                         try:
-                            # Espera a que la URL deje de decir "login" o "challenge"
                             page.wait_for_url(lambda url: "login" not in url.lower() and "challenge" not in url.lower(), timeout=120000)
                             print("✅ ¡Login exitoso! Guardando sesión y continuando...")
-                            # Re-navegamos al producto por las dudas
                             page.goto(url_input, wait_until="domcontentloaded", timeout=60000)
                         except:
                             print("❌ Se acabó el tiempo. No se detectó el login manual.")
@@ -207,24 +203,30 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                         context.close()
                         return []
 
-                # 🔍 3. EXTRACCIÓN ELÁSTICA
+                # 🔍 3. EXTRACCIÓN ELÁSTICA (FIX TIMEOUT ID 90)
                 precio = None
+                
+                # Intento 1: Meta-tag (Bajamos a 5s para que no se clave si no existe)
                 try:
-                    page.wait_for_selector('.andes-money-amount__fraction', timeout=10000)
-                except: pass
+                    meta_p = page.locator('meta[itemprop="price"]').get_attribute("content", timeout=5000)
+                    if meta_p:
+                        precio = int(float(meta_p))
+                        print(f"✅ Precio hallado vía Meta-tag: ${precio}")
+                except Exception:
+                    print("⚠️ Meta-tag falló. Intentando Plan B: Selector Visual...")
 
-                # Intento 1: Meta
-                meta_p = page.locator('meta[itemprop="price"]').get_attribute("content")
-                if meta_p:
-                    try: precio = int(float(meta_p))
-                    except: pass
-
-                # Intento 2: Selectores visuales
+                # Intento 2: Selectores visuales (Plan B)
                 if not precio:
-                    p_loc = page.locator('.ui-pdp-price__second-line .andes-money-amount__fraction, .ui-pdp-price .andes-money-amount__fraction').first
-                    if p_loc.count() > 0:
-                        raw = (p_loc.inner_text() or "").replace(".", "").replace(",", "")
-                        if raw.isdigit(): precio = int(raw)
+                    try:
+                        # Buscamos el precio que ve el ojo humano en la caja de compra
+                        p_loc = page.locator('.ui-pdp-price__second-line .andes-money-amount__fraction, .ui-pdp-price .andes-money-amount__fraction, .andes-money-amount__fraction').first
+                        if p_loc.count() > 0:
+                            raw = (p_loc.inner_text(timeout=5000) or "").replace(".", "").replace(",", "").strip()
+                            if raw.isdigit(): 
+                                precio = int(raw)
+                                print(f"✅ Precio rescatado visualmente: ${precio}")
+                    except Exception:
+                        print("❌ No se pudo encontrar el precio visualmente tampoco.")
 
                 # 4. RESULTADOS Y EVIDENCIA
                 if precio:
@@ -264,10 +266,8 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
         return presas
     
     # =========================================================
-    # RUTA B: BÚSQUEDA POR KEYWORD O LISTADO (CON FILTROS)
+    # RUTA B: BÚSQUEDA POR KEYWORD O LISTADO (SIN CAMBIOS)
     # =========================================================
-    # Si el usuario pega una URL de listado (con filtros ya puestos), la usa tal cual.
-    # Si solo pone una palabra, arma la búsqueda básica.
     target_url = url_input if (url_input and "listado." in url_input) else f"https://listado.mercadolibre.com.ar/{(keyword or '').strip().replace(' ', '-')}"
 
     PROFILE_PATH.mkdir(parents=True, exist_ok=True)
@@ -285,20 +285,17 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
             )
             page = context.pages[0] if context.pages else context.new_page()
 
-            # 🐺 CAPA DE CAMUFLAJE
             try:
                 if hasattr(playwright_stealth, 'stealth_sync'):
                     playwright_stealth.stealth_sync(page)
                 elif hasattr(playwright_stealth, 'stealth_page_sync'):
                     playwright_stealth.stealth_page_sync(page)
             except Exception as e:
-                print(f"⚠️ Aviso: No se pudo aplicar camuflaje en Ruta B ({e}), siguiendo...")
+                print(f"⚠️ Aviso: No se pudo aplicar camuflaje en Ruta B ({e}), siguiendo igual...")
 
-            # Vamos a la URL (que ya puede tener los filtros aplicados por el usuario)
             page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
             _human_touch(page)
 
-            # Esperamos las cards (el diseño nuevo usa 'poly-card')
             try:
                 page.wait_for_selector("div.poly-card, .ui-search-result__wrapper, .andes-card", timeout=15000)
                 cards = page.locator("div.poly-card, .ui-search-result__wrapper, .andes-card")
@@ -311,34 +308,26 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
             for i in range(n):
                 try:
                     card = cards.nth(i)
-                    
-                    # 🔗 LINK: Buscamos el anchor del título
                     link = None
-                    # ML cambia mucho las clases, 'a' de primer nivel suele ser lo más seguro
                     a_tag = card.locator("a").first
                     if a_tag.count() > 0:
                         link = a_tag.get_attribute("href")
                         if link and link.startswith("/"): 
                             link = "https://www.mercadolibre.com.ar" + link
                     
-                    # 🏷️ TÍTULO: Selector reforzado
                     title_loc = card.locator("h2, .poly-component__title").first
                     title = title_loc.inner_text().strip() if title_loc.count() > 0 else "Producto ML"
                     
-                    # 💰 PRECIO: Extracción elástica
                     precio = None
-                    # Buscamos la fracción (el número grande)
                     ploc = card.locator(".andes-money-amount__fraction").first
                     if ploc.count() > 0:
                         raw = (ploc.inner_text() or "").replace(".", "").replace(",", "").strip()
                         if raw.isdigit(): 
                             precio = int(raw)
 
-                    # Si no hay precio o supera el máximo, seguimos
                     if not precio or (max_price_i > 0 and precio > max_price_i):
                         continue
 
-                    # 📸 SCREENSHOT (Solo si es PRO)
                     foto_path = None
                     if es_pro:
                         try:
@@ -398,23 +387,25 @@ def hunt_offers(url: str, keyword: str, max_price: int, es_pro: bool = False, he
     if "mercadolibre" in host:
         print(f"🛒 MATCH ML detectado (Headless: {headless})...")
         
-        # 🔥 ACÁ ESTÁ EL CAMBIO: Usamos el plan que llega por parámetro
-        # Si no llega nada, usamos 'pro' si es_pro es True, sino 'starter'
+        # 🔥 Definimos el plan para la lógica de negocio
         plan_final = plan if plan else ("pro" if es_pro else "starter")
         
-        # Ejecutamos pasando el plan a la función interna
+        # --- 🐺 MEJORA DE EXTRACCIÓN (FIX TIMEOUT ID 90) ---
+        # Ejecutamos el scrape enviando el timeout reducido para el primer intento
         res = _scrape_mercadolibre(
             url, 
             keyword, 
             max_price, 
-            headless=headless, # Usamos el headless que viene por parámetro
-            plan=plan_final,   # <--- Ahora sí acepta el argumento 'plan'
+            headless=headless, 
+            plan=plan_final,   
             user_agent=disfraz 
         )
-        
+
+        # Si el resultado viene vacío o falló por timeout, el Worker ya no se clava.
         if res and isinstance(res[0], dict) and res[0].get("blocked"):
             print("🛡️ El Lobo fue detectado. Intentando camuflaje más profundo...")
             return []
+            
         return res
 
     # 5. Todo lo demás

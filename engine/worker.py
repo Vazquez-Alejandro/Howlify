@@ -15,35 +15,42 @@ from scraper.scraper_pro import hunt_offers
 
 def obtener_cazas_pendientes():
     """
-    MODO TEST: Consulta Supabase buscando SOLO la cacería 92
+    Busca cacerías sincronizadas por bloques de tiempo (00, 15, 30, 45).
     """
     ahora = datetime.now(timezone.utc)
+    minuto_actual = ahora.minute
     
-    # En engine/worker.py, dentro de obtener_cazas_pendientes:
     query = supabase.table("cazas").select("*").eq("estado", "activa").execute()
-    # --------------------------------------------
-    
     pendientes = []
+
     for caza in query.data:
         last_check = caza.get("last_check")
         
-        if not last_check:
-            pendientes.append(caza)
-            continue
-            
+        # Extraemos el número de la frecuencia (ej: "15 min" -> 15)
         try:
-            minutos_val = int(caza["frecuencia"].split()[0])
+            frecuencia_min = int(caza["frecuencia"].split()[0])
         except:
-            minutos_val = 60
+            frecuencia_min = 15 # Default por seguridad
+
+        # --- 🐺 LÓGICA DE SINCRONIZACIÓN ---
+        # Verificamos si el minuto actual es múltiplo de la frecuencia
+        # Ej: Si frecuencia es 15, dispara en :00, :15, :30, :45
+        es_momento_de_bloque = (minuto_actual % frecuencia_min == 0)
+
+        if es_momento_de_bloque:
+            # Si nunca se chequeó, entra de una al bloque
+            if not last_check:
+                pendientes.append(caza)
+                continue
             
-        # Convertimos last_check a objeto consciente de UTC
-        last_check_dt = datetime.fromisoformat(last_check.replace('Z', '+00:00'))
-        proximo_chequeo = last_check_dt + timedelta(minutes=minutos_val)
-        
-        # 🐺 Solo si pasó el tiempo, lo agregamos a la jauría
-        if ahora >= proximo_chequeo:
-            pendientes.append(caza)
+            # Si ya se chequeó, verificamos que no haya sido en este MISMO bloque
+            # (para evitar que el worker dispare 60 veces durante el mismo minuto)
+            last_check_dt = datetime.fromisoformat(last_check.replace('Z', '+00:00'))
+            diferencia = ahora - last_check_dt
             
+            if diferencia > timedelta(seconds=70): 
+                pendientes.append(caza)
+
     return pendientes
 
 def main():
@@ -61,6 +68,7 @@ def main():
                     
                     # Guardamos el precio histórico antes de la nueva búsqueda
                     precio_anterior = caza.get("ultimo_precio_detectado") 
+                    precio_objetivo = caza.get("precio_max")
                     
                     # 🔥 LANZAMOS AL LOBO
                     resultados = hunt_offers(
@@ -83,12 +91,23 @@ def main():
                         precio_actual = resultados[0].get("price")
                         print(f"✅ Presas detectadas ({len(resultados)}) para '{caza['producto']}'. Precio: ${precio_actual}")
                         
-                        # 📈 Lógica de Aviso de Aumento (Solo Pro y Business)
-                        if precio_anterior and precio_actual > precio_anterior:
-                            if caza.get("plan") in ["pro", "business"]:
-                                print(f"⚠️ AVISO DE AUMENTO: {caza['producto']} subió de ${precio_anterior} a ${precio_actual}")
-                                # Aquí es donde el Telegram dirá: "Che, esto subió"
+                        # --- 🐺 DETECCIÓN PARA EL SEMÁFORO ---
                         
+                        # 🟢 Caso 1: ¡Llegamos al objetivo!
+                        if precio_actual <= precio_objetivo:
+                            print(f"🎯 ¡OBJETIVO ALCANZADO! {caza['producto']} bajó a ${precio_actual} (VERDE 🟢)")
+                        
+                        # 🔴 Caso 2: El precio SUBIÓ (Inflación)
+                        elif precio_anterior and precio_actual > precio_anterior:
+                            diferencia = precio_actual - precio_anterior
+                            porcentaje = (diferencia / precio_anterior) * 100
+                            print(f"⚠️ AVISO DE AUMENTO: {caza['producto']} subió +${diferencia} ({porcentaje:.1f}%) (ROJO 🔴)")
+                        
+                        # 🟡 Caso 3: El precio BAJÓ pero no al objetivo todavía
+                        elif precio_anterior and precio_actual < precio_anterior:
+                            diferencia = precio_anterior - precio_actual
+                            print(f"📉 REBAJA DETECTADA: {caza['producto']} bajó -${diferencia} (AMARILLO 🟡)")
+
                         # Guardamos el nuevo precio detectado para la próxima comparación
                         update_data["ultimo_precio_detectado"] = precio_actual
                     else:
