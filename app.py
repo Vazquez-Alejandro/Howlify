@@ -40,10 +40,9 @@ from auth.auth_supabase import supa_signup, supa_login, supa_reset_password
 from scraper.scraper_pro import hunt_offers
 from config import PLAN_LIMITS
 from services.business_service import obtener_top_oportunidades
-from services.whatsapp_service import enviar_whatsapp
-from services.telegram_service import enviar_telegram
 from utils.affiliate import get_affiliate_url
 from scraper.airbnb import hunt_airbnb
+from services.notification_service import enviar_telegram, enviar_email, enviar_whatsapp
 
 # --- 🛠️ SERVICIOS DE BASE DE DATOS ---
 # Centralizamos guardar_caza_supabase aquí, que es donde vive ahora
