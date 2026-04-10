@@ -16,44 +16,6 @@ from services.notification_service import despachar_alertas_jauria
 
 # ---------------------------------------
 
-def despachar_alertas_jauria(user_data, producto, estado, precio_nuevo, variacion):
-    """
-    🐺 El Lobo decide por dónde avisar según el plan y el semáforo.
-    """
-    plan = user_data.get('plan_id', 'starter').lower()
-    t_id = user_data.get('telegram_id')
-    email = user_data.get('email')
-    
-    # Emoji y mensaje unificado
-    msg = (
-        f"{estado} *HOWLIFY ALERT*\n\n"
-        f"📦 *Producto:* {producto}\n"
-        f"💰 *Precio:* ${precio_nuevo:,}\n"
-        f"📊 *Cambio:* {variacion:+.2f}%\n\n"
-        f"🐺 _Enviado desde tu ThinkPad_"
-    ).replace(",", ".")
-
-    # 🟦 TELEGRAM: Para todos (Starter, Pro, Business)
-    if t_id:
-        try:
-            enviar_telegram(t_id, msg)
-            print(f"📱 [Notificador] Telegram enviado a {t_id}")
-        except Exception as e:
-            print(f"❌ Error enviando Telegram: {e}")
-
-    # 📧 EMAIL: Para todos (Foco preventivo en Amarillo/Naranja)
-    if email and estado in ["🟡", "🟠", "🔴"]:
-        try:
-            enviar_email_alerta(email, producto, estado, precio_nuevo, variacion)
-            print(f"📧 [Notificador] Email enviado a {email}")
-        except Exception as e:
-            print(f"❌ Error enviando Email: {e}")
-
-    # 🟩 WHATSAPP: Solo si NO es Starter (El gancho del Pro/Business)
-    if plan != "starter":
-        # wa.enviar_mensaje(user_data.get('phone'), msg)
-        print(f"✅ [Notificador] WhatsApp saltado (Lógica preparada para {plan})")
-
 def obtener_cazas_pendientes():
     """
     Busca cacerías sincronizadas por bloques de tiempo (00, 15, 30, 45).
@@ -61,7 +23,7 @@ def obtener_cazas_pendientes():
     ahora = datetime.now(timezone.utc)
     minuto_actual = ahora.minute
     
-    query = supabase.table("cazas").select("*, profiles(email, telegram_id, plan_id, whatsapp_number)").eq("estado", "activa").execute()
+    query = supabase.table("cazas").select("*, profiles(email, telegram_id, plan, whatsapp_number)").eq("estado", "activa").execute()
     pendientes = []
 
     for caza in query.data:
@@ -93,13 +55,14 @@ def obtener_cazas_pendientes():
                 pendientes.append(caza)
 
     return pendientes
+
 def main():
     print("🐺 LOBO GUARDIÁN: Iniciando sistema de vigilancia pro...")
     
     while True:
         try:
             print(f"🕒 [{datetime.now().strftime('%H:%M:%S')}] Escaneando agenda en Supabase...")
-            cazas = obtener_cazas_pendientes() # <-- Asegurate que esta traiga el join de 'profiles'
+            cazas = obtener_cazas_pendientes() 
             
             if cazas:
                 print(f"🎯 Encontradas {len(cazas)} cacerías vencidas. Lanzando jauría...")
@@ -108,8 +71,9 @@ def main():
                     
                     precio_anterior = caza.get("ultimo_precio_detectado") 
                     precio_objetivo = caza.get("precio_max")
+                    last_alert_str = caza.get("last_alert_at")
                     
-                    # 🔥 LANZAMOS AL LOBO
+                    # 🔥 LANZAMOS AL LOBO (Scraper)
                     resultados = hunt_offers(
                         url=caza.get("link"),
                         keyword=caza.get("producto"),
@@ -127,41 +91,60 @@ def main():
 
                     if resultados:
                         precio_actual = resultados[0].get("price")
-                        print(f"✅ Presas detectadas ({len(resultados)}) para '{caza['producto']}'. Precio: ${precio_actual}")
+                        print(f"✅ Presa detectada para '{caza['producto']}'. Precio actual: ${precio_actual}")
                         
-                        # --- 🐺 LÓGICA DE SEMÁFORO Y GATILLO ---
-                        estado = None
-                        hubo_cambio_relevante = False
+                        # --- 🐺 LÓGICA DE SEMÁFORO INTELIGENTE ---
+                        estado = "🟢" 
                         variacion = 0
-
                         if precio_anterior:
                             variacion = ((precio_actual - precio_anterior) / precio_anterior) * 100
 
-                        # 🟢 Caso 1: ¡Llegamos al objetivo!
                         if precio_actual <= precio_objetivo:
-                            estado = "🟢"
-                            print(f"🎯 ¡OBJETIVO ALCANZADO! {caza['producto']} (VERDE 🟢)")
-                            # Notificamos si es la primera vez que baja del objetivo
-                            if not precio_anterior or precio_anterior > precio_objetivo:
-                                hubo_cambio_relevante = True
+                            estado = "🔴" 
+                        elif variacion <= -5:
+                            estado = "🟡" 
+                        elif variacion > 5:
+                            estado = "🟠" 
+
+                        # --- 🕒 LÓGICA DE COOLDOWN ---
+                        ahora_utc = datetime.now(timezone.utc)
+                        puedo_alertar = True
                         
-                        # 🔴 Caso 2: El precio SUBIÓ (Inflación)
-                        elif precio_anterior and precio_actual > precio_anterior:
-                            estado = "🔴"
-                            print(f"⚠️ AVISO DE AUMENTO: {caza['producto']} subió {variacion:.1f}% (ROJO 🔴)")
-                            hubo_cambio_relevante = True
-                        
-                        # 🟡 Caso 3: El precio BAJÓ pero no al objetivo todavía
-                        elif precio_anterior and precio_actual < precio_anterior:
-                            estado = "🟡"
-                            print(f"📉 REBAJA DETECTADA: {caza['producto']} bajó {variacion:.1f}% (AMARILLO 🟡)")
-                            hubo_cambio_relevante = True
+                        if last_alert_str:
+                            try:
+                                last_alert_dt = datetime.fromisoformat(last_alert_str.replace('Z', '+00:00'))
+                                if ahora_utc - last_alert_dt < timedelta(minutes=30):
+                                    puedo_alertar = False
+                            except Exception as e:
+                                print(f"⚠ Error parseando last_alert_at: {e}")
 
                         # --- 🚀 DESPACHO DE NOTIFICACIONES ---
-                        if hubo_cambio_relevante and estado:
-                            # Sacamos los datos del perfil que vienen por el Join de Supabase
-                            user_profile = caza.get("profiles", {})
-                            if user_profile:
+                        if estado in ["🟡", "🔴"] and puedo_alertar:
+                            user_profile = caza.get("profiles")
+                            
+                            if isinstance(user_profile, list) and len(user_profile) > 0:
+                                user_profile = user_profile[0]
+                            
+                            if not user_profile:
+                                try:
+                                    print(f"⚠️ Buscando perfil de emergencia en DB para: {caza.get('user_id')}")
+                                    res_perfil = supabase.table("profiles").select("*").eq("user_id", caza.get("user_id")).execute()
+                                    if res_perfil.data and len(res_perfil.data) > 0:
+                                        user_profile = res_perfil.data[0]
+                                except Exception as e:
+                                    print(f"❌ Error buscando perfil: {e}")
+
+                            # 🛠️ PUENTE DE RESPALDO (Hardcodeado para Alejandro)
+                            if not user_profile:
+                                print(f"🛠️ Usando perfil de respaldo manual para {caza.get('user_id')}")
+                                user_profile = {
+                                    "email": "howlify.app@gmail.com",
+                                    "telegram_id": "8091046688",
+                                    "plan": "business_monitor"
+                                }
+
+                            if user_profile and isinstance(user_profile, dict) and user_profile.get('email'):
+                                print(f"📣 ¡GATILLO! Enviando notificación {estado} a {user_profile.get('email')}")
                                 despachar_alertas_jauria(
                                     user_data=user_profile,
                                     producto=caza['producto'],
@@ -169,12 +152,16 @@ def main():
                                     precio_nuevo=precio_actual,
                                     variacion=variacion
                                 )
+                                update_data["last_alert_at"] = ahora_utc.isoformat()
+                                update_data["last_alert_price"] = precio_actual
+                            else:
+                                print(f"❌ No se pudo recuperar data del usuario {caza.get('user_id')}")
 
                         update_data["ultimo_precio_detectado"] = precio_actual
                     else:
                         print(f"💨 Sin novedades para '{caza['producto']}'.")
 
-                    # Actualizamos Supabase
+                    # Actualizamos Supabase con los resultados del ciclo
                     supabase.table("cazas").update(update_data).eq("id", caza["id"]).execute()  
                     
             else:
@@ -183,7 +170,6 @@ def main():
         except Exception as e:
             print(f"❌ Error crítico en el ciclo del Worker: {e}")
 
-        # Chequeamos cada 60 segundos
         time.sleep(60)
 
 def _handle_exit(signum, frame):
