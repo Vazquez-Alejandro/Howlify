@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import time
 import re
-import smtplib
+#import smtplib
 from datetime import datetime, timedelta, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -16,6 +16,7 @@ from services.whatsapp_service import enviar_whatsapp
 from services.business_service import guardar_oportunidad_business
 from services.duffel_service import buscar_ofertas_vuelos
 from services.database_service import vigilar_ofertas
+from services.notification_service import enviar_email
 
 from supabase import create_client
 import os
@@ -411,83 +412,21 @@ def disparar_alerta_minima(caza_id, oferta, precio_max):
 
     return True
 
-
 # ==========================================================
-# ENVIO POR CANAL
+# ENVIO POR CANAL (AHORA CENTRALIZADO)
 # ==========================================================
 
 def enviar_email(destino, oferta, caza_nombre=""):
-    destino = (destino or "").strip()
-    if not destino:
-        print("⚠ email vacío, no se puede enviar alerta")
-        return False
-
-    if not SMTP_HOST or not SMTP_FROM:
-        print(f"⚠ SMTP no configurado. No se pudo enviar email a {destino}")
-        return False
-
-    subject = f"🐺 Oferta encontrada: {caza_nombre or 'Howlify'}"
-
-    title = str(oferta.get("title") or "Oferta detectada").strip()
-    try:
-        price = int(float(oferta.get("price") or 0))
-    except Exception:
-        price = 0
-
-    url = str(oferta.get("url") or "").strip()
-    source = str(oferta.get("source") or "").strip()
-
-    text_body = (
-        f"Howlify detectó una oferta.\n\n"
-        f"Caza: {caza_nombre or '-'}\n"
-        f"Producto: {title}\n"
-        f"Precio: ${price:,.0f}\n"
-        f"Fuente: {source or '-'}\n"
-        f"Link: {url}\n"
-    ).replace(",", ".")
-
-    html_body = f"""
-    <html>
-      <body>
-        <h2>🐺 Howlify detectó una oferta</h2>
-        <p><strong>Caza:</strong> {caza_nombre or '-'}</p>
-        <p><strong>Producto:</strong> {title}</p>
-        <p><strong>Precio:</strong> ${format(price, ',.0f').replace(',', '.')}</p>
-        <p><strong>Fuente:</strong> {source or '-'}</p>
-        <p><a href="{url}">Ver oferta</a></p>
-      </body>
-    </html>
     """
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = SMTP_FROM
-    msg["To"] = destino
-    msg.attach(MIMEText(text_body, "plain", "utf-8"))
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-    try:
-        if SMTP_USE_SSL:
-            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=20) as server:
-                if SMTP_USER and SMTP_PASSWORD:
-                    server.login(SMTP_USER, SMTP_PASSWORD)
-                server.sendmail(SMTP_FROM, [destino], msg.as_string())
-        else:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as server:
-                server.ehlo()
-                if SMTP_USE_TLS:
-                    server.starttls()
-                    server.ehlo()
-                if SMTP_USER and SMTP_PASSWORD:
-                    server.login(SMTP_USER, SMTP_PASSWORD)
-                server.sendmail(SMTP_FROM, [destino], msg.as_string())
-
-        print(f"📧 email enviado a {destino}")
-        return True
-
-    except Exception as e:
-        print(f"⚠ falló envío email a {destino}: {e}")
-        return False
+    Función puente que delega al notification_service.
+    """
+    from services.notification_service import enviar_email as enviar_nuevo
+    
+    asunto = f"🐺 Oferta encontrada: {caza_nombre or 'Howlify'}"
+    cuerpo = f"Producto: {oferta.get('title')}\nPrecio: ${oferta.get('price')}"
+    
+    # Llamamos al nuevo servicio unificado
+    return enviar_nuevo(destino, asunto, cuerpo)
 
 def enviar_alerta_por_canal(user_contact, oferta, caza_nombre=""):
     plan = user_contact.get("plan") or "starter"
