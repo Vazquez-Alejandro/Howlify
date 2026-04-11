@@ -96,3 +96,11 @@ def despachar_alertas_jauria(user_data, producto, estado, precio_nuevo, variacio
     if plan != "starter":
         # Aquí llamarías a la lógica de tu alertas.py
         print(f"✅ [Notificador] WhatsApp listo para plan {plan}")
+
+def enviar_whatsapp(numero, mensaje):
+    """
+    🛠️ MOCK: Función preparada para el futuro envío por WhatsApp.
+    Por ahora solo printea en consola para no romper el flujo.
+    """
+    print(f"📱 [PROXIMAMENTE] Simulando envío de WhatsApp a {numero}: {mensaje}")
+    return True
