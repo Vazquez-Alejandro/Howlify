@@ -1,28 +1,43 @@
-# Usamos la imagen de Playwright para tener todos los navegadores listos
-FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
+# Usamos Python 3.12 oficial como base
+FROM python:3.12-slim
 
-# Evita que Python genere archivos .pyc
+# Evita archivos .pyc y trabas en el buffer
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
 WORKDIR /app
 
-# Instalamos Node.js (Necesario para Mudslide/WhatsApp)
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs
+# Instalamos dependencias de sistema necesarias para Playwright y Node
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    gnupg \
+    libgconf-2-4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libgdk-pixbuf2.0-0 \
+    libgtk-3-0 \
+    libgbm-dev \
+    libnss3 \
+    libxss1 \
+    libasound2 \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copiamos e instalamos dependencias de Python
+# Actualizamos pip e instalamos las dependencias de Python
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Instalamos los navegadores de Playwright por las dudas
-RUN playwright install --with-deps chromium
+# Instalamos Playwright y sus navegadores
+RUN pip install playwright && \
+    playwright install --with-deps chromium
 
-# Copiamos todo el proyecto
+# Copiamos el resto del proyecto
 COPY . .
 
-# Exponemos el puerto
 EXPOSE 8501
 
-# Comando de arranque con los flags de seguridad para Render
+# Comando de arranque para Render
 CMD ["streamlit", "run", "app_dev.py", "--server.port", "8501", "--server.address", "0.0.0.0", "--server.enableCORS", "false", "--server.enableXsrfProtection", "false"]
