@@ -1,6 +1,7 @@
 import smtplib
 import os
 import requests
+import subprocess
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
@@ -15,7 +16,7 @@ SMTP_PASS = os.getenv("SMTP_PASSWORD", "")
 TOKEN_TELEGRAM = os.getenv("TELEGRAM_TOKEN", "") 
 
 # ==========================================
-# 📧 CANAL EMAIL (Rescatado de engine.py)
+# 📧 CANAL EMAIL
 # ==========================================
 def enviar_email(destinatario, asunto, cuerpo_html):
     if not SMTP_USER or not SMTP_PASS:
@@ -56,6 +57,26 @@ def enviar_telegram(chat_id, mensaje):
         print(f"❌ Error Telegram: {e}")
 
 # ==========================================
+# 🟢 CANAL WHATSAPP (Vía Mudslide)
+# ==========================================
+def enviar_whatsapp(numero, mensaje):
+    """
+    🚀 ENVÍO REAL: Usa Mudslide para despachar el mensaje por WhatsApp.
+    """
+    if not numero:
+        print("❌ WhatsApp: No hay número de destino.")
+        return False
+        
+    try:
+        # Ejecutamos el comando validado en la terminal
+        subprocess.run(["npx", "mudslide", "send", str(numero), mensaje], check=True)
+        print(f"✅ [WhatsApp] Mensaje enviado con éxito a {numero}")
+        return True
+    except Exception as e:
+        print(f"❌ Error enviando WhatsApp con Mudslide: {e}")
+        return False
+
+# ==========================================
 # 🐺 EL DESPACHADOR (El cerebro que decide)
 # ==========================================
 def despachar_alertas_jauria(user_data, producto, estado, precio_nuevo, variacion):
@@ -65,9 +86,10 @@ def despachar_alertas_jauria(user_data, producto, estado, precio_nuevo, variacio
     plan = user_data.get('plan_id', 'starter').lower()
     t_id = user_data.get('telegram_id')
     email = user_data.get('email')
+    whatsapp_num = user_data.get('whatsapp_number') # Extraemos el número del dict
     
-    # 📝 Mensaje formateado para Telegram
-    msg_telegram = (
+    # 📝 Mensaje formateado para Telegram y WhatsApp
+    msg_alerta = (
         f"{estado} *HOWLIFY ALERT*\n\n"
         f"📦 *Producto:* {producto}\n"
         f"💰 *Precio:* ${precio_nuevo:,}\n"
@@ -75,9 +97,9 @@ def despachar_alertas_jauria(user_data, producto, estado, precio_nuevo, variacio
         f"🐺 _Enviado desde tu ThinkPad_"
     ).replace(",", ".")
 
-    # 1. Notificar por Telegram (Todos los planes según tu decisión)
+    # 1. Notificar por Telegram
     if t_id:
-        enviar_telegram(t_id, msg_telegram)
+        enviar_telegram(t_id, msg_alerta)
 
     # 2. Notificar por Email (Solo si es preventivo/crítico)
     if email and estado in ["🟡", "🟠", "🔴"]:
@@ -92,15 +114,8 @@ def despachar_alertas_jauria(user_data, producto, estado, precio_nuevo, variacio
         """
         enviar_email(email, asunto, cuerpo)
 
-    # 3. WhatsApp (Lógica preparada para Pro/Business)
-    if plan != "starter":
-        # Aquí llamarías a la lógica de tu alertas.py
-        print(f"✅ [Notificador] WhatsApp listo para plan {plan}")
-
-def enviar_whatsapp(numero, mensaje):
-    """
-    🛠️ MOCK: Función preparada para el futuro envío por WhatsApp.
-    Por ahora solo printea en consola para no romper el flujo.
-    """
-    print(f"📱 [PROXIMAMENTE] Simulando envío de WhatsApp a {numero}: {mensaje}")
-    return True
+    # 3. WhatsApp (REAL para planes que no sean Starter)
+    if plan != "starter" and whatsapp_num:
+        enviar_whatsapp(whatsapp_num, msg_alerta)
+    elif plan != "starter" and not whatsapp_num:
+        print(f"⚠️ [Notificador] Plan {plan} requiere WhatsApp pero no hay número.")
