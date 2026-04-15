@@ -1696,6 +1696,22 @@ st.markdown(
         color: #ddd !important;
     }
 
+    /* --- UNIFICACIÓN DE TAGS (DÍAS) --- */
+    span[data-baseweb="tag"] {
+        min-width: 90px !important;
+        justify-content: center !important;
+        text-align: center !important;
+        border-radius: 10px !important;
+        background-color: rgba(255, 255, 255, 0.1) !important;
+    }
+
+    /* --- ALINEACIÓN DE ÍCONOS Y TÍTULOS --- */
+    .stMarkdown h4 {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -2266,37 +2282,63 @@ with st.expander("📲 Configurar Notificaciones", expanded=False):
         t_id, ws_actual, mail_active = None, None, True
         rep_enabled, rep_time_db, rep_days_db = True, "09:00:00", []
 
-    # --- 📅 1. SECCIÓN REPORTE DIARIO (PROTAGONISTA) ---
-    st.markdown("#### 📅 Reporte Diario de Salud")
-    st.caption("Recibí un resumen matutino de todas tus cacerías activas directamente en Telegram.")
-    
-    col_rep1, col_rep2 = st.columns([2, 1])
-    with col_rep1:
-        nuevos_dias = st.multiselect(
-            "Días de envío:",
-            ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"],
-            default=rep_days_db if rep_days_db else ["Lunes"],
-            key="ms_report_days_profile"
-        )
-    with col_rep2:
+    # --- 📅 SECCIÓN REPORTE DIARIO DENTRO DE UN DESPLEGABLE ---
+    with st.expander("📅 Reporte Diario de Salud — Configurar", expanded=False):
+        st.caption("Recibí un resumen matutino de todas tus cacerías activas directamente en Telegram.")
+
+        orden_maestro = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
+        # rep_days_db viene de la DB; normalizamos contra orden_maestro
+        seleccion_inicial = [d for d in orden_maestro if d in (rep_days_db or [])]
+        if not seleccion_inicial:
+            seleccion_inicial = ["Lunes"]
+
+        # Mostrar checkboxes en orden maestro y construir la lista final en ese mismo orden
+        st.markdown("**Días de envío**")
+        nuevos_dias = []
+        for d in orden_maestro:
+            checked = d in seleccion_inicial
+            if st.checkbox(d, value=checked, key=f"chk_report_day_{d}"):
+                nuevos_dias.append(d)
+
+        # Hora y toggle
         hora_actual_formato = rep_time_db[:5] if rep_time_db else "09:00"
         lista_horas = [f"{h:02d}:00" for h in range(24)]
         idx_hora = lista_horas.index(hora_actual_formato) if hora_actual_formato in lista_horas else 9
         nueva_hora = st.selectbox("Hora:", lista_horas, index=idx_hora, key="sb_report_time_profile")
-    
-    col_tgl, col_btn_rep = st.columns([1, 2])
-    with col_tgl:
+
         activar_rep = st.toggle("Activar Reporte", value=rep_enabled, key="tg_report_enabled")
-    with col_btn_rep:
-        if st.button("💾 Guardar Agenda de Reporte", width="stretch", key="btn_save_report_vfinal"):
+
+        # Guardar
+        if st.button("💾 Guardar Agenda de Reporte", key="btn_save_report_checkboxes"):
             updates = {
                 "report_enabled": activar_rep,
                 "report_days": nuevos_dias,
                 "report_time": f"{nueva_hora}:00"
             }
             supabase.table("profiles").update(updates).eq("user_id", user_id).execute()
-            st.success("✅ Agenda del Lobo actualizada.")
-            time.sleep(1); st.rerun()
+            # Actualizamos session_state para reflejar lo guardado en la sesión actual
+            st.session_state["ms_report_days_profile"] = nuevos_dias
+            st.success("✅ Agenda actualizada. Los días se guardaron en orden lógico.")
+            time.sleep(0.6)
+            # opcional: recargar para reflejar cambios desde la DB en otras partes de la app
+            if hasattr(st, "experimental_rerun"):
+                st.experimental_rerun()
+
+
+    st.divider()
+
+# --- 📧 1. SECCIÓN EMAIL ---
+    st.markdown("#### 📧 Correo Electrónico")
+    col_m1, col_m2 = st.columns([3, 1])
+    with col_m1:
+        st.info(f"Alertas enviadas a: **{st.session_state.get('user_email', 'tu email')}**")
+    with col_m2:
+        nuevo_estado_mail = st.toggle("Activar", value=mail_active, key="tg_mail_notif")
+        
+    if nuevo_estado_mail != mail_active:
+        supabase.table("profiles").update({"email_notifications": nuevo_estado_mail}).eq("user_id", user_id).execute()
+        st.toast("Preferencia de Email actualizada")
 
     st.divider()
 
@@ -2323,42 +2365,38 @@ with st.expander("📲 Configurar Notificaciones", expanded=False):
 
     st.divider()
 
-    # --- 📧 3. SECCIÓN EMAIL ---
-    st.markdown("#### 📧 Correo Electrónico")
-    col_m1, col_m2 = st.columns([3, 1])
-    with col_m1:
-        st.info(f"Alertas enviadas a: **{st.session_state.get('user_email', 'tu email')}**")
-    with col_m2:
-        nuevo_estado_mail = st.toggle("Activar", value=mail_active, key="tg_mail_notif")
-        
-    if nuevo_estado_mail != mail_active:
-        supabase.table("profiles").update({"email_notifications": nuevo_estado_mail}).eq("user_id", user_id).execute()
-        st.toast("Preferencia de Email actualizada")
-
-    st.divider()
-
-    # --- 🟩 4. SECCIÓN WHATSAPP ---
+    # --- 🟩 3. SECCIÓN WHATSAPP ---
+    st.markdown("#### 🟩 WhatsApp")
     if plan.lower() in ["pro", "business_reseller", "business_monitor"]:
-        ws_num = st.text_input("Número (ej: 54911...)", value=ws_actual if ws_actual else "", key="ws_input_vfinal")
-        
-        col_ws1, col_ws2 = st.columns(2)
-        with col_ws1:
-            if st.button("💾 Guardar WhatsApp", width="stretch", key="btn_save_ws_vfinal"):
+        if not ws_actual:
+            # ESTADO: NO VINCULADO
+            ws_num = st.text_input("Número (ej: 54911...)", placeholder="Ingresá tu número para vincular", key="ws_input_vfinal")
+            if st.button("🐺 Vincular WhatsApp ahora", width="stretch", key="btn_save_ws_vfinal"):
                 ws_limpio = "".join(filter(str.isdigit, ws_num))
                 if len(ws_limpio) >= 10:
                     supabase.table("profiles").update({"whatsapp_number": ws_limpio}).eq("user_id", user_id).execute()
                     st.success(f"✅ WhatsApp {ws_limpio} vinculado.")
                     time.sleep(1); st.rerun()
-        
-        with col_ws2:
-            if ws_actual and st.button("🧪 Probar Conexión", width="stretch", key="btn_test_ws_vfinal"):
-                with st.spinner("Enviando aullido..."):
-                    # USAMOS LA FUNCIÓN QUE YA IMPORTASTE EN LA LÍNEA 45
-                    exito = enviar_whatsapp(ws_actual, "🐺 *Howlify Alert:* ¡Conexión exitosa!")
-                    if exito:
-                        st.toast("✅ ¡Mensaje enviado!")
-                    else:
-                        st.error("❌ Falló el envío.")
+                else:
+                    st.error("⚠️ El número es demasiado corto.")
+        else:
+            # ESTADO: VINCULADO
+            st.success(f"✅ Vinculado (Número: {ws_actual})")
+            col_ws1, col_ws2 = st.columns(2)
+            with col_ws1:
+                if st.button("🧪 Probar Conexión", width="stretch", key="btn_test_ws_vfinal"):
+                    with st.spinner("Enviando..."):
+                        exito = enviar_whatsapp(ws_actual, "🐺 *Howlify Alert:* ¡Conexión exitosa!")
+                        if exito: st.toast("✅ ¡Mensaje enviado!")
+                        else: st.error("❌ Falló el envío.")
+            
+            with col_ws2:
+                if st.button("🗑️ Desvincular", width="stretch", key="btn_unlink_ws"):
+                    supabase.table("profiles").update({"whatsapp_number": None}).eq("user_id", user_id).execute()
+                    st.toast("WhatsApp desvinculado")
+                    time.sleep(1); st.rerun()
+    else:
+        st.info("💡 **Tip:** WhatsApp disponible en planes **Pro** o **Business**.")
 
 # --- ➕ NUEVA CACERÍA (LIMPIO - SIN REPORTE) ---
 total_ocupado = cazas_activas

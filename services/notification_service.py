@@ -61,20 +61,28 @@ def enviar_telegram(chat_id, mensaje):
 # ==========================================
 def enviar_whatsapp(numero, mensaje):
     """
-    🚀 ENVÍO REAL: Usa Mudslide para despachar el mensaje por WhatsApp.
+    🚀 ENVÍO REAL: Versión blindada para Linux.
     """
     if not numero:
-        print("❌ WhatsApp: No hay número de destino.")
         return False
         
+    # Limpiamos el número por las dudas (solo números)
+    num_clean = "".join(filter(str.isdigit, str(numero)))
+    
     try:
-        # Ejecutamos el comando validado en la terminal
-        subprocess.run(["npx", "mudslide", "send", str(numero), mensaje], check=True)
-        print(f"✅ [WhatsApp] Mensaje enviado con éxito a {numero}")
+        # Usamos una lista de argumentos y shell=False es más seguro, 
+        # pero si npx no está en el path de Python, usamos el comando directo:
+        comando = f'npx mudslide send {num_clean} "{mensaje}"'
+        
+        # Ejecutamos
+        subprocess.run(comando, shell=True, check=True)
+        
+        print(f"✅ [WhatsApp] Comando ejecutado para {num_clean}")
         return True
     except Exception as e:
-        print(f"❌ Error enviando WhatsApp con Mudslide: {e}")
+        print(f"❌ Error en subprocess: {e}")
         return False
+    
 
 # ==========================================
 # 🐺 EL DESPACHADOR (El cerebro que decide)
