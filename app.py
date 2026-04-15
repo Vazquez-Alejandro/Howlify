@@ -2338,19 +2338,28 @@ with st.expander("📲 Configurar Notificaciones", expanded=False):
     st.divider()
 
     # --- 🟩 4. SECCIÓN WHATSAPP ---
-    st.markdown("#### 🟩 WhatsApp")
     if plan.lower() in ["pro", "business_reseller", "business_monitor"]:
         ws_num = st.text_input("Número (ej: 54911...)", value=ws_actual if ws_actual else "", key="ws_input_vfinal")
-        if st.button("💾 Guardar WhatsApp", width="stretch", key="btn_save_ws_vfinal"):
-            ws_limpio = "".join(filter(str.isdigit, ws_num))
-            if len(ws_limpio) >= 10:
-                supabase.table("profiles").update({"whatsapp_number": ws_limpio}).eq("user_id", user_id).execute()
-                st.success(f"✅ WhatsApp {ws_limpio} vinculado.")
-                time.sleep(1); st.rerun()
-            else:
-                st.error("⚠️ El número es demasiado corto.")
-    else:
-        st.info("💡 **Tip:** WhatsApp disponible en planes **Pro** o **Business**.")
+        
+        col_ws1, col_ws2 = st.columns(2)
+        with col_ws1:
+            if st.button("💾 Guardar WhatsApp", width="stretch", key="btn_save_ws_vfinal"):
+                ws_limpio = "".join(filter(str.isdigit, ws_num))
+                if len(ws_limpio) >= 10:
+                    supabase.table("profiles").update({"whatsapp_number": ws_limpio}).eq("user_id", user_id).execute()
+                    st.success(f"✅ WhatsApp {ws_limpio} vinculado.")
+                    time.sleep(1); st.rerun()
+        
+        with col_ws2:
+            if ws_actual and st.button("🧪 Probar Conexión", width="stretch", key="btn_test_ws_vfinal"):
+                with st.spinner("Enviando aullido..."):
+                    # USAMOS LA FUNCIÓN QUE YA IMPORTASTE EN LA LÍNEA 45
+                    exito = enviar_whatsapp(ws_actual, "🐺 *Howlify Alert:* ¡Conexión exitosa!")
+                    if exito:
+                        st.toast("✅ ¡Mensaje enviado!")
+                    else:
+                        st.error("❌ Falló el envío.")
+
 # --- ➕ NUEVA CACERÍA (LIMPIO - SIN REPORTE) ---
 total_ocupado = cazas_activas
 if total_ocupado < limite_plan:
