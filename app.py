@@ -2007,7 +2007,7 @@ if "user_logged" not in st.session_state:
             plan = st.session_state["plan_elegido"]
             st.info(f"Registrando nuevo miembro · Plan {plan_label(plan)}")
 
-            nu = st.text_input("Usuario", key="r_user", placeholder="Ej: Howlyfan123")
+            nu = st.text_input("Usuario", key="r_user", placeholder="Ej: Howlifan123")
             em = st.text_input("Email", key="r_email", placeholder="tu@email.com")
             
             # --- SECCIÓN DE PASSWORDS ---
