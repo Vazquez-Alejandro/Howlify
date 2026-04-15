@@ -10,28 +10,33 @@ def generar_sugerencias(username):
     random.shuffle(sufijos)
     return [f"{username}_{s}" for s in sufijos[:3]]
 
-def supa_signup(email, password, username, plan="starter"):
+def supa_signup(email, password, confirm_password, username, plan="starter"):
     """Registro con validación de Nick Único y sugerencias."""
     try:
-        # Verificar disponibilidad del Alias con cliente ADMIN
+        # 1. Validación de contraseña (confirmación)
+        if password != confirm_password:
+            return None, "⚠️ Las contraseñas no coinciden."
+
+        # 2. Verificar disponibilidad del Alias con cliente ADMIN
         check = supabase_admin.table("profiles").select("username").eq("username", username).execute()
         
         if check.data:
             sugerencias = generar_sugerencias(username)
             return None, f"⚠️ El alias '{username}' ya está en uso. Probá con: {', '.join(sugerencias)}"
 
-        # Registro en Auth
+        # 3. Registro en Auth
         res = supabase.auth.sign_up({
-            "email": email.lower(),
+            "email": email.strip().lower(),
             "password": password,
             "options": {"data": {"username": username, "plan": plan}}
         })
 
         if res.user:
+            # 4. Crear perfil en la tabla 'profiles'
             profile_data = {
                 "user_id": res.user.id,
-                "email": email.lower(),
-                "username": username,
+                "email": email.strip().lower(),
+                "username": username.strip(),
                 "plan": plan,
                 "created_at": datetime.utcnow().isoformat()
             }
@@ -54,7 +59,7 @@ def supa_login(identifier, password):
             final_email = res_p.data[0]["email"]
 
         res = supabase.auth.sign_in_with_password({
-            "email": final_email.lower(),
+            "email": final_email.strip().lower(),
             "password": password
         })
         return (res.user, f"🐺 ¡Bienvenido, {identifier}!") if res.user else (None, "❌ Credenciales inválidas.")
@@ -62,13 +67,15 @@ def supa_login(identifier, password):
         return None, f"❌ Error: {str(e)}"
 
 def supa_logout():
+    """Cierra la sesión del usuario actual."""
     try:
         supabase.auth.sign_out()
         return True, "👋 Sesión cerrada."
-    except:
-        return False, "Error al cerrar sesión."
+    except Exception as e:
+        return False, f"Error al cerrar sesión: {str(e)}"
 
 def actualizar_alias(user_id, nuevo_username):
+    """Cambia el alias del usuario verificando que no exista."""
     try:
         check = supabase_admin.table("profiles").select("username").eq("username", nuevo_username).execute()
         if check.data:
@@ -79,11 +86,9 @@ def actualizar_alias(user_id, nuevo_username):
         return False, str(e)
 
 def supa_reset_password(email):
-    """
-    Envía un correo de recuperación de contraseña.
-    """
+    """Envía un correo de recuperación de contraseña."""
     try:
-        res = supabase.auth.reset_password_for_email(email)
+        supabase.auth.reset_password_for_email(email.strip().lower())
         return True, "📧 Se envió un correo para restablecer tu contraseña."
     except Exception as e:
         return False, f"❌ Error al enviar correo: {str(e)}"
