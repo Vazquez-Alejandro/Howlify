@@ -12,22 +12,21 @@ def generar_sugerencias(username):
 
 def supa_signup(email, password, confirm_password, username, plan="starter"):
     """
-    Registro simplificado: El perfil se crea vía Trigger en Supabase 
-    usando los metadatos enviados en 'options'.
+    Registro optimizado: El perfil se crea automáticamente en Supabase
+    gracias al Trigger SQL. Ya no hacemos el insert manual aquí.
     """
     try:
-        # 1. Validación de contraseña
         if password != confirm_password:
             return None, "⚠️ Las contraseñas no coinciden."
 
-        # 2. Verificar disponibilidad del Alias con cliente ADMIN
+        # 1. Verificar disponibilidad del Alias
         check = supabase_admin.table("profiles").select("username").eq("username", username).execute()
         if check.data:
             sugerencias = generar_sugerencias(username)
             return None, f"⚠️ El alias '{username}' ya está en uso. Probá con: {', '.join(sugerencias)}"
 
-        # 3. Registro en Auth
-        # Pasamos username y plan en user_metadata para que el Trigger los tome
+        # 2. Registro en Auth
+        # Los metadatos 'username' y 'plan' son capturados por el Trigger en la DB
         res = supabase.auth.sign_up({
             "email": email.strip().lower(),
             "password": password,
@@ -40,9 +39,11 @@ def supa_signup(email, password, confirm_password, username, plan="starter"):
         })
 
         if res.user:
+            # NO HACEMOS INSERT AQUÍ. El Trigger en Supabase ya lo hizo.
             return res.user, "✅ Registro exitoso. ¡Bienvenido a la jauría!"
         
-        return None, "❌ No se pudo crear el usuario."
+        return None, "❌ No se pudo crear el usuario en Auth."
+        
     except Exception as e:
         return None, f"❌ Error en registro: {str(e)}"
 
@@ -51,7 +52,6 @@ def supa_login(identifier, password):
     try:
         final_email = identifier
         if "@" not in identifier:
-            # Es un alias, buscamos el email real con ADMIN
             res_p = supabase_admin.table("profiles").select("email").eq("username", identifier).execute()
             if not res_p.data:
                 return None, f"❌ No existe el alias '{identifier}'."
@@ -69,7 +69,6 @@ def supa_login(identifier, password):
         return None, f"❌ Error: {str(e)}"
 
 def supa_logout():
-    """Cierra la sesión del usuario actual."""
     try:
         supabase.auth.sign_out()
         return True, "👋 Sesión cerrada."
@@ -77,7 +76,6 @@ def supa_logout():
         return False, f"Error al cerrar sesión: {str(e)}"
 
 def actualizar_alias(user_id, nuevo_username):
-    """Cambia el alias del usuario verificando que no exista."""
     try:
         check = supabase_admin.table("profiles").select("username").eq("username", nuevo_username).execute()
         if check.data:
@@ -88,7 +86,6 @@ def actualizar_alias(user_id, nuevo_username):
         return False, str(e)
 
 def supa_reset_password(email):
-    """Envía un correo de recuperación de contraseña."""
     try:
         supabase.auth.reset_password_for_email(email.strip().lower())
         return True, "📧 Se envió un correo para restablecer tu contraseña."
