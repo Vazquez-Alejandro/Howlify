@@ -1,5 +1,6 @@
 import os
 import random
+import time
 from datetime import datetime
 # Importamos los clientes desde el archivo hermano usando el punto (.)
 from .supabase_client import supabase, supabase_admin
@@ -11,15 +12,14 @@ def generar_sugerencias(username):
     return [f"{username}_{s}" for s in sufijos[:3]]
 
 def supa_signup(email, password, confirm_password, username, plan="starter"):
-    """Registro con validación de Nick Único y sugerencias."""
+    """Registro con validación de Nick Único y sincronización de perfil."""
     try:
-        # 1. Validación de contraseña (confirmación)
+        # 1. Validación de contraseña
         if password != confirm_password:
             return None, "⚠️ Las contraseñas no coinciden."
 
-        # 2. Verificar disponibilidad del Alias con cliente ADMIN
+        # 2. Verificar disponibilidad del Alias
         check = supabase_admin.table("profiles").select("username").eq("username", username).execute()
-        
         if check.data:
             sugerencias = generar_sugerencias(username)
             return None, f"⚠️ El alias '{username}' ya está en uso. Probá con: {', '.join(sugerencias)}"
@@ -32,7 +32,9 @@ def supa_signup(email, password, confirm_password, username, plan="starter"):
         })
 
         if res.user:
-            # 4. Crear perfil en la tabla 'profiles'
+            # FIX: Pausa de 1 segundo para que Supabase asiente el ID en auth.users
+            time.sleep(1)
+            
             profile_data = {
                 "user_id": res.user.id,
                 "email": email.strip().lower(),
@@ -40,8 +42,14 @@ def supa_signup(email, password, confirm_password, username, plan="starter"):
                 "plan": plan,
                 "created_at": datetime.utcnow().isoformat()
             }
-            supabase_admin.table("profiles").insert(profile_data).execute()
-            return res.user, "✅ Registro exitoso. ¡Bienvenido!"
+            
+            # 4. Crear perfil en la tabla 'profiles'
+            try:
+                supabase_admin.table("profiles").insert(profile_data).execute()
+                return res.user, "✅ Registro exitoso. ¡Bienvenido!"
+            except Exception as e_ins:
+                # Si el insert falla, devolvemos el error específico de la tabla
+                return None, f"❌ Error al crear perfil: {str(e_ins)}"
         
         return None, "❌ No se pudo crear el usuario."
     except Exception as e:
@@ -52,13 +60,12 @@ def supa_login(identifier, password):
     try:
         final_email = identifier
         if "@" not in identifier:
-            # Es un alias, buscamos el email real con ADMIN
             res_p = supabase_admin.table("profiles").select("email").eq("username", identifier).execute()
             if not res_p.data:
                 return None, f"❌ No existe el alias '{identifier}'."
             final_email = res_p.data[0]["email"]
 
-        res = supabase.auth.sign_in_with_password({
+        res = supabase.auth.in_with_password({
             "email": final_email.strip().lower(),
             "password": password
         })
