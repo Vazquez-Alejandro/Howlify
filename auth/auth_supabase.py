@@ -12,8 +12,8 @@ def generar_sugerencias(username):
 
 def supa_signup(email, password, confirm_password, username, plan="starter"):
     """
-    Registro optimizado: El perfil se crea automáticamente en Supabase
-    gracias al Trigger SQL. Ya no hacemos el insert manual aquí.
+    Registro optimizado: El perfil se crea automáticamente en Supabase vía Trigger.
+    Incluye limpieza de mensajes de error para la UI.
     """
     try:
         if password != confirm_password:
@@ -26,7 +26,6 @@ def supa_signup(email, password, confirm_password, username, plan="starter"):
             return None, f"⚠️ El alias '{username}' ya está en uso. Probá con: {', '.join(sugerencias)}"
 
         # 2. Registro en Auth
-        # Los metadatos 'username' y 'plan' son capturados por el Trigger en la DB
         res = supabase.auth.sign_up({
             "email": email.strip().lower(),
             "password": password,
@@ -39,13 +38,19 @@ def supa_signup(email, password, confirm_password, username, plan="starter"):
         })
 
         if res.user:
-            # NO HACEMOS INSERT AQUÍ. El Trigger en Supabase ya lo hizo.
-            return res.user, "✅ Registro exitoso. ¡Bienvenido a la jauría!"
+            return res.user, "✅ Registro exitoso. ¡Revisá tu mail para activar tu cuenta!"
         
         return None, "❌ No se pudo crear el usuario en Auth."
         
     except Exception as e:
-        return None, f"❌ Error en registro: {str(e)}"
+        error_msg = str(e)
+        # Limpieza de errores de política de contraseña para QA
+        if "Password should contain" in error_msg:
+            return None, "🔒 Contraseña muy débil. Debe incluir mayúsculas, minúsculas, números y símbolos."
+        if "already registered" in error_msg:
+            return None, "📧 Este correo ya está registrado. Intentá iniciar sesión."
+        
+        return None, f"❌ Error en registro: {error_msg}"
 
 def supa_login(identifier, password):
     """Login Dual: Email o Alias."""
@@ -66,7 +71,10 @@ def supa_login(identifier, password):
             return res.user, f"🐺 ¡Bienvenido, {identifier}!"
         return None, "❌ Credenciales inválidas."
     except Exception as e:
-        return None, f"❌ Error: {str(e)}"
+        error_msg = str(e)
+        if "Email not confirmed" in error_msg:
+            return None, "📧 Debes confirmar tu email antes de ingresar."
+        return None, f"❌ Error: {error_msg}"
 
 def supa_logout():
     try:
