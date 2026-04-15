@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from scraper.scraper_pro import hunt_offers
-from services.whatsapp_service import enviar_whatsapp
+from services.notification_service import enviar_whatsapp
 from services.business_service import guardar_oportunidad_business
 from services.duffel_service import buscar_ofertas_vuelos
 from services.database_service import vigilar_ofertas

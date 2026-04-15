@@ -3,6 +3,7 @@ import signal
 import sys
 import os 
 from datetime import datetime, timedelta, timezone
+from services.database_service import ejecutar_reporte_diario_total
 
 # --- 🐺 EL "FIX" DE RUTAS PARA LINUX ---
 # Esto le dice a Python que suba un nivel ('..') para encontrar las otras carpetas
@@ -55,7 +56,6 @@ def obtener_cazas_pendientes():
                 pendientes.append(caza)
 
     return pendientes
-
 def main():
     print("🐺 LOBO GUARDIÁN: Iniciando sistema de vigilancia pro...")
     
@@ -166,6 +166,13 @@ def main():
                     
             else:
                 print("💤 Nada que cazar por ahora. Todo bajo control.")
+
+            # --- 🐺 REPORTE DIARIO AUTOMÁTICO ---
+            # Se ejecuta una vez por cada vuelta del loop (cada minuto)
+            try:
+                ejecutar_reporte_diario_total()
+            except Exception as e:
+                print(f"❌ Error en despacho de reporte diario: {e}")
 
         except Exception as e:
             print(f"❌ Error crítico en el ciclo del Worker: {e}")

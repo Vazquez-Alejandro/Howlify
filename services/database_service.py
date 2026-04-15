@@ -11,6 +11,7 @@ from scraper.scraper_pro import hunt_offers
 # 🐺 IMPORTACIÓN CENTRALIZADA DE NOTIFICACIONES
 from services.notification_service import enviar_telegram, enviar_email, enviar_whatsapp
 
+
 # Conexión central
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
@@ -90,6 +91,17 @@ def es_plan_business(plan: str) -> bool:
 # ==========================================================
 
 def vigilar_ofertas():
+    # 🐺 IMPORTACIÓN LOCAL PARA EVITAR REFERENCIA CIRCULAR
+    # Al estar dentro de la función, VS Code reconocerá los nombres sin bloquear la carga del módulo
+    from engine.engine import (
+        disparar_alerta_minima, 
+        obtener_ultima_alerta, 
+        too_soon, 
+        obtener_contacto_usuario, 
+        enviar_alerta_por_canal, 
+        guardar_alerta
+    )
+
     print("🐺 Vigilando ofertas...")
     now = datetime.now(timezone.utc)
     valor_dolar_hoy = obtener_dolar_tarjeta()
@@ -145,8 +157,7 @@ def vigilar_ofertas():
                     precio_actual, precio_minimo, diff_vs_minimo
                 )
 
-            # Alertas - Usamos la lógica centralizada de notificaciones
-            from scraper.alertas import disparar_alerta_minima, obtener_ultima_alerta, too_soon, obtener_contacto_usuario, enviar_alerta_por_canal, guardar_alerta
+            # Alertas - Usamos las funciones importadas localmente
             if disparar_alerta_minima(caza_id, mejor, precio_limite_final):
                 prev = obtener_ultima_alerta(caza_id)
                 enviar = False
@@ -158,7 +169,6 @@ def vigilar_ofertas():
 
                 if enviar:
                     contacto = obtener_contacto_usuario(user_id)
-                    # Aquí la función enviar_alerta_por_canal ya debe usar notification_service internamente
                     if enviar_alerta_por_canal(contacto, mejor, caza_nombre=producto):
                         guardar_alerta(caza_id, user_id, mejor)
 
@@ -218,7 +228,7 @@ def armar_texto_reporte(user_id, cazas, familia_plan, nombre_usuario=""):
 
     return saludo + cuerpo + "\n\n🔗 [Ver mi Panel](https://howlify.com)"
 
-def ejecutar_reporte_diario_total():
+def ejecutar_reporte_diario_total(force=False):
     import pytz
     tz = pytz.timezone('America/Argentina/Buenos_Aires')
     now = datetime.now(tz)
@@ -227,24 +237,47 @@ def ejecutar_reporte_diario_total():
     hora_actual = now.strftime("%H:%M:00") 
 
     try:
-        res_usuarios = (supabase.table("profiles")
+        # 🐺 IMPORTACIÓN LOCAL PARA ROMPER LA REFERENCIA CIRCULAR
+        # Esto evita que database_service y engine se bloqueen entre sí al iniciar
+        from engine.engine import (
+            disparar_alerta_minima, 
+            obtener_ultima_alerta, 
+            too_soon, 
+            obtener_contacto_usuario, 
+            enviar_alerta_por_canal, 
+            guardar_alerta
+        )
+
+        print(f"🕒 [{hora_actual}] Iniciando chequeo de reportes (Force={force})...")
+
+        # Se agrega la lógica de Force para testear sin importar la hora
+        query = (supabase.table("profiles")
             .select("user_id, username, plan, telegram_id, report_days, report_time")
-            .eq("report_enabled", True)
-            .eq("report_time", hora_actual)
-            .contains("report_days", [dia_actual])
-            .execute())
+            .eq("report_enabled", True))
         
+        if not force:
+            query = query.eq("report_time", hora_actual).contains("report_days", [dia_actual])
+        
+        res_usuarios = query.execute()
         usuarios = res_usuarios.data or []
+
+        if force and not usuarios:
+            print("⚠️ No hay usuarios con reportes habilitados para forzar.")
+
         for u in usuarios:
             uid = u["user_id"]
             res_cazas = supabase.table("cazas").select("*").eq("user_id", uid).eq("estado", "activa").execute()
             cazas = res_cazas.data or []
-            if not cazas: continue 
+            
+            if not cazas: 
+                print(f"ℹ️ Usuario {u.get('username')} no tiene cacerías activas.")
+                continue 
 
             mensaje = armar_texto_reporte(uid, cazas, normalize_plan_family(u.get("plan")), u.get("username"))
             
             if u.get("telegram_id"):
                 enviar_telegram(u["telegram_id"], mensaje)
+                print(f"✅ Reporte enviado con éxito a {u.get('username')}.")
                 
     except Exception as e:
         print(f"❌ Error en reporte diario: {e}")
