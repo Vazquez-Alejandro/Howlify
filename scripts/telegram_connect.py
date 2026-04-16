@@ -1,20 +1,25 @@
 import os
+import sys
 import time
 import requests
 from pathlib import Path
 from dotenv import load_dotenv
-from auth.supabase_client import supabase  # Importamos tu cliente de Supabase
 
-# Configuración de rutas y variables
-current_dir = Path(__file__).resolve().parent
-env_path = current_dir.parent / ".env"
+# --- ARREGLO DE RUTAS PARA RENDER ---
+# Esto hace que el script vea la carpeta 'auth' y 'services' desde la raíz
+BASE_DIR = Path(__file__).resolve().parent.parent
+sys.path.append(str(BASE_DIR))
+
+from auth.supabase_client import supabase  # Ahora sí lo va a encontrar
+
+# Carga de entorno
+env_path = BASE_DIR / ".env"
 load_dotenv(dotenv_path=env_path)
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 API_URL = f"https://api.telegram.org/bot{TOKEN}"
 
 def enviar_mensaje(chat_id, texto):
-    """Función auxiliar para enviar mensajes"""
     url = f"{API_URL}/sendMessage"
     payload = {"chat_id": chat_id, "text": texto, "parse_mode": "Markdown"}
     try:
@@ -46,34 +51,25 @@ def main():
                         texto_recibido = msg["text"]
                         user_name = msg["from"].get("first_name", "Cazador")
 
-                        # LÓGICA DE VINCULACIÓN AUTOMÁTICA
+                        print(f"📩 Procesando mensaje de {user_name}...")
+
                         if texto_recibido.startswith("/start"):
                             partes = texto_recibido.split()
                             
-                            # Si el comando tiene el ID (ej: /start UUID-DE-SUPABASE)
                             if len(partes) > 1:
                                 supabase_user_id = partes[1]
                                 try:
-                                    # Actualizamos Supabase directamente
-                                    supabase.table("users").update({
+                                    # Actualizamos la tabla 'profiles' (que es la que mostraste en la captura)
+                                    supabase.table("profiles").update({
                                         "telegram_id": str(chat_id)
-                                    }).eq("id", supabase_user_id).execute()
+                                    }).eq("user_id", supabase_user_id).execute()
                                     
-                                    respuesta = (
-                                        f"¡Hola {user_name}! 🐺\n\n"
-                                        "✅ **Cuenta vinculada con éxito.**\n"
-                                        "Ya podés cerrar este chat. El Lobo te avisará por acá cuando bajen los precios."
-                                    )
+                                    respuesta = f"¡Hola {user_name}! 🐺\n\n✅ **Cuenta vinculada con éxito.**"
                                 except Exception as e:
                                     print(f"❌ Error en Supabase: {e}")
-                                    respuesta = "❌ Hubo un error al vincular tu cuenta. Reintentá desde la web."
+                                    respuesta = "❌ Hubo un error al vincular tu cuenta."
                             else:
-                                # Si entra sin link (manual)
-                                respuesta = (
-                                    f"¡Hola {user_name}! 🐺\n\n"
-                                    f"Tu ID es: `{chat_id}`\n"
-                                    "Para vincularte automáticamente, usá el botón 'Vincular' en la web de Howlify."
-                                )
+                                respuesta = f"¡Hola {user_name}! 🐺\nUsa el link de la web para vincularte."
                             
                             enviar_mensaje(chat_id, respuesta)
 
