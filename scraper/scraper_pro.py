@@ -268,7 +268,7 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
         return presas
     
     # =========================================================
-    # RUTA B: BÚSQUEDA POR KEYWORD O LISTADO (OPTIMIZADA)
+    # RUTA B: BÚSQUEDA POR KEYWORD O LISTADO (CON PLAN B)
     # =========================================================
     target_url = url_input if (url_input and "listado." in url_input) else f"https://listado.mercadolibre.com.ar/{(keyword or '').strip().replace(' ', '-')}"
 
@@ -297,7 +297,6 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
             except Exception as e:
                 print(f"⚠️ Aviso: No se pudo aplicar camuflaje en Ruta B ({e}), siguiendo igual...")
 
-            # En listados también usamos networkidle para evitar cards vacías
             page.goto(target_url, wait_until="networkidle", timeout=60000)
             _human_touch(page)
             time.sleep(2.0)
@@ -305,60 +304,87 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
             try:
                 page.wait_for_selector("div.poly-card, .ui-search-result__wrapper, .andes-card", timeout=15000)
                 cards = page.locator("div.poly-card, .ui-search-result__wrapper, .andes-card")
+                
+                n = min(cards.count(), 20)
+                for i in range(n):
+                    try:
+                        card = cards.nth(i)
+                        link = None
+                        a_tag = card.locator("a").first
+                        if a_tag.count() > 0:
+                            link = a_tag.get_attribute("href")
+                            if link and link.startswith("/"): 
+                                link = "https://www.mercadolibre.com.ar" + link
+                        
+                        title_loc = card.locator("h2, .poly-component__title").first
+                        title = title_loc.inner_text().strip() if title_loc.count() > 0 else "Producto ML"
+                        
+                        precio = None
+                        ploc = card.locator(".andes-money-amount__fraction").first
+                        if ploc.count() > 0:
+                            raw = (ploc.inner_text() or "").replace(".", "").replace(",", "").strip()
+                            if raw.isdigit(): 
+                                precio = int(raw)
+
+                        if not precio or (max_price_i > 0 and precio > max_price_i):
+                            continue
+
+                        foto_path = None
+                        if es_pro:
+                            try:
+                                Path("evidence").mkdir(parents=True, exist_ok=True)
+                                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                foto_path = f"evidence/evidencia_{i}_{ts}.png"
+                                card.screenshot(path=foto_path)
+                            except: pass
+
+                        presas.append({
+                            "title": title[:120],
+                            "price": precio,
+                            "url": link or target_url,
+                            "source": "mercadolibre",
+                            "screenshot": foto_path
+                        })
+                    except: continue
             except:
-                if context: context.close()
-                return []
+                print("⚠️ Playwright falló en Ruta B. Intentando Plan B...")
 
-            n = min(cards.count(), 20)
-
-            for i in range(n):
-                try:
-                    card = cards.nth(i)
-                    link = None
-                    a_tag = card.locator("a").first
-                    if a_tag.count() > 0:
-                        link = a_tag.get_attribute("href")
-                        if link and link.startswith("/"): 
-                            link = "https://www.mercadolibre.com.ar" + link
-                    
-                    title_loc = card.locator("h2, .poly-component__title").first
-                    title = title_loc.inner_text().strip() if title_loc.count() > 0 else "Producto ML"
-                    
-                    precio = None
-                    ploc = card.locator(".andes-money-amount__fraction").first
-                    if ploc.count() > 0:
-                        raw = (ploc.inner_text() or "").replace(".", "").replace(",", "").strip()
-                        if raw.isdigit(): 
-                            precio = int(raw)
-
-                    if not precio or (max_price_i > 0 and precio > max_price_i):
-                        continue
-
-                    foto_path = None
-                    if es_pro:
-                        try:
-                            Path("evidence").mkdir(parents=True, exist_ok=True)
-                            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                            foto_path = f"evidence/evidencia_{i}_{ts}.png"
-                            card.screenshot(path=foto_path)
-                        except: pass
-
-                    presas.append({
-                        "title": title[:120],
-                        "price": precio,
-                        "url": link or target_url,
-                        "source": "mercadolibre",
-                        "screenshot": foto_path
-                    })
-                except: continue
-
-            return presas
         except Exception as e:
-            print(f"❌ Error en Ruta B: {e}")
-            return []
+            print(f"❌ Error en Ruta B (Playwright): {e}")
         finally:
-            if context: 
-                context.close()
+            if context: context.close()
+
+    # --- PLAN B: SCRAPERAPI (Si Playwright no encontró nada por bloqueo) ---
+    if not presas:
+        api_key = os.getenv("SCRAPERAPI_KEY")
+        if api_key:
+            import requests
+            from bs4 import BeautifulSoup
+            print("🕵️ Activando Plan B: Túnel de IPs residenciales...")
+            proxy_url = f"http://api.scraperapi.com?api_key={api_key}&url={target_url}"
+            try:
+                resp = requests.get(proxy_url, timeout=30)
+                if resp.status_code == 200:
+                    soup = BeautifulSoup(resp.text, 'html.parser')
+                    items = soup.select("div.poly-card, .ui-search-result__wrapper, .andes-card")
+                    for item in items[:10]:
+                        try:
+                            title = item.select_one("h2, .poly-component__title").get_text(strip=True)
+                            p_raw = item.select_one(".andes-money-amount__fraction").get_text(strip=True)
+                            price = int(p_raw.replace(".","").replace(",",""))
+                            link = item.select_one("a")["href"]
+                            if link.startswith("/"): link = "https://www.mercadolibre.com.ar" + link
+                            
+                            if max_price_i == 0 or price <= max_price_i:
+                                presas.append({
+                                    "title": title[:120], "price": price, "url": link,
+                                    "source": "mercadolibre (via Tunnel)", "screenshot": None
+                                })
+                        except: continue
+            except Exception as e:
+                print(f"❌ Falló Plan B: {e}")
+
+    return presas
 # -------------------------------------------------
 # Router central (VERSIÓN NINJA DEFINITIVA)
 # -------------------------------------------------
