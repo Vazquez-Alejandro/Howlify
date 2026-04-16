@@ -1,61 +1,75 @@
-🐺 Howlify v1.2.0-beta
-Howlify is a high-performance price monitoring and flight search engine. Designed for deal hunters, it combines web scraping with professional travel APIs to find the best opportunities in real-time.
+🐺 Howlify v1.3.0-beta
 
-🛠️ Tech Stack
-Language: Python 3.10+
+Howlify is a high-performance price monitoring and notification engine. Designed for deal hunters, it combines advanced web scraping with real-time multi-channel alerts to catch the best opportunities before they vanish.
+🛠️ Tech Stack & Infrastructure
 
-Framework: Streamlit (Web Interface)
+    Language: Python 3.10+
 
-APIs: Duffel API (Direct Airline Connection) & DolarApi (Real-time ARS Conversion)
+    Framework: Streamlit (Pro Web Interface)
 
-Database: Supabase / SQLite3 (Persistence & Hunt history)
+    Database: Supabase (PostgreSQL) with RLS & Service Role architecture.
 
-Scraping: Playwright / BeautifulSoup4
+    Automation: Cron-job.org (External trigger for high-frequency monitoring).
+
+    Hosting: Render (Cloud Deployment).
 
 🚀 Key Features
 ✈️ Travel & Flights
-Smart Flight Router: Integrated search for Despegar, Almundo, Turismocity, Avantrip, and Smiles.
 
-Professional Flight Data: Real-time airline offers via Duffel API (Direct NDC).
+    Smart Flight Router: Integrated search for Despegar, Almundo, Turismocity, and Smiles.
 
-Auto-Currency Conversion: Prices automatically converted to Argentine Pesos (ARS) using the "Dólar Tarjeta" rate.
+    Professional Flight Data: Real-time airline offers via Duffel API (Direct NDC).
 
-🛒 E-Commerce Intelligence (New!)
-Hybrid ML Scraper: Smart routing that distinguishes between Direct Product Links (Deep Scan) and Search Result Listings (Massive Hunt).
+    Auto-Currency Conversion: Prices automatically converted to ARS using DolarApi (Dólar Tarjeta rate).
 
-Multi-Context Spoofing (Pro Feature): Parallel scraping using multiple "disguises" (Desktop & iPhone 13) to bypass anti-bot measures and find hidden mobile-only deals.
+🛒 E-Commerce Intelligence (ML Specialist)
 
-Tiered Search Logic: Dynamic plan detection (Starter/Pro/Business) that unlocks advanced scraping layers and frequency.
+    Hybrid ML Scraper: Smart routing for Mercado Libre (Deep Scan vs. Search Results).
 
-Anti-Fraud Shield: Real-time seller reliability analysis during direct product scans.
+    Multi-Context Spoofing: Parallel scraping (Desktop/iPhone) to bypass anti-bot measures.
 
-🛡️ Core Infrastructure
-Affiliate Ready: Built-in deep linking architecture for monetization.
+    Anti-Fraud Shield: Real-time seller reliability and reputation analysis.
 
-Multi-Target Tracking: Monitor products and flights across different platforms simultaneously.
+🔔 Smart Notification System (New!)
 
-Security: SHA-256 Hashing, Age verification, and Regex-based validation.
+    Telegram Bot Integration: One-click account linking (/start auto-sync) and instant deal alerts via Telegram Bot API.
+
+    Multi-Channel Alerts: Support for WhatsApp Cloud API (Meta) and Resend/SMTP for critical price drops.
+
+    User Persistence: Dedicated profile management in Supabase to track individual "Hunts".
 
 📥 Installation
-Clone the repository:
+
+    Clone & Setup:
 
 Bash
+
 git clone https://github.com/vazquez-alejandro/howlify.git
 cd howlify
-Set up virtual environment:
-
-Bash
 python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-Install dependencies:
-
-Bash
+source .venv/bin/activate
 pip install -r requirements.txt
 playwright install chromium
-Environment Variables:
-Create a .env file with your Supabase and Duffel credentials.
 
-Run the App:
+    Environment Variables:
+    Create a .env file with the following keys:
+
+Fragmento de código
+
+SUPABASE_URL=your_url
+SUPABASE_SERVICE_ROLE_KEY=your_key
+TELEGRAM_TOKEN=your_bot_token
+DUFFEL_TOKEN=your_token
+
+    Run the App:
 
 Bash
+
 streamlit run app.py
+
+    Background Connect (Telegram):
+    To keep the bot listening for new users:
+
+Bash
+
+python3 scripts/telegram_connect.py

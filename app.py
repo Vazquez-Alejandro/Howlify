@@ -2581,3 +2581,18 @@ if not st.session_state.get("busquedas"):
     st.info("No tenés cacerías activas. Creá una arriba para empezar. 🐺")
 
 render_footer()
+
+# ==========================================================
+# 🕒 AUTOMATIZACIÓN (CRON-JOB TRIGGER)
+# ==========================================================
+# Este bloque detecta cuando la app está en producción y dispara el monitor
+if st.get_option("server.address") != "localhost":
+    # Usamos session_state para que no se duplique el proceso en la misma carga
+    if "monitor_iniciado" not in st.session_state:
+        try:
+            # sys.executable asegura que usemos el Python del entorno virtual (.venv)
+            subprocess.Popen([sys.executable, "scripts/mercadolibre_monitor.py"])
+            st.session_state["monitor_iniciado"] = True
+            print("🐺 Lobo patrullando: Monitor activado por Cron/Visita.")
+        except Exception as e:
+            print(f"❌ Error al disparar el monitor automático: {e}")
