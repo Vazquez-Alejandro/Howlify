@@ -2353,7 +2353,9 @@ with st.expander("📲 Configurar Notificaciones", expanded=False):
             st.info("Para activar Telegram, hacé clic en el botón y luego tocá 'INICIAR' en la app.")
             st.link_button("🐺 Vincular Telegram ahora", url_bot, use_container_width=True)
             
-            if st.button("🔄 Verificar Vinculación", key="btn_verify_tg_vfinal"): 
+            if st.button("🔄 Verificar Vinculación", key="btn_verify_tg_vfinal"):
+                # Limpiamos cualquier caché de datos de perfil para forzar la lectura de Supabase
+                st.cache_data.clear() 
                 st.rerun()
         else:
             st.success(f"✅ Vinculado (ID: {t_id})")
