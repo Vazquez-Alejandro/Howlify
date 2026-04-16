@@ -61,29 +61,45 @@ def enviar_telegram(chat_id, mensaje):
 # ==========================================
 def enviar_whatsapp(numero, mensaje):
     """
-    🚀 ENVÍO REAL: Versión blindada para Linux.
+    🚀 ENVÍO REAL: Usando la API Oficial de Meta Cloud.
     """
-    if not numero:
+    token = os.getenv("WHATSAPP_TOKEN")
+    phone_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
+    
+    if not token or not phone_id or not numero:
+        print("❌ WhatsApp: Token o Phone ID no configurados en Render.")
         return False
         
-    # Limpiamos el número por las dudas (solo números)
+    # Limpiamos el número: debe ser 549... (sin el 15)
     num_clean = "".join(filter(str.isdigit, str(numero)))
     
-    try:
-        # Usamos una lista de argumentos y shell=False es más seguro, 
-        # pero si npx no está en el path de Python, usamos el comando directo:
-        comando = f'npx mudslide send {num_clean} "{mensaje}"'
-        
-        # Ejecutamos
-        subprocess.run(comando, shell=True, check=True)
-        
-        print(f"✅ [WhatsApp] Comando ejecutado para {num_clean}")
-        return True
-    except Exception as e:
-        print(f"❌ Error en subprocess: {e}")
-        return False
+    url = f"https://graph.facebook.com/v18.0/{phone_id}/messages"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
     
-
+    # IMPORTANTE: Meta solo permite texto libre si el usuario te escribió antes.
+    # Si es el primer mensaje, deberías usar un 'template'. 
+    # Por ahora probamos con texto libre:
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": num_clean,
+        "type": "text",
+        "text": {"body": mensaje}
+    }
+    
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        if response.status_code == 200:
+            print(f"✅ [WhatsApp API] Mensaje enviado a {num_clean}")
+            return True
+        else:
+            print(f"❌ [WhatsApp API] Error {response.status_code}: {response.text}")
+            return False
+    except Exception as e:
+        print(f"❌ Error en request WhatsApp: {e}")
+        return False
 # ==========================================
 # 🐺 EL DESPACHADOR (El cerebro que decide)
 # ==========================================
