@@ -133,7 +133,9 @@ def _keyword_match(title_l: str, keyword: str) -> bool:
         return True
 
     match_count = sum(1 for tok in tokens if tok in title_l)
-    return match_count > 0# -------------------------------------------------
+    return match_count > 0
+
+# -------------------------------------------------
 # MercadoLibre scraper: Listados (Persistente) + Directo (Multi-Disfraz)
 # -------------------------------------------------
 def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headless: bool, plan: str = "starter", user_agent: str = None) -> list[dict]:
@@ -157,10 +159,11 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
         print(f"🐺 [ML] Link directo ROBUSTO. Plan: {plan.upper()} | Usando Sesión + Stealth...")
         
         PROFILE_PATH.mkdir(parents=True, exist_ok=True)
+        context = None  # Inicializamos para evitar UnboundLocalError
 
         with sync_playwright() as p:
             try:
-                # Lanzamos el contexto persistente para guardar el login para siempre
+                # Lanzamos el contexto persistente
                 context = p.chromium.launch_persistent_context(
                     user_data_dir=str(PROFILE_PATH),
                     headless=headless,
@@ -187,7 +190,7 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                 # Navegación
                 page.goto(url_input, wait_until="domcontentloaded", timeout=60000)
                 
-                # 🛡️ GESTIÓN DE LOGIN MANUAL (EL PARACAÍDAS)
+                # 🛡️ GESTIÓN DE LOGIN MANUAL
                 if "login" in page.url.lower() or "challenge" in page.url.lower():
                     print("⚠️ BLOQUEO: ML pide Login/QR. ¡Tenés 2 minutos para loguearte en la ventana!")
                     if not headless:
@@ -199,14 +202,11 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                             print("❌ Se acabó el tiempo. No se detectó el login manual.")
                             return []
                     else:
-                        print("❌ Error: ML pide login y estás en modo invisible. Cambiá FORCE_HEADLESS a False.")
-                        context.close()
+                        print("❌ Error: ML pide login y estás en modo invisible.")
                         return []
 
-                # 🔍 3. EXTRACCIÓN ELÁSTICA (FIX TIMEOUT ID 90)
+                # 🔍 3. EXTRACCIÓN ELÁSTICA
                 precio = None
-                
-                # Intento 1: Meta-tag (Bajamos a 5s para que no se clave si no existe)
                 try:
                     meta_p = page.locator('meta[itemprop="price"]').get_attribute("content", timeout=5000)
                     if meta_p:
@@ -215,10 +215,8 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                 except Exception:
                     print("⚠️ Meta-tag falló. Intentando Plan B: Selector Visual...")
 
-                # Intento 2: Selectores visuales (Plan B)
                 if not precio:
                     try:
-                        # Buscamos el precio que ve el ojo humano en la caja de compra
                         p_loc = page.locator('.ui-pdp-price__second-line .andes-money-amount__fraction, .ui-pdp-price .andes-money-amount__fraction, .andes-money-amount__fraction').first
                         if p_loc.count() > 0:
                             raw = (p_loc.inner_text(timeout=5000) or "").replace(".", "").replace(",", "").strip()
@@ -228,7 +226,6 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                     except Exception:
                         print("❌ No se pudo encontrar el precio visualmente tampoco.")
 
-                # 4. RESULTADOS Y EVIDENCIA
                 if precio:
                     title_loc = page.locator(".ui-pdp-title").first
                     title = title_loc.inner_text() if title_loc.count() > 0 else "Producto ML"
@@ -261,7 +258,8 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
             except Exception as e:
                 print(f"❌ Error crítico en cacería: {e}")
             finally:
-                context.close()
+                if context:  # <--- SEGURO DE VIDA
+                    context.close()
         
         return presas
     
@@ -272,6 +270,8 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
 
     PROFILE_PATH.mkdir(parents=True, exist_ok=True)
     DEBUG_SHOT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    
+    context = None  # Inicializamos para evitar UnboundLocalError
 
     with sync_playwright() as p:
         try:
@@ -300,7 +300,7 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                 page.wait_for_selector("div.poly-card, .ui-search-result__wrapper, .andes-card", timeout=15000)
                 cards = page.locator("div.poly-card, .ui-search-result__wrapper, .andes-card")
             except:
-                context.close()
+                if context: context.close()
                 return []
 
             n = min(cards.count(), 20)
@@ -351,7 +351,8 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
             print(f"❌ Error en Ruta B: {e}")
             return []
         finally:
-            context.close()
+            if context:  # <--- SEGURO DE VIDA
+                context.close()
 # -------------------------------------------------
 # Router central (VERSIÓN NINJA DEFINITIVA)
 # -------------------------------------------------
