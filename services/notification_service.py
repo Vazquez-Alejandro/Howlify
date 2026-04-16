@@ -1,145 +1,118 @@
-import smtplib
 import os
 import requests
-import subprocess
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
 # ==========================================
-# CONFIGURACIÓN (Ajustada a tu .env)
-# ==========================================
-SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-SMTP_USER = os.getenv("SMTP_USER", "")
-SMTP_PASS = os.getenv("SMTP_PASSWORD", "")
-TOKEN_TELEGRAM = os.getenv("TELEGRAM_TOKEN", "") 
-
-# ==========================================
-# 📧 CANAL EMAIL
+# 📧 CANAL EMAIL (Vía Resend - Más estable)
 # ==========================================
 def enviar_email(destinatario, asunto, cuerpo_html):
-    if not SMTP_USER or not SMTP_PASS:
-        print("❌ SMTP: Credenciales no configuradas.")
+    api_key = os.getenv("RESEND_API_KEY")
+    from_email = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
+    
+    if not api_key:
+        print("❌ Resend: API Key no configurada en Render.")
         return False
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = f"Howlify Alertas 🐺 <{SMTP_USER}>"
-        msg['To'] = destinatario
-        msg['Subject'] = asunto
-        msg.attach(MIMEText(cuerpo_html, 'html'))
 
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as server:
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASS)
-            server.send_message(msg)
-        return True
+    url = "https://api.resend.com/emails"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "from": from_email,
+        "to": destinatario,
+        "subject": asunto,
+        "html": cuerpo_html
+    }
+    
+    try:
+        r = requests.post(url, json=payload, headers=headers)
+        print(f"DEBUG MAIL: {r.status_code} - {r.text}")
+        return r.status_code in [200, 201]
     except Exception as e:
-        print(f"❌ Error SMTP: {e}")
+        print(f"❌ Error Email: {e}")
         return False
 
 # ==========================================
 # 🟦 CANAL TELEGRAM
 # ==========================================
 def enviar_telegram(chat_id, mensaje):
-    if not TOKEN_TELEGRAM:
+    token = os.getenv("TELEGRAM_TOKEN")
+    if not token:
         print("❌ Telegram: Token no configurado.")
-        return
-    url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
+        return False
+    
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id, 
         "text": mensaje, 
         "parse_mode": "Markdown"
     }
     try:
-        requests.post(url, json=payload)
+        r = requests.post(url, json=payload)
+        return r.status_code == 200
     except Exception as e:
         print(f"❌ Error Telegram: {e}")
+        return False
 
 # ==========================================
-# 🟢 CANAL WHATSAPP (Vía Mudslide)
+# 🟢 CANAL WHATSAPP (Vía Whapi - DEFINITIVO)
 # ==========================================
 def enviar_whatsapp(numero, mensaje):
-    """
-    🚀 ENVÍO REAL: Usando la API Oficial de Meta Cloud.
-    """
     token = os.getenv("WHATSAPP_TOKEN")
-    phone_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
     
-    if not token or not phone_id or not numero:
-        print("❌ WhatsApp: Token o Phone ID no configurados en Render.")
+    if not token or not numero:
+        print("❌ WhatsApp: Token o número no configurados.")
         return False
         
-    # Limpiamos el número: debe ser 549... (sin el 15)
     num_clean = "".join(filter(str.isdigit, str(numero)))
-    
     url = "https://gate.whapi.cloud/messages/text"
+    
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
     
-    # IMPORTANTE: Meta solo permite texto libre si el usuario te escribió antes.
-    # Si es el primer mensaje, deberías usar un 'template'. 
-    # Por ahora probamos con texto libre:
     payload = {
-        "messaging_product": "whatsapp",
-        "to": num_clean,
-        "type": "text",
-        "text": {"body": mensaje}
+        "to": f"{num_clean}@s.whatsapp.net",
+        "body": mensaje
     }
     
     try:
         response = requests.post(url, json=payload, headers=headers)
-        if response.status_code == 200:
-            print(f"✅ [WhatsApp API] Mensaje enviado a {num_clean}")
-            return True
-        else:
-            print(f"❌ [WhatsApp API] Error {response.status_code}: {response.text}")
-            return False
+        print(f"DEBUG WHATSAPP: {response.status_code} - {response.text}")
+        return response.status_code in [200, 201]
     except Exception as e:
-        print(f"❌ Error en request WhatsApp: {e}")
+        print(f"❌ Error WhatsApp: {e}")
         return False
+
 # ==========================================
-# 🐺 EL DESPACHADOR (El cerebro que decide)
+# 🐺 EL DESPACHADOR
 # ==========================================
 def despachar_alertas_jauria(user_data, producto, estado, precio_nuevo, variacion):
-    """
-    Decide por qué canales enviar según el plan y el estado del semáforo.
-    """
     plan = user_data.get('plan_id', 'starter').lower()
     t_id = user_data.get('telegram_id')
     email = user_data.get('email')
-    whatsapp_num = user_data.get('whatsapp_number') # Extraemos el número del dict
+    whatsapp_num = user_data.get('whatsapp_number')
     
-    # 📝 Mensaje formateado para Telegram y WhatsApp
     msg_alerta = (
         f"{estado} *HOWLIFY ALERT*\n\n"
         f"📦 *Producto:* {producto}\n"
         f"💰 *Precio:* ${precio_nuevo:,}\n"
         f"📊 *Cambio:* {variacion:+.2f}%\n\n"
-        f"🐺 _Enviado desde tu ThinkPad_"
+        f"🐺 _Enviado desde Howlify_"
     ).replace(",", ".")
 
-    # 1. Notificar por Telegram
+    # 1. Telegram
     if t_id:
         enviar_telegram(t_id, msg_alerta)
 
-    # 2. Notificar por Email (Solo si es preventivo/crítico)
-    if email and estado in ["🟡", "🟠", "🔴"]:
+    # 2. Email
+    if email:
         asunto = f"{estado} Alerta Howlify: {producto}"
-        cuerpo = f"""
-        <h2>Reporte del Lobo 🐺</h2>
-        <p>El producto <b>{producto}</b> ha cambiado de estado a <b>{estado}</b>.</p>
-        <ul>
-            <li>Precio: ${precio_nuevo:,}</li>
-            <li>Variación: {variacion:+.2f}%</li>
-        </ul>
-        """
+        cuerpo = f"<h2>Reporte del Lobo 🐺</h2><p>El producto <b>{producto}</b> cambió a <b>{estado}</b>.</p>"
         enviar_email(email, asunto, cuerpo)
 
-    # 3. WhatsApp (REAL para planes que no sean Starter)
+    # 3. WhatsApp (Solo planes Pro/Business)
     if plan != "starter" and whatsapp_num:
         enviar_whatsapp(whatsapp_num, msg_alerta)
-    elif plan != "starter" and not whatsapp_num:
-        print(f"⚠️ [Notificador] Plan {plan} requiere WhatsApp pero no hay número.")
