@@ -155,11 +155,11 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
     
     if es_producto_directo:
         # 🎭 1. IDENTIDAD Y PERFIL
-        ua_final = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+        ua_final = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         print(f"🐺 [ML] Link directo ROBUSTO. Plan: {plan.upper()} | Usando Sesión + Stealth...")
         
         PROFILE_PATH.mkdir(parents=True, exist_ok=True)
-        context = None  # Inicializamos para evitar UnboundLocalError
+        context = None 
 
         with sync_playwright() as p:
             try:
@@ -184,30 +184,33 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                 except Exception as e:
                     print(f"⚠️ Aviso: No se pudo aplicar camuflaje ({e}), siguiendo igual...")
                 
-                # 🕒 2. PAUSA HUMANA
-                time.sleep(random.uniform(2.0, 4.0))
+                # 🕒 2. PAUSA HUMANA INICIAL (Crucial en Render)
+                time.sleep(random.uniform(3.0, 6.0))
 
-                # Navegación
-                page.goto(url_input, wait_until="domcontentloaded", timeout=60000)
+                # Navegación: Cambiamos a networkidle para asegurar carga de scripts de precio
+                print(f"📡 Navegando a: {url_input}...")
+                page.goto(url_input, wait_until="networkidle", timeout=60000)
                 
-                # 🛡️ GESTIÓN DE LOGIN MANUAL
-                if "login" in page.url.lower() or "challenge" in page.url.lower():
-                    print("⚠️ BLOQUEO: ML pide Login/QR. ¡Tenés 2 minutos para loguearte en la ventana!")
+                # 🛡️ GESTIÓN DE BLOQUEO / CHALLENGE
+                if any(x in page.url.lower() for x in ["login", "challenge", "captcha", "ipv4"]):
+                    print(f"❌ BLOQUEO DETECTADO en Render: {page.url}")
                     if not headless:
                         try:
-                            page.wait_for_url(lambda url: "login" not in url.lower() and "challenge" not in url.lower(), timeout=120000)
-                            print("✅ ¡Login exitoso! Guardando sesión y continuando...")
-                            page.goto(url_input, wait_until="domcontentloaded", timeout=60000)
+                            print("⚠️ Esperando resolución manual...")
+                            page.wait_for_url(lambda url: not any(x in url.lower() for x in ["login", "challenge", "captcha"]), timeout=120000)
+                            page.goto(url_input, wait_until="networkidle", timeout=60000)
                         except:
-                            print("❌ Se acabó el tiempo. No se detectó el login manual.")
                             return []
                     else:
-                        print("❌ Error: ML pide login y estás en modo invisible.")
                         return []
+
+                # 🕒 Pausa post-carga para que el JS renderice el precio final
+                time.sleep(2.5)
 
                 # 🔍 3. EXTRACCIÓN ELÁSTICA
                 precio = None
                 try:
+                    # Intento 1: Meta-tag (El más rápido)
                     meta_p = page.locator('meta[itemprop="price"]').get_attribute("content", timeout=5000)
                     if meta_p:
                         precio = int(float(meta_p))
@@ -217,6 +220,7 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
 
                 if not precio:
                     try:
+                        # Intento 2: Selectores visuales (Actualizados)
                         p_loc = page.locator('.ui-pdp-price__second-line .andes-money-amount__fraction, .ui-pdp-price .andes-money-amount__fraction, .andes-money-amount__fraction').first
                         if p_loc.count() > 0:
                             raw = (p_loc.inner_text(timeout=5000) or "").replace(".", "").replace(",", "").strip()
@@ -258,20 +262,20 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
             except Exception as e:
                 print(f"❌ Error crítico en cacería: {e}")
             finally:
-                if context:  # <--- SEGURO DE VIDA
+                if context: 
                     context.close()
         
         return presas
     
     # =========================================================
-    # RUTA B: BÚSQUEDA POR KEYWORD O LISTADO (SIN CAMBIOS)
+    # RUTA B: BÚSQUEDA POR KEYWORD O LISTADO (OPTIMIZADA)
     # =========================================================
     target_url = url_input if (url_input and "listado." in url_input) else f"https://listado.mercadolibre.com.ar/{(keyword or '').strip().replace(' ', '-')}"
 
     PROFILE_PATH.mkdir(parents=True, exist_ok=True)
     DEBUG_SHOT_PATH.parent.mkdir(parents=True, exist_ok=True)
     
-    context = None  # Inicializamos para evitar UnboundLocalError
+    context = None 
 
     with sync_playwright() as p:
         try:
@@ -293,8 +297,10 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
             except Exception as e:
                 print(f"⚠️ Aviso: No se pudo aplicar camuflaje en Ruta B ({e}), siguiendo igual...")
 
-            page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
+            # En listados también usamos networkidle para evitar cards vacías
+            page.goto(target_url, wait_until="networkidle", timeout=60000)
             _human_touch(page)
+            time.sleep(2.0)
 
             try:
                 page.wait_for_selector("div.poly-card, .ui-search-result__wrapper, .andes-card", timeout=15000)
@@ -351,7 +357,7 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
             print(f"❌ Error en Ruta B: {e}")
             return []
         finally:
-            if context:  # <--- SEGURO DE VIDA
+            if context: 
                 context.close()
 # -------------------------------------------------
 # Router central (VERSIÓN NINJA DEFINITIVA)
