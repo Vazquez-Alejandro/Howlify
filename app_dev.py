@@ -2346,24 +2346,27 @@ with st.expander("📲 Configurar Notificaciones", expanded=False):
     st.markdown("#### 🟦 Telegram")
     if "pro" in plan.lower() or "business" in plan.lower():
         if not t_id:
+            # Generamos el Deep Link con el ID de Supabase
+            # Importante: el script telegram_connect.py ya sabe leer este {user_id}
             url_bot = f"https://t.me/howlify_bot?start={user_id}" 
-            st.link_button("🐺 Vincular Telegram ahora", url_bot, width="stretch")
-            if st.button("🔄 Verificar Vinculación", key="btn_verify_tg_vfinal"): st.rerun()
+            
+            st.info("Para activar Telegram, hacé clic en el botón y luego tocá 'INICIAR' en la app.")
+            st.link_button("🐺 Vincular Telegram ahora", url_bot, use_container_width=True)
+            
+            if st.button("🔄 Verificar Vinculación", key="btn_verify_tg_vfinal"): 
+                st.rerun()
         else:
             st.success(f"✅ Vinculado (ID: {t_id})")
             col_tel1, col_tel2 = st.columns(2)
             with col_tel1:
-                if st.button("🧪 Probar Alerta", width="stretch", key="btn_test_tg_vfinal"): 
+                if st.button("🧪 Probar Alerta", use_container_width=True, key="btn_test_tg_vfinal"): 
                     exito = enviar_telegram(t_id, "¡Aullido de prueba exitoso! 🐺")
                     if exito: st.toast("✅ ¡Mensaje enviado!")
             with col_tel2:
-                if st.button("🗑️ Desvincular", width="stretch", key="btn_unlink_tg"):
+                if st.button("🗑️ Desvincular", use_container_width=True, key="btn_unlink_tg"):
+                    # Limpiamos la columna telegram_id en la tabla profiles
                     supabase.table("profiles").update({"telegram_id": None}).eq("user_id", user_id).execute()
                     st.rerun()
-    else:
-        st.warning("🔒 Telegram disponible en planes **Pro** y **Business**.")
-
-    st.divider()
 
     # --- 🟩 3. SECCIÓN WHATSAPP ---
     st.markdown("#### 🟩 WhatsApp")
