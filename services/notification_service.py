@@ -73,7 +73,7 @@ def enviar_whatsapp(numero, mensaje):
     # Limpiamos el número: debe ser 549... (sin el 15)
     num_clean = "".join(filter(str.isdigit, str(numero)))
     
-    url = f"https://graph.facebook.com/v18.0/{phone_id}/messages"
+    url = "https://gate.whapi.cloud/messages/text"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
