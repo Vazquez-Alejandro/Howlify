@@ -268,7 +268,7 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
         return presas
     
     # =========================================================
-    # RUTA B: BÚSQUEDA POR KEYWORD O LISTADO (CON PLAN B)
+    # RUTA B: BÚSQUEDA POR KEYWORD O LISTADO (CON PLAN B AUTOMÁTICO)
     # =========================================================
     target_url = url_input if (url_input and "listado." in url_input) else f"https://listado.mercadolibre.com.ar/{(keyword or '').strip().replace(' ', '-')}"
 
@@ -279,6 +279,7 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
 
     with sync_playwright() as p:
         try:
+            # 1. INTENTO NORMAL CON PLAYWRIGHT
             context = p.chromium.launch_persistent_context(
                 user_data_dir=str(PROFILE_PATH),
                 headless=headless,
@@ -302,6 +303,7 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
             time.sleep(2.0)
 
             try:
+                # Esperamos a que aparezcan los productos
                 page.wait_for_selector("div.poly-card, .ui-search-result__wrapper, .andes-card", timeout=15000)
                 cards = page.locator("div.poly-card, .ui-search-result__wrapper, .andes-card")
                 
@@ -347,20 +349,25 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                         })
                     except: continue
             except:
-                print("⚠️ Playwright falló en Ruta B. Intentando Plan B...")
+                print("⚠️ Playwright fue bloqueado o no encontró cards en Ruta B. Activando rescate...")
 
         except Exception as e:
             print(f"❌ Error en Ruta B (Playwright): {e}")
         finally:
             if context: context.close()
 
-    # --- PLAN B: SCRAPERAPI (Si Playwright no encontró nada por bloqueo) ---
+    # =========================================================
+    # --- PLAN B: EL TÚNEL (SCRAPERAPI) ---
+    # =========================================================
+    # Si Playwright falló por el bloqueo de Render, usamos IPs residenciales
     if not presas:
         api_key = os.getenv("SCRAPERAPI_KEY")
         if api_key:
             import requests
             from bs4 import BeautifulSoup
-            print("🕵️ Activando Plan B: Túnel de IPs residenciales...")
+            print("🕵️ El Lobo activa el Túnel: Usando IPs residenciales para saltar bloqueo...")
+            
+            # Llamamos a la API que disfraza nuestra IP de Render
             proxy_url = f"http://api.scraperapi.com?api_key={api_key}&url={target_url}"
             try:
                 resp = requests.get(proxy_url, timeout=30)
@@ -377,12 +384,17 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                             
                             if max_price_i == 0 or price <= max_price_i:
                                 presas.append({
-                                    "title": title[:120], "price": price, "url": link,
-                                    "source": "mercadolibre (via Tunnel)", "screenshot": None
+                                    "title": title[:120], 
+                                    "price": price, 
+                                    "url": link,
+                                    "source": "mercadolibre (via Tunnel)", 
+                                    "screenshot": None
                                 })
                         except: continue
+                    if presas:
+                        print(f"✅ ¡Rescate exitoso! Se encontraron {len(presas)} productos vía Túnel.")
             except Exception as e:
-                print(f"❌ Falló Plan B: {e}")
+                print(f"❌ El Plan B también fue detectado o falló: {e}")
 
     return presas
 # -------------------------------------------------
