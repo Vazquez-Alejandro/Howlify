@@ -5,12 +5,14 @@ import requests
 from pathlib import Path
 from dotenv import load_dotenv
 
-# --- ARREGLO DE RUTAS PARA RENDER ---
-# Esto hace que el script vea la carpeta 'auth' y 'services' desde la raíz
+# --- CONFIGURACIÓN DE RUTAS ---
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.append(str(BASE_DIR))
 
-from auth.supabase_client import supabase  # Ahora sí lo va a encontrar
+try:
+    from auth.supabase_client import supabase
+except ImportError:
+    print("❌ ERROR: No se pudo importar supabase_client. Revisá la estructura de carpetas.")
 
 # Carga de entorno
 env_path = BASE_DIR / ".env"
@@ -51,25 +53,31 @@ def main():
                         texto_recibido = msg["text"]
                         user_name = msg["from"].get("first_name", "Cazador")
 
-                        print(f"📩 Procesando mensaje de {user_name}...")
-
                         if texto_recibido.startswith("/start"):
                             partes = texto_recibido.split()
                             
                             if len(partes) > 1:
-                                supabase_user_id = partes[1]
+                                supabase_user_id = partes[1].strip()
+                                print(f"🔍 Intentando vincular chat_id {chat_id} con user_id {supabase_user_id}")
+                                
                                 try:
-                                    # Actualizamos la tabla 'profiles' (que es la que mostraste en la captura)
-                                    supabase.table("profiles").update({
+                                    # USAMOS 'user_id' que es la columna de tu captura
+                                    resultado = supabase.table("profiles").update({
                                         "telegram_id": str(chat_id)
                                     }).eq("user_id", supabase_user_id).execute()
                                     
-                                    respuesta = f"¡Hola {user_name}! 🐺\n\n✅ **Cuenta vinculada con éxito.**"
+                                    if len(resultado.data) > 0:
+                                        print(f"✅ Éxito: Perfil actualizado para {supabase_user_id}")
+                                        respuesta = f"¡Hola {user_name}! 🐺\n\n✅ **Cuenta vinculada con éxito.**"
+                                    else:
+                                        print(f"⚠️ No se encontró la fila para el user_id: {supabase_user_id}")
+                                        respuesta = "❌ No pudimos encontrar tu perfil. Registrate en la web primero."
+                                        
                                 except Exception as e:
                                     print(f"❌ Error en Supabase: {e}")
-                                    respuesta = "❌ Hubo un error al vincular tu cuenta."
+                                    respuesta = "❌ Error técnico al guardar en la base de datos."
                             else:
-                                respuesta = f"¡Hola {user_name}! 🐺\nUsa el link de la web para vincularte."
+                                respuesta = f"¡Hola {user_name}! 🐺\nUsá el link de la web para vincular tu cuenta."
                             
                             enviar_mensaje(chat_id, respuesta)
 
