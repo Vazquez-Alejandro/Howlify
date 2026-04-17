@@ -151,120 +151,64 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
     # =========================================================
     # RUTA A: LINK DIRECTO (CON DISFRAZ NINJA Y PERSISTENCIA)
     # =========================================================
-    es_producto_directo = bool(url_input and url_input.startswith("http") and "listado." not in url_input)
-    
     if es_producto_directo:
-        # 🎭 1. IDENTIDAD Y PERFIL
         ua_final = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        print(f"🐺 [ML] Link directo ROBUSTO. Plan: {plan.upper()} | Usando Sesión + Stealth...")
+        print(f"🐺 [ML] Link directo: {url_input}")
         
         PROFILE_PATH.mkdir(parents=True, exist_ok=True)
         context = None 
 
         with sync_playwright() as p:
             try:
-                # Lanzamos el contexto persistente
                 context = p.chromium.launch_persistent_context(
                     user_data_dir=str(PROFILE_PATH),
                     headless=headless,
                     channel="chrome", 
                     user_agent=ua_final,
-                    viewport={"width": 1280, "height": 720},
-                    args=["--disable-blink-features=AutomationControlled", "--no-sandbox", "--disable-dev-shm-usage"]
+                    args=["--no-sandbox"]
                 )
-                
                 page = context.pages[0] if context.pages else context.new_page()
                 
-                # 🐺 CAPA DE CAMUFLAJE
-                try:
-                    if hasattr(playwright_stealth, 'stealth_sync'):
-                        playwright_stealth.stealth_sync(page)
-                    elif hasattr(playwright_stealth, 'stealth_page_sync'):
-                        playwright_stealth.stealth_page_sync(page)
-                except Exception as e:
-                    print(f"⚠️ Aviso: No se pudo aplicar camuflaje ({e}), siguiendo igual...")
+                # Bajamos el timeout a 20s para que si hay bloqueo, salte rápido al Plan B
+                page.goto(url_input, wait_until="domcontentloaded", timeout=20000)
                 
-                # 🕒 2. PAUSA HUMANA INICIAL (Crucial en Render)
-                time.sleep(random.uniform(3.0, 6.0))
-
-                # Navegación: Cambiamos a networkidle para asegurar carga de scripts de precio
-                print(f"📡 Navegando a: {url_input}...")
-                page.goto(url_input, wait_until="networkidle", timeout=60000)
-                
-                # 🛡️ GESTIÓN DE BLOQUEO / CHALLENGE
-                if any(x in page.url.lower() for x in ["login", "challenge", "captcha", "ipv4"]):
-                    print(f"❌ BLOQUEO DETECTADO en Render: {page.url}")
-                    if not headless:
-                        try:
-                            print("⚠️ Esperando resolución manual...")
-                            page.wait_for_url(lambda url: not any(x in url.lower() for x in ["login", "challenge", "captcha"]), timeout=120000)
-                            page.goto(url_input, wait_until="networkidle", timeout=60000)
-                        except:
-                            return []
-                    else:
-                        return []
-
-                # 🕒 Pausa post-carga para que el JS renderice el precio final
-                time.sleep(2.5)
-
-                # 🔍 3. EXTRACCIÓN ELÁSTICA
-                precio = None
-                try:
-                    # Intento 1: Meta-tag (El más rápido)
-                    meta_p = page.locator('meta[itemprop="price"]').get_attribute("content", timeout=5000)
-                    if meta_p:
-                        precio = int(float(meta_p))
-                        print(f"✅ Precio hallado vía Meta-tag: ${precio}")
-                except Exception:
-                    print("⚠️ Meta-tag falló. Intentando Plan B: Selector Visual...")
-
-                if not precio:
-                    try:
-                        # Intento 2: Selectores visuales (Actualizados)
-                        p_loc = page.locator('.ui-pdp-price__second-line .andes-money-amount__fraction, .ui-pdp-price .andes-money-amount__fraction, .andes-money-amount__fraction').first
-                        if p_loc.count() > 0:
-                            raw = (p_loc.inner_text(timeout=5000) or "").replace(".", "").replace(",", "").strip()
-                            if raw.isdigit(): 
-                                precio = int(raw)
-                                print(f"✅ Precio rescatado visualmente: ${precio}")
-                    except Exception:
-                        print("❌ No se pudo encontrar el precio visualmente tampoco.")
-
-                if precio:
-                    title_loc = page.locator(".ui-pdp-title").first
-                    title = title_loc.inner_text() if title_loc.count() > 0 else "Producto ML"
-                    
-                    foto_path = None
-                    if es_pro:
-                        try:
-                            base_path = os.path.abspath("evidence")
-                            os.makedirs(base_path, exist_ok=True)
-                            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                            filename = f"directo_{ts}.png"
-                            full_path = os.path.join(base_path, filename)
-                            page.evaluate("window.scrollTo(0, 0)")
-                            time.sleep(1.0) 
-                            page.screenshot(path=full_path)
-                            foto_path = full_path if os.path.exists(full_path) else None
-                        except: pass
-
-                    if max_price_i == 0 or precio <= max_price_i:
-                        presas.append({
-                            "title": title[:120],
-                            "price": precio,
-                            "url": url_input,
-                            "source": "mercadolibre",
-                            "screenshot": foto_path
-                        })
-                else:
-                    print(f"🛡️ No se detectó precio en: {page.url}")
-
+                # Intento de extracción rápida
+                p_meta = page.locator('meta[itemprop="price"]').get_attribute("content", timeout=5000)
+                if p_meta:
+                    precio = int(float(p_meta))
+                    presas.append({"title": "Aspiradora", "price": precio, "url": url_input, "source": "mercadolibre"})
             except Exception as e:
-                print(f"❌ Error crítico en cacería: {e}")
+                print(f"⚠️ Playwright falló o tardó mucho. Iniciando Plan B (Túnel)...")
             finally:
-                if context: 
-                    context.close()
+                if context: context.close()
         
+        # === EL SALVAVIDAS: PLAN B (SCRAPERAPI) ===
+        if not presas:
+            api_key = os.getenv("SCRAPERAPI_KEY")
+            if api_key:
+                import requests
+                from bs4 import BeautifulSoup
+                print("🕵️ Activando Túnel Residencial para Link Directo...")
+                # Agregamos &render=true para que la API resuelva el JS de Meli por nosotros
+                proxy_url = f"http://api.scraperapi.com?api_key={api_key}&url={url_input}&render=true"
+                try:
+                    resp = requests.get(proxy_url, timeout=60)
+                    if resp.status_code == 200:
+                        soup = BeautifulSoup(resp.text, 'html.parser')
+                        # Buscamos el precio en el meta tag del HTML devuelto
+                        meta_p = soup.find("meta", {"itemprop": "price"})
+                        if meta_p and meta_p.get("content"):
+                            precio = int(float(meta_p["content"]))
+                            presas.append({
+                                "title": "Aspiradora (via Tunnel)", 
+                                "price": precio, 
+                                "url": url_input, 
+                                "source": "mercadolibre (via Tunnel)"
+                            })
+                            print(f"✅ ¡Rescate exitoso! Precio encontrado: ${precio}")
+                except Exception as e:
+                    print(f"❌ Falló el túnel: {e}")
+
         return presas
     
     # =========================================================
