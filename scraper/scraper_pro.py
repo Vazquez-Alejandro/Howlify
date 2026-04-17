@@ -136,164 +136,125 @@ def _keyword_match(title_l: str, keyword: str) -> bool:
     return match_count > 0
 
 # -------------------------------------------------
-# MercadoLibre scraper: Listados (Persistente) + Directo (Doble Capa)
+# MercadoLibre scraper: Listados + Directo (Doble Capa con Extractor Universal)
 # -------------------------------------------------
 def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headless: bool, plan: str = "starter", user_agent: str = None) -> list[dict]:
-    # 1. Validaciones e inicialización de variables (ESTO VA PRIMERO)
+    import requests
+    import re
+    from bs4 import BeautifulSoup
+
+    # 1. Validaciones e inicialización
     if url_input and url_input.startswith("http") and not _is_mercadolibre(url_input):
         raise ValueError(f"[ML] URL no es MercadoLibre: {url_input}")
 
     max_price_i = int(max_price or 0)
     presas: list[dict] = []
     es_pro = plan.lower() in ["pro", "business", "business_monitor", "business_reseller"]
-    
-    # Esta es la variable que causaba el error si no estaba acá arriba:
     es_producto_directo = bool(url_input and url_input.startswith("http") and "listado." not in url_input)
-    
     ua_final = user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    api_key = os.getenv("SCRAPERAPI_KEY")
 
     # =========================================================
-    # RUTA A: LINK DIRECTO (CON PLAN B INTEGRADO)
+    # RUTA A: LINK DIRECTO
     # =========================================================
     if es_producto_directo:
-        print(f"🐺 [ML] Link directo detectado: {url_input}")
-        PROFILE_PATH.mkdir(parents=True, exist_ok=True)
-        context = None 
-
+        print(f"🐺 [ML] Ruta A (Directo): {url_input}")
         with sync_playwright() as p:
+            context = None
             try:
                 context = p.chromium.launch_persistent_context(
-                    user_data_dir=str(PROFILE_PATH),
-                    headless=headless,
-                    channel="chrome", 
-                    user_agent=ua_final,
+                    user_data_dir=str(PROFILE_PATH), headless=headless, channel="chrome", user_agent=ua_final,
                     args=["--no-sandbox", "--disable-dev-shm-usage"]
                 )
                 page = context.pages[0] if context.pages else context.new_page()
-                
-                # Timeout de 20s: si no carga rápido, saltamos al Plan B
                 page.goto(url_input, wait_until="domcontentloaded", timeout=20000)
                 
-                # Intento de extracción rápida via Meta-tag
                 p_meta = page.locator('meta[itemprop="price"]').get_attribute("content", timeout=7000)
                 if p_meta:
                     precio = int(float(p_meta))
                     t_loc = page.locator(".ui-pdp-title").first
                     title = t_loc.inner_text() if t_loc.count() > 0 else "Producto ML"
-                    
                     presas.append({"title": title[:120], "price": precio, "url": url_input, "source": "mercadolibre"})
-                    print(f"✅ Playwright encontró precio: ${precio}")
-            except Exception:
-                print(f"⚠️ Playwright falló en link directo. Pasando a Plan B (Túnel)...")
+            except:
+                print("⚠️ Playwright bloqueado en Ruta A. Activando Extractor Universal...")
             finally:
                 if context: context.close()
-        
-        # === EL SALVAVIDAS: PLAN B (SCRAPERAPI) PARA RUTA A ===
-        if not presas:
-            api_key = os.getenv("SCRAPERAPI_KEY")
-            if api_key:
-                import requests
-                from bs4 import BeautifulSoup
-                print("🕵️ Activando Túnel Residencial para Link Directo...")
-                # render=true para que la API maneje el JS por nosotros
-                proxy_url = f"http://api.scraperapi.com?api_key={api_key}&url={url_input}&render=true"
-                try:
-                    resp = requests.get(proxy_url, timeout=60)
-                    if resp.status_code == 200:
-                        soup = BeautifulSoup(resp.text, 'html.parser')
-                        meta_p = soup.find("meta", {"itemprop": "price"})
-                        if meta_p and meta_p.get("content"):
-                            precio = int(float(meta_p["content"]))
-                            t_tag = soup.find("h1", class_="ui-pdp-title")
-                            title = t_tag.get_text(strip=True) if t_tag else "Producto (via Tunnel)"
-                            
-                            presas.append({
-                                "title": title[:120], "price": precio, "url": url_input, 
-                                "source": "mercadolibre (via Tunnel)"
-                            })
-                            print(f"✅ ¡Rescate exitoso vía Túnel! Precio: ${precio}")
-                except Exception as e:
-                    print(f"❌ Falló el túnel en Ruta A: {e}")
 
+        # --- PLAN B AGRESIVO (RUTA A) ---
+        if not presas and api_key:
+            print("🕵️ Ejecutando Túnel AR con Renderizado Remoto...")
+            proxy_url = f"http://api.scraperapi.com?api_key={api_key}&url={url_input}&render=true&country_code=ar"
+            try:
+                resp = requests.get(proxy_url, timeout=60)
+                if resp.status_code == 200:
+                    html = resp.text
+                    precio = None
+                    # Intento 1: Regex sobre JSON interno
+                    match = re.search(r'\"price\":\s*(\d+)', html)
+                    if match: precio = int(match.group(1))
+                    
+                    # Intento 2: BeautifulSoup
+                    if not precio:
+                        soup = BeautifulSoup(html, 'html.parser')
+                        p_tag = soup.select_one(".andes-money-amount__fraction, [itemprop='price']")
+                        if p_tag:
+                            val = p_tag.get("content") or p_tag.get_text()
+                            precio = int(float(str(val).replace(".","").replace(",","")))
+                    
+                    if precio:
+                        presas.append({"title": "Producto Rescatado", "price": precio, "url": url_input, "source": "mercadolibre (Tunnel AR)"})
+                        print(f"✅ ¡Rescate exitoso! Precio: ${precio}")
+            except Exception as e: print(f"❌ Fallo crítico Plan B: {e}")
         return presas
-    
+
     # =========================================================
-    # RUTA B: BÚSQUEDA POR KEYWORD O LISTADO
+    # RUTA B: BÚSQUEDA / LISTADO
     # =========================================================
     target_url = url_input if (url_input and "listado." in url_input) else f"https://listado.mercadolibre.com.ar/{(keyword or '').strip().replace(' ', '-')}"
-    print(f"🐺 [ML] Buscando listado: {target_url}")
+    print(f"🐺 [ML] Ruta B (Listado): {target_url}")
 
-    context = None 
     with sync_playwright() as p:
+        context = None
         try:
-            context = p.chromium.launch_persistent_context(
-                user_data_dir=str(PROFILE_PATH),
-                headless=headless,
-                channel="chrome",
-                args=["--no-sandbox", "--disable-dev-shm-usage"],
-            )
+            context = p.chromium.launch_persistent_context(user_data_dir=str(PROFILE_PATH), headless=headless, channel="chrome", args=["--no-sandbox"])
             page = context.pages[0] if context.pages else context.new_page()
-
-            page.goto(target_url, wait_until="networkidle", timeout=45000)
-            _human_touch(page)
-
-            page.wait_for_selector("div.poly-card, .ui-search-result__wrapper, .andes-card", timeout=15000)
-            cards = page.locator("div.poly-card, .ui-search-result__wrapper, .andes-card")
+            page.goto(target_url, wait_until="networkidle", timeout=30000)
             
-            n = min(cards.count(), 15)
-            for i in range(n):
+            cards = page.locator(".ui-search-result__wrapper, .andes-card, .poly-card")
+            for i in range(min(cards.count(), 10)):
                 try:
                     card = cards.nth(i)
                     p_raw = card.locator(".andes-money-amount__fraction").first.inner_text()
                     precio = int(p_raw.replace(".","").replace(",","").strip())
-                    
                     link = card.locator("a").first.get_attribute("href")
-                    if link and link.startswith("/"): 
-                        link = "https://www.mercadolibre.com.ar" + link
-                    
+                    if link and link.startswith("/"): link = "https://www.mercadolibre.com.ar" + link
                     if max_price_i == 0 or precio <= max_price_i:
-                        presas.append({
-                            "title": "Resultado ML",
-                            "price": precio,
-                            "url": link or target_url,
-                            "source": "mercadolibre"
-                        })
+                        presas.append({"title": "Resultado ML", "price": precio, "url": link or target_url, "source": "mercadolibre"})
                 except: continue
-        except Exception:
-            print("⚠️ Playwright falló en búsqueda. Activando Plan B...")
+        except:
+            print("⚠️ Playwright falló en Ruta B. Activando Túnel...")
         finally:
             if context: context.close()
 
-    # =========================================================
-    # --- PLAN B PARA BÚSQUEDA (SCRAPERAPI) ---
-    # =========================================================
-    if not presas:
-        api_key = os.getenv("SCRAPERAPI_KEY")
-        if api_key:
-            import requests
-            from bs4 import BeautifulSoup
-            print("🕵️ El Lobo activa el Túnel para Búsqueda...")
-            proxy_url = f"http://api.scraperapi.com?api_key={api_key}&url={target_url}"
-            try:
-                resp = requests.get(proxy_url, timeout=30)
-                if resp.status_code == 200:
-                    soup = BeautifulSoup(resp.text, 'html.parser')
-                    items = soup.select("div.poly-card, .ui-search-result__wrapper, .andes-card")
-                    for item in items[:10]:
-                        try:
-                            title = item.select_one("h2, .poly-component__title").get_text(strip=True)
-                            p_raw = item.select_one(".andes-money-amount__fraction").get_text(strip=True)
-                            price = int(p_raw.replace(".","").replace(",",""))
-                            link = item.select_one("a")["href"]
-                            if link.startswith("/"): link = "https://www.mercadolibre.com.ar" + link
-                            
-                            if max_price_i == 0 or price <= max_price_i:
-                                presas.append({
-                                    "title": title[:120], "price": price, "url": link,
-                                    "source": "mercadolibre (via Tunnel)"
-                                })
-                        except: continue
-            except: pass
+    # --- PLAN B AGRESIVO (RUTA B) ---
+    if not presas and api_key:
+        print("🕵️ Extrayendo listado vía Túnel AR...")
+        proxy_url = f"http://api.scraperapi.com?api_key={api_key}&url={target_url}&country_code=ar"
+        try:
+            resp = requests.get(proxy_url, timeout=45)
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, 'html.parser')
+                items = soup.select(".ui-search-result__wrapper, .andes-card, .poly-card")
+                for item in items[:10]:
+                    try:
+                        p_raw = item.select_one(".andes-money-amount__fraction").get_text()
+                        price = int(p_raw.replace(".","").replace(",",""))
+                        link = item.select_one("a")["href"]
+                        if link.startswith("/"): link = "https://www.mercadolibre.com.ar" + link
+                        if max_price_i == 0 or price <= max_price_i:
+                            presas.append({"title": "Resultado (Tunnel)", "price": price, "url": link, "source": "mercadolibre (via Tunnel)"})
+                    except: continue
+        except: pass
 
     return presas
 # -------------------------------------------------
