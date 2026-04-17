@@ -141,143 +141,100 @@ def _keyword_match(title_l: str, keyword: str) -> bool:
 # Scraper Pro: Despegar (Ruta C) + MercadoLibre (Ruta A y B)
 # -------------------------------------------------
 def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headless: bool, plan: str = "starter", user_agent: str = None) -> list[dict]:
-    import requests
-    import re
-    import os
-    from bs4 import BeautifulSoup
 
-    # 1. Definición de variables base
+
+    # --- CONFIGURACIÓN INICIAL ---
     max_price_i = int(max_price or 0)
     presas: list[dict] = []
     api_key = os.getenv("SCRAPERAPI_KEY")
     ua_final = user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
     # =========================================================
-    # RUTA C: DESPEGAR (ULTRA-RESIDENCIAL) - EVALUAR PRIMERO
+    # RUTA C: DESPEGAR (LOW-RAM MODE)
     # =========================================================
     if url_input and "despegar.com" in url_input:
-        print(f"✈️ Olfateando Vuelo en Despegar: {url_input}")
-        if api_key:
-            # Despegar SIEMPRE requiere Premium + Render + IP Argentina
-            proxy_url = f"http://api.scraperapi.com?api_key={api_key}&url={url_input}&render=true&premium=true&country_code=ar"
-            try:
-                resp = requests.get(proxy_url, timeout=90)
-                if resp.status_code == 200:
-                    html = resp.text
-                    soup = BeautifulSoup(html, 'html.parser')
-                    
-                    # Intento 1: Selectores de Despegar
-                    price_tag = soup.select_one(".price-amount, .amount, .item-fare")
-                    precio = None
-                    if price_tag:
-                        raw_p = price_tag.get_text().replace(".","").replace(",","").replace("$","").strip()
-                        precio = int(''.join(filter(str.isdigit, raw_p)))
-                    else:
-                        # Intento 2: Regex por si cargó el JSON pero no el DOM
-                        match = re.search(r'\"amount\":\s*(\d+)', html)
-                        if match: precio = int(match.group(1))
-
-                    if precio:
-                        print(f"🎯 ¡Vuelo encontrado! Precio: ${precio}")
-                        return [{
-                            "title": "Vuelo (Despegar)", "price": precio,
-                            "url": url_input, "source": "despegar"
-                        }]
-                else:
-                    print(f"❌ Despegar rechazó la conexión. Status: {resp.status_code}")
-            except Exception as e:
-                print(f"❌ Error en Ruta C (Despegar): {e}")
-        return []
-
-    # --- VALIDACIÓN SOLO PARA MERCADO LIBRE SI NO ES DESPEGAR ---
-    if url_input and url_input.startswith("http") and not _is_mercadolibre(url_input):
-        raise ValueError(f"[ML] URL no reconocida: {url_input}")
-
-    es_producto_directo = bool(url_input and url_input.startswith("http") and "listado." not in url_input)
-
-    # =========================================================
-    # RUTA A: LINK DIRECTO (ML)
-    # =========================================================
-    if es_producto_directo:
-        print(f"🐺 [ML] Ruta A (Directo): {url_input}")
-        with sync_playwright() as p:
-            context = None
-            try:
-                context = p.chromium.launch_persistent_context(
-                    user_data_dir=str(PROFILE_PATH), headless=headless, channel="chrome", user_agent=ua_final,
-                    args=["--no-sandbox", "--disable-dev-shm-usage"]
-                )
-                page = context.pages[0] if context.pages else context.new_page()
-                page.goto(url_input, wait_until="domcontentloaded", timeout=20000)
-                p_meta = page.locator('meta[itemprop="price"]').get_attribute("content", timeout=7000)
-                if p_meta:
-                    precio = int(float(p_meta))
-                    t_loc = page.locator(".ui-pdp-title").first
-                    title = t_loc.inner_text() if t_loc.count() > 0 else "Producto ML"
-                    presas.append({"title": title[:120], "price": precio, "url": url_input, "source": "mercadolibre"})
-            except:
-                print("⚠️ Playwright bloqueado en ML Ruta A. Activando Plan B...")
-            finally:
-                if context: context.close()
-
-        # Plan B ML Directo (Residencial)
-        if not presas and api_key:
-            proxy_url = f"http://api.scraperapi.com?api_key={api_key}&url={url_input}&render=true&premium=true&country_code=ar"
-            try:
-                resp = requests.get(proxy_url, timeout=60)
-                if resp.status_code == 200:
-                    html = resp.text
-                    match = re.search(r'\"price\":\s*(\d+)', html)
-                    precio = int(match.group(1)) if match else None
-                    if precio:
-                        presas.append({"title": "Producto Rescatado", "price": precio, "url": url_input, "source": "mercadolibre (Tunnel)"})
-            except: pass
-        return presas
-
-    # =========================================================
-    # RUTA B: BÚSQUEDA / LISTADO (ML)
-    # =========================================================
-    target_url = url_input if (url_input and "listado." in url_input) else f"https://listado.mercadolibre.com.ar/{(keyword or '').strip().replace(' ', '-')}"
-    print(f"🐺 [ML] Ruta B (Listado): {target_url}")
-
-    with sync_playwright() as p:
-        context = None
+        print(f"✈️ Olfateando Despegar (Ahorro RAM): {url_input}")
+        if not api_key: return []
+        
+        # Despegar requiere Render + Premium + IP Argentina
+        proxy_url = f"http://api.scraperapi.com?api_key={api_key}&url={url_input}&render=true&premium=true&country_code=ar"
         try:
-            context = p.chromium.launch_persistent_context(user_data_dir=str(PROFILE_PATH), headless=headless, channel="chrome", args=["--no-sandbox"])
-            page = context.pages[0] if context.pages else context.new_page()
-            page.goto(target_url, wait_until="networkidle", timeout=30000)
-            cards = page.locator(".ui-search-result__wrapper, .andes-card, .poly-card")
-            for i in range(min(cards.count(), 10)):
-                try:
-                    card = cards.nth(i)
-                    p_raw = card.locator(".andes-money-amount__fraction").first.inner_text()
-                    precio = int(p_raw.replace(".","").replace(",","").strip())
-                    link = card.locator("a").first.get_attribute("href")
-                    if link and link.startswith("/"): link = "https://www.mercadolibre.com.ar" + link
-                    if max_price_i == 0 or precio <= max_price_i:
-                        presas.append({"title": "Resultado ML", "price": precio, "url": link or target_url, "source": "mercadolibre"})
-                except: continue
-        except:
-            print("⚠️ Playwright bloqueado en ML Ruta B. Activando Plan B...")
-        finally:
-            if context: context.close()
-
-    if not presas and api_key:
-        proxy_url = f"http://api.scraperapi.com?api_key={api_key}&url={target_url}&country_code=ar"
-        try:
-            resp = requests.get(proxy_url, timeout=45)
+            resp = requests.get(proxy_url, timeout=90)
             if resp.status_code == 200:
                 soup = BeautifulSoup(resp.text, 'html.parser')
-                items = soup.select(".ui-search-result__wrapper, .andes-card, .poly-card")
-                for item in items[:10]:
-                    try:
-                        p_raw = item.select_one(".andes-money-amount__fraction").get_text()
-                        price = int(p_raw.replace(".","").replace(",",""))
-                        link = item.select_one("a")["href"]
-                        if link.startswith("/"): link = "https://www.mercadolibre.com.ar" + link
-                        presas.append({"title": "Resultado (Tunnel)", "price": price, "url": link, "source": "mercadolibre (Tunnel)"})
-                    except: continue
-        except: pass
+                price_tag = soup.select_one(".price-amount, .amount, .item-fare, .sub-amount")
+                precio = None
+                if price_tag:
+                    raw_p = price_tag.get_text().replace(".","").replace(",","").replace("$","").strip()
+                    precio = int(''.join(filter(str.isdigit, raw_p)))
+                else:
+                    match = re.search(r'\"amount\":\s*(\d+)', resp.text)
+                    if match: precio = int(match.group(1))
+
+                if precio:
+                    print(f"✅ Vuelo encontrado: ${precio}")
+                    return [{"title": "Vuelo Despegar", "price": precio, "url": url_input, "source": "despegar"}]
+        except Exception as e:
+            print(f"❌ Error en Despegar: {e}")
+        return []
+
+    # =========================================================
+    # RUTA A y B: MERCADO LIBRE (MODO HÍBRIDO INTELIGENTE)
+    # =========================================================
+    target = url_input if (url_input and "http" in url_input) else f"https://listado.mercadolibre.com.ar/{(keyword or '').strip().replace(' ', '-')}"
+    
+    # 1. INTENTO CON REQUESTS (PARA NO USAR RAM DE CHROME)
+    if api_key:
+        print(f"🐺 Olfateando ML vía API (Modo Liviano): {target}")
+        # Usamos premium=true para ML también, para asegurar éxito en Render
+        proxy_url = f"http://api.scraperapi.com?api_key={api_key}&url={target}&render=true&premium=true&country_code=ar"
+        try:
+            resp = requests.get(proxy_url, timeout=60)
+            if resp.status_code == 200:
+                html = resp.text
+                # Extracción por Regex (Rápida y efectiva)
+                match = re.search(r'\"price\":\s*(\d+)', html)
+                if match:
+                    precio = int(match.group(1))
+                    print(f"🎯 Rescate exitoso vía API: ${precio}")
+                    return [{"title": "Producto ML", "price": precio, "url": target, "source": "mercadolibre (API)"}]
+                
+                # Extracción por BeautifulSoup (Si el regex falla)
+                soup = BeautifulSoup(html, 'html.parser')
+                p_tag = soup.select_one(".andes-money-amount__fraction")
+                if p_tag:
+                    precio = int(p_tag.get_text().replace(".","").replace(",","").strip())
+                    return [{"title": "Producto ML", "price": precio, "url": target, "source": "mercadolibre (API)"}]
+        except:
+            print("⚠️ API falló o timeout. Saltando a Playwright...")
+
+    # 2. ÚLTIMO RECURSO: PLAYWRIGHT (SOLO SI LO ANTERIOR FALLA)
+    # Ponemos todo en un bloque try/finally para cerrar el browser sí o sí
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        browser = None
+        try:
+            print("🚀 Abriendo Chrome (Último recurso, cuidado RAM)...")
+            browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage", "--single-process"])
+            context = browser.new_context(viewport={"width": 800, "height": 600}, user_agent=ua_final)
+            page = context.new_page()
+            
+            # Bloqueamos basura para no saturar los 512MB
+            page.route("**/*.{png,jpg,jpeg,gif,webp,svg,css,woff,ttf}", lambda route: route.abort())
+            
+            page.goto(target, wait_until="domcontentloaded", timeout=30000)
+            
+            # Intento de captura rápida
+            p_meta = page.locator('meta[itemprop="price"]').get_attribute("content", timeout=5000)
+            if p_meta:
+                precio = int(float(p_meta))
+                presas.append({"title": "Producto ML", "price": precio, "url": target, "source": "mercadolibre"})
+        except Exception as e:
+            print(f"❌ Playwright también falló: {e}")
+        finally:
+            if browser:
+                browser.close()
+                print("🛑 Chrome cerrado.")
 
     return presas
 # -------------------------------------------------
