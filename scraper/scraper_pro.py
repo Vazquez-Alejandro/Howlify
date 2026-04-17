@@ -181,7 +181,7 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
         # --- PLAN B DE DIAGNÓSTICO (RUTA A) ---
         if not presas and api_key:
             print("🕵️ Iniciando Diagnóstico Profundo via Túnel AR...")
-            proxy_url = f"http://api.scraperapi.com?api_key={api_key}&url={url_input}&render=true&country_code=ar"
+            proxy_url = f"http://api.scraperapi.com?api_key={api_key}&url={url_input}&render=true&premium=true&country_code=ar"
             try:
                 resp = requests.get(proxy_url, timeout=60)
                 print(f"📡 Status de la API: {resp.status_code}")
