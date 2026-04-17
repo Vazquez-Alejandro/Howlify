@@ -153,12 +153,22 @@ def _safe_float(val, default=0.0):
     
 def clean_ml_url(url: str) -> str:
     """
-    Limpia las URLs de Mercado Libre eliminando parámetros de tracking 
-    (?...) y anclas (#...) que rompen la redirección y el scraping.
+    Versión Robusta: Extrae el ID del producto y reconstruye la URL.
+    Evita el error 'Página no existe' al mantener el identificador MLA.
     """
-    if not url or not isinstance(url, str):
+    if not url or not isinstance(url, str) or "mercadolibre" not in url:
         return url
-    # Cortamos primero por el ancla y luego por los parámetros de búsqueda
+
+    # Buscamos el patrón MLA seguido de números (ej: MLA123456789 o MLA-123456789)
+    match = re.search(r'(MLA-?\d+)', url, re.IGNORECASE)
+    
+    if match:
+        # Extraemos el ID y le quitamos el guion si lo tiene
+        product_id = match.group(1).replace("-", "").upper()
+        # Retornamos la URL canónica que ML siempre reconoce
+        return f"https://www.mercadolibre.com.ar/p/{product_id}"
+    
+    # Si no encuentra el ID MLA, al menos limpiamos el tracking básico
     return url.split('#')[0].split('?')[0].strip()
 
 # ==========================================================
