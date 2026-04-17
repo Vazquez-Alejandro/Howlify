@@ -4,12 +4,14 @@ import os
 import random
 import re
 import time
+import requests
 from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime 
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 import playwright_stealth
+from bs4 import BeautifulSoup
 
 from .despegar import hunt_despegar_vuelos
 from utils.logic import get_random_user_agent, apply_human_jitter, evaluar_oferta
@@ -136,12 +138,9 @@ def _keyword_match(title_l: str, keyword: str) -> bool:
     return match_count > 0
 
 # -------------------------------------------------
-# MercadoLibre scraper: Listados + Directo (Doble Capa con Extractor Universal)
+# MercadoLibre scraper: Listados + Directo (Doble Capa + Diagnóstico Profundo)
 # -------------------------------------------------
 def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headless: bool, plan: str = "starter", user_agent: str = None) -> list[dict]:
-    import requests
-    import re
-    from bs4 import BeautifulSoup
 
     # 1. Validaciones e inicialización
     if url_input and url_input.startswith("http") and not _is_mercadolibre(url_input):
@@ -149,7 +148,6 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
 
     max_price_i = int(max_price or 0)
     presas: list[dict] = []
-    es_pro = plan.lower() in ["pro", "business", "business_monitor", "business_reseller"]
     es_producto_directo = bool(url_input and url_input.startswith("http") and "listado." not in url_input)
     ua_final = user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     api_key = os.getenv("SCRAPERAPI_KEY")
@@ -176,35 +174,50 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                     title = t_loc.inner_text() if t_loc.count() > 0 else "Producto ML"
                     presas.append({"title": title[:120], "price": precio, "url": url_input, "source": "mercadolibre"})
             except:
-                print("⚠️ Playwright bloqueado en Ruta A. Activando Extractor Universal...")
+                print("⚠️ Playwright bloqueado en Ruta A. Activando Diagnóstico Profundo...")
             finally:
                 if context: context.close()
 
-        # --- PLAN B AGRESIVO (RUTA A) ---
+        # --- PLAN B DE DIAGNÓSTICO (RUTA A) ---
         if not presas and api_key:
-            print("🕵️ Ejecutando Túnel AR con Renderizado Remoto...")
+            print("🕵️ Iniciando Diagnóstico Profundo via Túnel AR...")
             proxy_url = f"http://api.scraperapi.com?api_key={api_key}&url={url_input}&render=true&country_code=ar"
             try:
                 resp = requests.get(proxy_url, timeout=60)
+                print(f"📡 Status de la API: {resp.status_code}")
+                
                 if resp.status_code == 200:
                     html = resp.text
                     precio = None
-                    # Intento 1: Regex sobre JSON interno
-                    match = re.search(r'\"price\":\s*(\d+)', html)
-                    if match: precio = int(match.group(1))
                     
-                    # Intento 2: BeautifulSoup
+                    # Diagnóstico visual rápido en logs
+                    soup = BeautifulSoup(html, 'html.parser')
+                    t_diag = soup.find("h1")
+                    print(f"📝 Título visto por el Túnel: {t_diag.get_text(strip=True) if t_diag else 'NO ENCONTRADO'}")
+
+                    # Intento 1: Regex sobre JSON interno (Fuerza bruta)
+                    match = re.search(r'\"price\":\s*(\d+)', html)
+                    if match: 
+                        precio = int(match.group(1))
+                        print(f"🎯 Precio hallado por Regex: {precio}")
+                    
+                    # Intento 2: Selectores visuales
                     if not precio:
-                        soup = BeautifulSoup(html, 'html.parser')
                         p_tag = soup.select_one(".andes-money-amount__fraction, [itemprop='price']")
                         if p_tag:
                             val = p_tag.get("content") or p_tag.get_text()
-                            precio = int(float(str(val).replace(".","").replace(",","")))
-                    
+                            precio = int(float(str(val).replace(".","").replace(",","").strip()))
+                            print(f"🎯 Precio hallado por BeautifulSoup: {precio}")
+
                     if precio:
-                        presas.append({"title": "Producto Rescatado", "price": precio, "url": url_input, "source": "mercadolibre (Tunnel AR)"})
-                        print(f"✅ ¡Rescate exitoso! Precio: ${precio}")
-            except Exception as e: print(f"❌ Fallo crítico Plan B: {e}")
+                        presas.append({
+                            "title": (t_diag.get_text(strip=True) if t_diag else "Producto Rescatado")[:120],
+                            "price": precio, "url": url_input, "source": "mercadolibre (Tunnel AR)"
+                        })
+                else:
+                    print(f"❌ Error de API: {resp.status_code}. Revisar créditos en ScraperAPI.")
+            except Exception as e:
+                print(f"❌ Fallo crítico en el Túnel: {e}")
         return presas
 
     # =========================================================
@@ -232,19 +245,20 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                         presas.append({"title": "Resultado ML", "price": precio, "url": link or target_url, "source": "mercadolibre"})
                 except: continue
         except:
-            print("⚠️ Playwright falló en Ruta B. Activando Túnel...")
+            print("⚠️ Playwright falló en Ruta B. Activando Túnel AR...")
         finally:
             if context: context.close()
 
-    # --- PLAN B AGRESIVO (RUTA B) ---
+    # --- PLAN B DE DIAGNÓSTICO (RUTA B) ---
     if not presas and api_key:
-        print("🕵️ Extrayendo listado vía Túnel AR...")
+        print("🕵️ Extrayendo listado vía Túnel Residencial AR...")
         proxy_url = f"http://api.scraperapi.com?api_key={api_key}&url={target_url}&country_code=ar"
         try:
             resp = requests.get(proxy_url, timeout=45)
             if resp.status_code == 200:
                 soup = BeautifulSoup(resp.text, 'html.parser')
                 items = soup.select(".ui-search-result__wrapper, .andes-card, .poly-card")
+                print(f"📦 Items detectados en el listado: {len(items)}")
                 for item in items[:10]:
                     try:
                         p_raw = item.select_one(".andes-money-amount__fraction").get_text()
@@ -254,7 +268,10 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                         if max_price_i == 0 or price <= max_price_i:
                             presas.append({"title": "Resultado (Tunnel)", "price": price, "url": link, "source": "mercadolibre (via Tunnel)"})
                     except: continue
-        except: pass
+            else:
+                print(f"❌ Error API en Ruta B: {resp.status_code}")
+        except Exception as e:
+            print(f"❌ Error en Túnel Ruta B: {e}")
 
     return presas
 # -------------------------------------------------
