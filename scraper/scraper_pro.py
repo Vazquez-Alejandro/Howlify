@@ -136,25 +136,27 @@ def _keyword_match(title_l: str, keyword: str) -> bool:
     return match_count > 0
 
 # -------------------------------------------------
-# MercadoLibre scraper: Listados (Persistente) + Directo (Multi-Disfraz)
+# MercadoLibre scraper: Listados (Persistente) + Directo (Doble Capa)
 # -------------------------------------------------
 def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headless: bool, plan: str = "starter", user_agent: str = None) -> list[dict]:
+    # 1. Validaciones e inicialización de variables (ESTO VA PRIMERO)
     if url_input and url_input.startswith("http") and not _is_mercadolibre(url_input):
         raise ValueError(f"[ML] URL no es MercadoLibre: {url_input}")
 
     max_price_i = int(max_price or 0)
     presas: list[dict] = []
-    
-    # 🔥 DEFINIMOS ES_PRO ACÁ PARA QUE TODO EL MUNDO LA CONOZCA
     es_pro = plan.lower() in ["pro", "business", "business_monitor", "business_reseller"]
+    
+    # Esta es la variable que causaba el error si no estaba acá arriba:
+    es_producto_directo = bool(url_input and url_input.startswith("http") and "listado." not in url_input)
+    
+    ua_final = user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
     # =========================================================
-    # RUTA A: LINK DIRECTO (CON DISFRAZ NINJA Y PERSISTENCIA)
+    # RUTA A: LINK DIRECTO (CON PLAN B INTEGRADO)
     # =========================================================
     if es_producto_directo:
-        ua_final = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        print(f"🐺 [ML] Link directo: {url_input}")
-        
+        print(f"🐺 [ML] Link directo detectado: {url_input}")
         PROFILE_PATH.mkdir(parents=True, exist_ok=True)
         context = None 
 
@@ -165,153 +167,112 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                     headless=headless,
                     channel="chrome", 
                     user_agent=ua_final,
-                    args=["--no-sandbox"]
+                    args=["--no-sandbox", "--disable-dev-shm-usage"]
                 )
                 page = context.pages[0] if context.pages else context.new_page()
                 
-                # Bajamos el timeout a 20s para que si hay bloqueo, salte rápido al Plan B
+                # Timeout de 20s: si no carga rápido, saltamos al Plan B
                 page.goto(url_input, wait_until="domcontentloaded", timeout=20000)
                 
-                # Intento de extracción rápida
-                p_meta = page.locator('meta[itemprop="price"]').get_attribute("content", timeout=5000)
+                # Intento de extracción rápida via Meta-tag
+                p_meta = page.locator('meta[itemprop="price"]').get_attribute("content", timeout=7000)
                 if p_meta:
                     precio = int(float(p_meta))
-                    presas.append({"title": "Aspiradora", "price": precio, "url": url_input, "source": "mercadolibre"})
-            except Exception as e:
-                print(f"⚠️ Playwright falló o tardó mucho. Iniciando Plan B (Túnel)...")
+                    t_loc = page.locator(".ui-pdp-title").first
+                    title = t_loc.inner_text() if t_loc.count() > 0 else "Producto ML"
+                    
+                    presas.append({"title": title[:120], "price": precio, "url": url_input, "source": "mercadolibre"})
+                    print(f"✅ Playwright encontró precio: ${precio}")
+            except Exception:
+                print(f"⚠️ Playwright falló en link directo. Pasando a Plan B (Túnel)...")
             finally:
                 if context: context.close()
         
-        # === EL SALVAVIDAS: PLAN B (SCRAPERAPI) ===
+        # === EL SALVAVIDAS: PLAN B (SCRAPERAPI) PARA RUTA A ===
         if not presas:
             api_key = os.getenv("SCRAPERAPI_KEY")
             if api_key:
                 import requests
                 from bs4 import BeautifulSoup
                 print("🕵️ Activando Túnel Residencial para Link Directo...")
-                # Agregamos &render=true para que la API resuelva el JS de Meli por nosotros
+                # render=true para que la API maneje el JS por nosotros
                 proxy_url = f"http://api.scraperapi.com?api_key={api_key}&url={url_input}&render=true"
                 try:
                     resp = requests.get(proxy_url, timeout=60)
                     if resp.status_code == 200:
                         soup = BeautifulSoup(resp.text, 'html.parser')
-                        # Buscamos el precio en el meta tag del HTML devuelto
                         meta_p = soup.find("meta", {"itemprop": "price"})
                         if meta_p and meta_p.get("content"):
                             precio = int(float(meta_p["content"]))
+                            t_tag = soup.find("h1", class_="ui-pdp-title")
+                            title = t_tag.get_text(strip=True) if t_tag else "Producto (via Tunnel)"
+                            
                             presas.append({
-                                "title": "Aspiradora (via Tunnel)", 
-                                "price": precio, 
-                                "url": url_input, 
+                                "title": title[:120], "price": precio, "url": url_input, 
                                 "source": "mercadolibre (via Tunnel)"
                             })
-                            print(f"✅ ¡Rescate exitoso! Precio encontrado: ${precio}")
+                            print(f"✅ ¡Rescate exitoso vía Túnel! Precio: ${precio}")
                 except Exception as e:
-                    print(f"❌ Falló el túnel: {e}")
+                    print(f"❌ Falló el túnel en Ruta A: {e}")
 
         return presas
     
     # =========================================================
-    # RUTA B: BÚSQUEDA POR KEYWORD O LISTADO (CON PLAN B AUTOMÁTICO)
+    # RUTA B: BÚSQUEDA POR KEYWORD O LISTADO
     # =========================================================
     target_url = url_input if (url_input and "listado." in url_input) else f"https://listado.mercadolibre.com.ar/{(keyword or '').strip().replace(' ', '-')}"
+    print(f"🐺 [ML] Buscando listado: {target_url}")
 
-    PROFILE_PATH.mkdir(parents=True, exist_ok=True)
-    DEBUG_SHOT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    
     context = None 
-
     with sync_playwright() as p:
         try:
-            # 1. INTENTO NORMAL CON PLAYWRIGHT
             context = p.chromium.launch_persistent_context(
                 user_data_dir=str(PROFILE_PATH),
                 headless=headless,
                 channel="chrome",
-                locale="es-AR",
-                viewport={"width": 1365, "height": 900},
-                args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+                args=["--no-sandbox", "--disable-dev-shm-usage"],
             )
             page = context.pages[0] if context.pages else context.new_page()
 
-            try:
-                if hasattr(playwright_stealth, 'stealth_sync'):
-                    playwright_stealth.stealth_sync(page)
-                elif hasattr(playwright_stealth, 'stealth_page_sync'):
-                    playwright_stealth.stealth_page_sync(page)
-            except Exception as e:
-                print(f"⚠️ Aviso: No se pudo aplicar camuflaje en Ruta B ({e}), siguiendo igual...")
-
-            page.goto(target_url, wait_until="networkidle", timeout=60000)
+            page.goto(target_url, wait_until="networkidle", timeout=45000)
             _human_touch(page)
-            time.sleep(2.0)
 
-            try:
-                # Esperamos a que aparezcan los productos
-                page.wait_for_selector("div.poly-card, .ui-search-result__wrapper, .andes-card", timeout=15000)
-                cards = page.locator("div.poly-card, .ui-search-result__wrapper, .andes-card")
-                
-                n = min(cards.count(), 20)
-                for i in range(n):
-                    try:
-                        card = cards.nth(i)
-                        link = None
-                        a_tag = card.locator("a").first
-                        if a_tag.count() > 0:
-                            link = a_tag.get_attribute("href")
-                            if link and link.startswith("/"): 
-                                link = "https://www.mercadolibre.com.ar" + link
-                        
-                        title_loc = card.locator("h2, .poly-component__title").first
-                        title = title_loc.inner_text().strip() if title_loc.count() > 0 else "Producto ML"
-                        
-                        precio = None
-                        ploc = card.locator(".andes-money-amount__fraction").first
-                        if ploc.count() > 0:
-                            raw = (ploc.inner_text() or "").replace(".", "").replace(",", "").strip()
-                            if raw.isdigit(): 
-                                precio = int(raw)
-
-                        if not precio or (max_price_i > 0 and precio > max_price_i):
-                            continue
-
-                        foto_path = None
-                        if es_pro:
-                            try:
-                                Path("evidence").mkdir(parents=True, exist_ok=True)
-                                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                foto_path = f"evidence/evidencia_{i}_{ts}.png"
-                                card.screenshot(path=foto_path)
-                            except: pass
-
+            page.wait_for_selector("div.poly-card, .ui-search-result__wrapper, .andes-card", timeout=15000)
+            cards = page.locator("div.poly-card, .ui-search-result__wrapper, .andes-card")
+            
+            n = min(cards.count(), 15)
+            for i in range(n):
+                try:
+                    card = cards.nth(i)
+                    p_raw = card.locator(".andes-money-amount__fraction").first.inner_text()
+                    precio = int(p_raw.replace(".","").replace(",","").strip())
+                    
+                    link = card.locator("a").first.get_attribute("href")
+                    if link and link.startswith("/"): 
+                        link = "https://www.mercadolibre.com.ar" + link
+                    
+                    if max_price_i == 0 or precio <= max_price_i:
                         presas.append({
-                            "title": title[:120],
+                            "title": "Resultado ML",
                             "price": precio,
                             "url": link or target_url,
-                            "source": "mercadolibre",
-                            "screenshot": foto_path
+                            "source": "mercadolibre"
                         })
-                    except: continue
-            except:
-                print("⚠️ Playwright fue bloqueado o no encontró cards en Ruta B. Activando rescate...")
-
-        except Exception as e:
-            print(f"❌ Error en Ruta B (Playwright): {e}")
+                except: continue
+        except Exception:
+            print("⚠️ Playwright falló en búsqueda. Activando Plan B...")
         finally:
             if context: context.close()
 
     # =========================================================
-    # --- PLAN B: EL TÚNEL (SCRAPERAPI) ---
+    # --- PLAN B PARA BÚSQUEDA (SCRAPERAPI) ---
     # =========================================================
-    # Si Playwright falló por el bloqueo de Render, usamos IPs residenciales
     if not presas:
         api_key = os.getenv("SCRAPERAPI_KEY")
         if api_key:
             import requests
             from bs4 import BeautifulSoup
-            print("🕵️ El Lobo activa el Túnel: Usando IPs residenciales para saltar bloqueo...")
-            
-            # Llamamos a la API que disfraza nuestra IP de Render
+            print("🕵️ El Lobo activa el Túnel para Búsqueda...")
             proxy_url = f"http://api.scraperapi.com?api_key={api_key}&url={target_url}"
             try:
                 resp = requests.get(proxy_url, timeout=30)
@@ -328,17 +289,11 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
                             
                             if max_price_i == 0 or price <= max_price_i:
                                 presas.append({
-                                    "title": title[:120], 
-                                    "price": price, 
-                                    "url": link,
-                                    "source": "mercadolibre (via Tunnel)", 
-                                    "screenshot": None
+                                    "title": title[:120], "price": price, "url": link,
+                                    "source": "mercadolibre (via Tunnel)"
                                 })
                         except: continue
-                    if presas:
-                        print(f"✅ ¡Rescate exitoso! Se encontraron {len(presas)} productos vía Túnel.")
-            except Exception as e:
-                print(f"❌ El Plan B también fue detectado o falló: {e}")
+            except: pass
 
     return presas
 # -------------------------------------------------
