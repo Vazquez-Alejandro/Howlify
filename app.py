@@ -731,251 +731,129 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         return
 
     st.markdown("### 📡 Radar de Precios Global")
-    st.caption("Hacé clic en una fila para cargar el análisis detallado abajo.")
-
+    
     # ==========================================================
-    # 1. TRAER REGLAS (MAPEO UNIFICADO)
+    # 1. TRAER DATOS (REGLAS + INFRACCIONES)
     # ==========================================================
     rules_res = supabase.table("monitor_rules").select("*").eq("user_id", user_id).execute()
     rules_data = rules_res.data or []
+    
+    # Traemos los logs del Lobo para detectar quién tiene captura guardada
+    inf_res = supabase.table("infracciones_log").select("caza_id, url_captura").execute()
+    infracciones_map = {str(i.get("caza_id")): i.get("url_captura") for i in inf_res.data or []}
     
     rules_map = {str(r.get("caza_id")): r for r in rules_data if r.get("caza_id")}
     rules_by_url = {str(r.get("product_url")): r for r in rules_data if r.get("product_url")}
 
     radar_rows = []
     for b in busquedas:
-        # 1. Limpieza de ID y Filtro Anti-Crash (Evita el error de bigint)
         bid = str(b.get("id") or "").strip()
         if not bid or not bid.isdigit():
             continue
             
         p_url = b.get("link") or b.get("url") or ""
-        
-        # 2. Mapeo de reglas
         rule = rules_map.get(bid) or rules_by_url.get(p_url) or {}
         
-        # 3. Consulta de precio (Segura con bid validado)
+        # Historial de precios para el KPI actual
         res_p = supabase.table("price_history").select("price").eq("caza_id", bid).order("checked_at", desc=True).limit(1).execute()
         curr_p = float(res_p.data[0]["price"]) if res_p.data else 0.0
         
         m_p = float(rule.get("min_price_allowed") or 0.0)
         max_p = float(rule.get("max_price_allowed") or 0.0)
 
-# --- 🐺 NUEVA LÓGICA DE SEMÁFORO DE 4 ESTADOS (PRO) ---
-        tolerancia = 0.05  # 5% de margen para el aviso amarillo
-        
-        if curr_p <= 0: 
-            riesgo = "⚪" # SIN DATOS
-        elif (m_p > 0 and curr_p < (m_p - 0.01)) or (max_p > 0 and curr_p > (max_p + 0.01)):
-            riesgo = "🔴" # VIOLACIÓN: Rompió el piso o el techo
-        elif (m_p > 0 and curr_p == m_p) or (max_p > 0 and curr_p == max_p):
-            riesgo = "🟠" # CRÍTICO: Está justo en el límite (la cornisa)
-        elif (m_p > 0 and curr_p <= m_p * (1 + tolerancia)) or (max_p > 0 and curr_p >= max_p * (1 - tolerancia)):
-            riesgo = "🟡" # ADVERTENCIA: A menos del 5% de quebrar reglas
-        elif m_p == 0 and max_p == 0:
-            riesgo = "⚪" # SIN REGLAS CONFIGURADAS
-        else:
-            riesgo = "🟢" # SALUDABLE: En el centro del rango seguro
+        # --- LÓGICA DE SEMÁFORO HOWLIFY ---
+        tolerancia = 0.05 
+        if curr_p <= 0: riesgo = "⚪"
+        elif (m_p > 0 and curr_p < (m_p - 0.01)) or (max_p > 0 and curr_p > (max_p + 0.01)): riesgo = "🔴"
+        elif (m_p > 0 and curr_p == m_p) or (max_p > 0 and curr_p == max_p): riesgo = "🟠"
+        elif (m_p > 0 and curr_p <= m_p * (1 + tolerancia)) or (max_p > 0 and curr_p >= max_p * (1 - tolerancia)): riesgo = "🟡"
+        else: riesgo = "🟢"
 
-        # 5. PROGRESO
+        # --- LÓGICA DE PROGRESO REFORZADA ---
         progreso = 0.0
-        if m_p > 0 and max_p > m_p:
-            progreso = max(0.0, min(1.0, (curr_p - m_p) / (max_p - m_p)))
+        if m_p > 0:
+            if max_p > m_p:
+                # Si tenemos los dos límites, calculamos el porcentaje real
+                progreso = max(0.0, min(1.0, (curr_p - m_p) / (max_p - m_p)))
+            else:
+                # Si solo tenemos mínimo, la barra se llena si el precio es mayor al mínimo
+                progreso = 1.0 if curr_p >= m_p else 0.0
 
-        # 6. 📸 LÓGICA DE EVIDENCIA: Extraemos la ruta del objeto 'b'
-        foto_path = b.get("screenshot")
-        evidencia_val = "📸 Ver" if (riesgo == "🔴" and foto_path) else ""
+        # 📸 EVIDENCIA DEL LOBO
+        foto_path_db = infracciones_map.get(bid)
+        evidencia_val = "📸 Ver" if foto_path_db else ""
 
-        # 7. ARMADO DE FILA (Con ID para la visualización)
         radar_rows.append({
-            "Riesgo": riesgo,
-            "ID": bid,
+            "Riesgo": riesgo, "ID": bid, 
             "Producto": (b.get("producto") or b.get("keyword") or "SIN NOMBRE").upper(),
-            "Precio": curr_p,
-            "Mín. MAP": m_p,
-            "Máximo": max_p,
-            "Evidencia": evidencia_val,
-            "Rango": progreso,
-            "URL": p_url,
-            "raw_data": b,
-            "full_id": bid
+            "Precio": curr_p, "Mín. MAP": m_p, "Máximo": max_p,
+            "Evidencia": evidencia_val, "Rango": progreso, "URL": p_url,
+            "screenshot_path": foto_path_db, "raw_data": b
         })
 
     # ==========================================================
-    # 2. RENDER DE TABLA Y VISUALIZADOR DE EVIDENCIA
+    # 2. RENDER DE TABLA
     # ==========================================================
     df_radar = pd.DataFrame(radar_rows)
-    
     if not df_radar.empty:
-        # Ordenamos por severidad del riesgo
-        orden_prioridad = {"🔴": 0, "🟠": 1, "🟡": 2, "🟢": 3, "⚪": 4}
-        df_radar["orden"] = df_radar["Riesgo"].map(orden_prioridad)
-        df_radar = df_radar.sort_values("orden")
-
-        # Limpiamos columnas de proceso para la vista de tabla
-        df_display = df_radar.drop(columns=["raw_data", "full_id", "orden"], errors='ignore')
-
-        # RENDER DE LA TABLA
+        df_display = df_radar.drop(columns=["raw_data", "screenshot_path"], errors='ignore')
         st.data_editor(
-            df_display,
-            use_container_width=True,
-            hide_index=True,
-            key="radar_table_business_vFinal",
-            disabled=True,
+            df_display, use_container_width=True, hide_index=True,
             column_config={
-                "Riesgo": st.column_config.TextColumn("Riesgo", width="small"),
-                "Producto": st.column_config.TextColumn("Producto", width="medium"),
-                "Precio": st.column_config.NumberColumn("Precio", format="$%d"),
-                "Mín. MAP": st.column_config.NumberColumn("Mín. MAP", format="$%d"),
-                "Máximo": st.column_config.NumberColumn("Máximo", format="$%d"),
                 "Evidencia": st.column_config.TextColumn("Evidencia", width="small"),
                 "Rango": st.column_config.ProgressColumn("Posición", min_value=0, max_value=1),
-                "URL": st.column_config.LinkColumn("Enlace", width="small"),
-                "ID": st.column_config.TextColumn("ID", width="small"),
-            },
-            column_order=("Riesgo", "ID", "Producto", "Precio", "Mín. MAP", "Máximo", "Evidencia", "Rango", "URL")
+                "URL": st.column_config.LinkColumn("Enlace")
+            }
         )
 
-        st.divider() # Una línea sutil para separar la tabla de la foto
+        st.divider()
 
-        # --- BLOQUE DE VISUALIZACIÓN DE FOTO (Base64) ---
-        # Filtramos solo los productos que tienen el emoji de cámara
+        # --- VISUALIZADOR DE EVIDENCIA ---
         con_evidencia = df_radar[df_radar["Evidencia"] != ""]["Producto"].unique()
-        
         if len(con_evidencia) > 0:
             st.markdown("#### 🕵️ Inspección de Evidencia")
-            seleccion = st.selectbox(
-                "Seleccioná un producto para ver la captura de pantalla:", 
-                con_evidencia,
-                index=None,
-                placeholder="Elegí una infracción 🔴 para ver la prueba..."
-            )
-            
+            seleccion = st.selectbox("Elegí una captura:", con_evidencia, index=None)
             if seleccion:
-                # Extraemos la fila original para obtener la ruta
-                fila_orig = df_radar[df_radar["Producto"] == seleccion].iloc[0]
-                ruta_foto = fila_orig["raw_data"].get("screenshot")
-                
-                if ruta_foto:
-                    img_b64 = get_image_base64(ruta_foto) # Usamos tu nueva utilidad
-                    if img_b64:
-                        st.image(
-                            f"data:image/png;base64,{img_b64}", 
-                            caption=f"Evidencia de Infracción: {seleccion}",
-                            use_container_width=True # Se adapta al ancho de tu ThinkPad
-                        )
-                    else:
-                        st.warning(f"⚠️ El archivo existe en DB pero no se encontró en el disco: {ruta_foto}")
-                else:
-                    st.info("No hay captura vinculada a este registro.")
-        else:
-            st.info("✅ No se detectaron infracciones con evidencia fotográfica por el momento.")
-
+                fila = df_radar[df_radar["Producto"] == seleccion].iloc[0]
+                img_b64 = get_image_base64(fila["screenshot_path"])
+                if img_b64:
+                    st.image(f"data:image/png;base64,{img_b64}", caption=f"Prueba: {seleccion}", use_container_width=True)
 
         # ==========================================================
-        # 3. SELECCIÓN & ANÁLISIS DINÁMICO (UNIFICADO)
+        # 3. ANÁLISIS DETALLADO & REGLAS
         # ==========================================================
         st.divider()
-        
-        # 1. Selector manual de producto
         nombres_productos = [row["Producto"] for row in radar_rows]
-        producto_elegido = st.selectbox(
-            "🔍 Seleccionar producto para configurar/analizar:", 
-            nombres_productos,
-            help="Elegí un producto para ver su historial y ajustar los límites de precio."
-        )
+        producto_elegido = st.selectbox("🔍 Seleccionar para configurar:", nombres_productos)
         
-        # 2. Recuperación de datos de la fila seleccionada
-        selected_row = next(item for item in radar_rows if item["Producto"] == producto_elegido)
+        sel = next(item for item in radar_rows if item["Producto"] == producto_elegido)
+        cid, curr_price = sel["ID"], sel["Precio"]
         
-        cid = selected_row["full_id"]
-        current_keyword = selected_row["Producto"]
-        curr_price = float(selected_row["Precio"])
-        c_row = selected_row["raw_data"]
-            
-        # 3. Traemos las reglas actuales
-        rule = rules_map.get(str(cid)) or {}
-        min_p = float(rule.get("min_price_allowed") or 0)
-        max_p = float(rule.get("max_price_allowed") or 0)
-
-        st.markdown(f"### 📈 Análisis de Detalle: {current_keyword}")
-
-        # --- MÉTRICAS DE CUMPLIMIENTO ---
-        res_hist = supabase.table("price_history").select("checked_at, price").eq("caza_id", cid).order("checked_at").execute()
-        df_hist = pd.DataFrame(res_hist.data or [])
-
-        compliance_rate = 100
-        if not df_hist.empty and min_p > 0:
-            compliance_rate = int((len(df_hist[df_hist["price"] >= min_p]) / len(df_hist)) * 100)
-
-        # --- 🐺 LÓGICA DE SEMÁFORO INTELIGENTE (4 ESTADOS) ---
-        tolerancia = 0.05  # 5% de margen para el aviso amarillo
+        # Traer historial para KPI y Gráfico
+        res_h = supabase.table("price_history").select("checked_at, price").eq("caza_id", cid).order("checked_at").execute()
+        df_h = pd.DataFrame(res_h.data or [])
         
-        if curr_price <= 0: 
-            color, txt = "#808080", "⚪ SIN DATOS"
-        elif (min_p > 0 and curr_price < (min_p - 0.01)) or (max_p > 0 and curr_price > (max_p + 0.01)):
-            color, txt = "#FF4B4B", "🔴 VIOLACIÓN CRÍTICA"
-        elif (min_p > 0 and curr_price == min_p) or (max_p > 0 and curr_price == max_p):
-            color, txt = "#FFA500", "🟠 LÍMITE ALCANZADO"
-        elif (min_p > 0 and curr_price <= min_p * (1 + tolerancia)) or (max_p > 0 and curr_price >= max_p * (1 - tolerancia)):
-            color, txt = "#FFD700", "🟡 RIESGO PRÓXIMO"
-        elif min_p == 0 and max_p == 0:
-            color, txt = "#555555", "⚪ SIN REGLAS MAP"
-        else: 
-            color, txt = "#28A745", "🟢 CUMPLIMIENTO OK"
+        # Mínimos actuales de la regla
+        min_p = float(sel["Mín. MAP"])
+        max_p = float(sel["Máximo"])
 
-        # --- RENDER DE KPIs ---
-        k1, k2, k3, k4 = st.columns(4)
-        with k1: st.markdown(f"<small>Precio Actual</small><h3>${int(curr_price):,}</h3>".replace(",", "."), unsafe_allow_html=True)
-        with k2: st.markdown(f"<small>Estado</small><h3 style='color:{color}; font-size:18px;'>{txt}</h3>", unsafe_allow_html=True)
-        with k3: st.markdown(f"<small>MAP (Mínimo)</small><h3>${int(min_p):,}</h3>".replace(",", "."), unsafe_allow_html=True)
-        with k4: st.markdown(f"<small>Compliance</small><h3>{compliance_rate}%</h3>", unsafe_allow_html=True)
+        k1, k2, k3 = st.columns(3)
+        with k1: st.metric("Precio Actual", f"${int(curr_price):,}".replace(",", "."))
+        with k2: st.metric("Estado", sel["Riesgo"])
+        with k3: st.metric("MAP Configurado", f"${int(min_p):,}".replace(",", "."))
 
-        # --- FORMULARIO DE CONFIGURACIÓN ---
-        with st.form("config_rules_v2"):
-            st.caption(f"⚙️ Ajustar límites para: {current_keyword}")
+        with st.form("config_rules_vFinal"):
+            st.caption(f"⚙️ Ajustar MAP para: {producto_elegido}")
             c1, c2 = st.columns(2)
-            f_min = c1.number_input("MAP (Mínimo permitido)", value=int(min_p), step=1000)
-            f_max = c2.number_input("Techo (Máximo permitido)", value=int(max_p), step=1000)
-
-            if st.form_submit_button("💾 Guardar Reglas de Monitoreo", use_container_width=True):
-                if not cid:
-                    st.error("No se detectó un ID válido.")
-                else:
-                    # Upsert limpio
-                    supabase.table("monitor_rules").delete().filter("caza_id", "eq", int(cid)).execute()
-                
-                    nueva_regla = {
-                        "caza_id": int(cid),
-                        "user_id": user_id,
-                        "min_price_allowed": int(f_min),
-                        "max_price_allowed": int(f_max),
-                        "product_name": str(current_keyword),
-                        "product_url": str(c_row.get("link") or c_row.get("url") or "")
-                    }
-                
-                    res = supabase.table("monitor_rules").insert(nueva_regla).execute()
-                    
-                    if res.data:
-                        st.success(f"✅ ¡Reglas para {current_keyword} actualizadas!")
-                        st.rerun()
-                    else:
-                        st.error("Error al guardar en la base de datos.")
-
-        # --- GRÁFICO HISTÓRICO ---
-        if not df_hist.empty:
-            df_hist["checked_at"] = pd.to_datetime(df_hist["checked_at"])
-            chart = alt.Chart(df_hist).mark_line(point=True, color="#ff4b4b").encode(
-                x=alt.X('checked_at:T', title="Fecha de chequeo"),
-                y=alt.Y('price:Q', scale=alt.Scale(zero=False), title="Precio ($ ARS)")
-            ).properties(height=300)
-            
-            if min_p > 0:
-                rule_line = alt.Chart(pd.DataFrame({'y': [min_p]})).mark_rule(color='red', strokeDash=[5,5]).encode(y='y:Q')
-                chart += rule_line
-            
-            st.altair_chart(chart.interactive(), use_container_width=True)
-
+            f_min = c1.number_input("MAP (Mínimo)", value=int(min_p), step=1000)
+            f_max = c2.number_input("Techo (Máximo)", value=int(max_p), step=1000)
+            if st.form_submit_button("💾 Guardar Cambios", use_container_width=True):
+                supabase.table("monitor_rules").upsert({
+                    "caza_id": int(cid), "user_id": user_id,
+                    "min_price_allowed": int(f_min), "max_price_allowed": int(f_max),
+                    "product_name": producto_elegido, "product_url": sel["URL"]
+                }, on_conflict="caza_id").execute()
+                st.success("✅ ¡Reglas actualizadas!"); st.rerun()
             
 def render_business_dashboard(plan: str, plan_label_text: str, user_id: str, busquedas: list):
     # Debug en pantalla (activar si querés ver qué valor llega)
@@ -2583,16 +2461,16 @@ if not st.session_state.get("busquedas"):
 render_footer()
 
 # ==========================================================
-# 🕒 AUTOMATIZACIÓN (CRON-JOB TRIGGER)
+# 🕒 AUTOMATIZACIÓN (MODO TEST LOCAL)
 # ==========================================================
-# Este bloque detecta cuando la app está en producción y dispara el monitor
-if st.get_option("server.address") != "localhost":
-    # Usamos session_state para que no se duplique el proceso en la misma carga
+
+
+if True: # MODO TEST LOCAL
     if "monitor_iniciado" not in st.session_state:
-        try:
-            # sys.executable asegura que usemos el Python del entorno virtual (.venv)
-            subprocess.Popen([sys.executable, "scripts/mercadolibre_monitor.py"])
-            st.session_state["monitor_iniciado"] = True
-            print("🐺 Lobo patrullando: Monitor activado por Cron/Visita.")
-        except Exception as e:
-            print(f"❌ Error al disparar el monitor automático: {e}")
+        # Conseguimos la ruta absoluta de la carpeta del proyecto
+        cwd = os.getcwd() 
+        script_path = os.path.join(cwd, "scripts", "mercadolibre_monitor.py")
+        
+        subprocess.Popen([sys.executable, script_path], cwd=cwd)
+        st.session_state["monitor_iniciado"] = True
+        print(f"🐺 Lobo lanzado desde: {script_path}")
