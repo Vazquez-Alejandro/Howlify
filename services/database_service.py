@@ -12,6 +12,7 @@ from scraper.scraper_pro import hunt_offers
 from services.notification_service import enviar_telegram, enviar_email, enviar_whatsapp
 
 
+
 # Conexión central
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
@@ -253,34 +254,36 @@ def armar_texto_reporte(user_id, cazas, familia_plan, nombre_usuario=""):
 
 def ejecutar_reporte_diario_total(force=False):
     import pytz
-    from datetime import datetime
-    # 🐺 Importación local de tu función de Whapi
-    from services.notification_service import enviar_whatsapp 
-    
+    from datetime import datetime, time as dt_time
+    # 🐺 IMPORTACIÓN: Asegurate que enviar_whatsapp y enviar_telegram existan en este path
+    from services.notification_service import enviar_whatsapp, enviar_telegram
+    from engine.engine import normalize_plan_family
+
     tz = pytz.timezone('America/Argentina/Buenos_Aires')
     now = datetime.now(tz)
     dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     dia_actual = dias_semana[now.weekday()]
     
-    # 🕵️ USAMOS SOLO HORA Y MINUTO PARA EVITAR FALLOS POR SEGUNDOS
-    hora_minuto = now.strftime("%H:%M") 
+    # Extraemos hora y minuto para el log y para armar el rango
+    h = now.hour
+    m = now.minute
 
     try:
-        # 🐺 IMPORTACIÓN LOCAL PARA EVITAR REFERENCIAS CIRCULARES
-        from engine.engine import (
-            obtener_contacto_usuario, 
-            enviar_telegram
-        )
-
-        print(f"🕒 [{now.strftime('%H:%M:%S')}] Chequeando reportes para {dia_actual} {hora_minuto} (Force={force})...")
+        print(f"🕒 [{now.strftime('%H:%M:%S')}] Chequeando reportes para {dia_actual} {h:02d}:{m:02d} (Force={force})...")
 
         query = (supabase.table("profiles")
             .select("user_id, username, plan, telegram_id, whatsapp_number, report_days, report_time")
             .eq("report_enabled", True))
         
         if not force:
-            # Buscamos que el report_time EMPIECE con la hora y minuto actual (ej: "09:30%")
-            query = query.ilike("report_time", f"{hora_minuto}%").contains("report_days", [dia_actual])
+            # 🛡️ FIX DEFINITIVO: Rango de tiempo para cubrir todo el minuto sin errores de tipo
+            rango_inicio = dt_time(h, m, 0).isoformat()
+            rango_fin = dt_time(h, m, 59).isoformat()
+            
+            query = (query
+                .gte("report_time", rango_inicio)
+                .lte("report_time", rango_fin)
+                .contains("report_days", [dia_actual]))
         
         res_usuarios = query.execute()
         usuarios = res_usuarios.data or []
@@ -289,7 +292,7 @@ def ejecutar_reporte_diario_total(force=False):
             uid = u["user_id"]
             username = u.get('username', 'Cazador')
             
-            # Buscamos las cacerías del usuario para armar el resumen
+            # Buscamos las cacerías activas del usuario
             res_cazas = supabase.table("cazas").select("*").eq("user_id", uid).eq("estado", "activa").execute()
             cazas = res_cazas.data or []
             
@@ -297,25 +300,30 @@ def ejecutar_reporte_diario_total(force=False):
                 print(f"ℹ️ {username} no tiene cacerías activas para reportar.")
                 continue 
 
-            # Armamos el texto del reporte (usa tu función armar_texto_reporte)
-            mensaje = armar_texto_reporte(uid, cazas, u.get("plan", "starter"), username)
+            # Armamos el texto (usando la función optimizada que vimos antes)
+            mensaje = armar_texto_reporte(uid, cazas, normalize_plan_family(u.get("plan")), username)
             
             # --- 🚀 ENVÍO MULTICANAL ---
             
             # 1. Telegram
             if u.get("telegram_id"):
-                enviar_telegram(u["telegram_id"], mensaje)
-                print(f"✅ Reporte Telegram enviado a {username}")
+                try:
+                    enviar_telegram(u["telegram_id"], mensaje)
+                    print(f"✅ Reporte Telegram enviado a {username}")
+                except Exception as e_tg:
+                    print(f"⚠️ Falló envío Telegram a {username}: {e_tg}")
                 
             # 2. WhatsApp (Whapi)
             if u.get("whatsapp_number"):
-                # Usamos la función de Whapi que arreglamos hoy
-                enviar_whatsapp(u["whatsapp_number"], mensaje)
-                print(f"✅ Reporte WhatsApp enviado a {username}")
+                try:
+                    enviar_whatsapp(u["whatsapp_number"], mensaje)
+                    print(f"✅ Reporte WhatsApp enviado a {username}")
+                except Exception as e_ws:
+                    print(f"⚠️ Falló envío WhatsApp a {username}: {e_ws}")
                 
     except Exception as e:
         print(f"❌ Error crítico en reporte diario: {e}")
-
+        
 def guardar_config_reporte(user_id, enabled, hora, dias):
     try:
         res = supabase.table("profiles").update({

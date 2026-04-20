@@ -1,5 +1,44 @@
 # Howlify Roadmap
 
+📝 Roadmap de mejoras urgentes
+
+
+2. Gestión de errores
+
+    [ ] Reemplazar try/except genérico por manejo específico: timeout, captcha, 403, etc.
+
+    [ ] Guardar en Supabase un estado claro (screenshot_failed, auth_required) en lugar de solo imprimir el error.
+
+3. Rutas de evidencia
+
+    [ ] Unificar carpeta evidence en todo el proyecto.
+
+    [ ] Validar tamaño de archivo para detectar capturas inválidas (ej. login en lugar de producto).
+
+4. UI/UX del Dashboard
+
+    [ ] Migrar configuración de reportes a checkboxes ordenados dentro de un expander (ya lo armamos).
+
+    [ ] Ocultar mensajes de debug en producción, mostrar solo feedback claro al usuario.
+
+    [ ] Confirmación visual al guardar (ejemplo: st.success("✅ Agenda actualizada")).
+
+5. Documentación
+
+    [ ] Actualizar README con instrucciones de instalación (dependencias de Playwright en Linux, setup de Supabase, cómo correr el dashboard).
+
+    [ ] Agregar ejemplos de uso: cómo crear un rastreador, cómo se ve la alerta en Telegram.
+
+6. Escalabilidad
+
+    [ ] Definir esquemas más claros en Supabase (monitor_rules, raw_data).
+
+    [ ] Agregar índices si pensás manejar muchos rastreadores.
+
+    [ ] Separar el monitor en un servicio independiente (cron job o worker).
+
+    [ ] Contenerizar con Docker para que las dependencias de Playwright estén siempre listas.
+
 ## Ideas futuras🚀 Próximos Pasos (Lo que viene)
 🏨 Vertical de Turismo (Hospedaje)
 Expandir el éxito de los vuelos a:
