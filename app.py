@@ -649,7 +649,7 @@ def mostrar_tarjeta_oportunidad(id_rastreo, titulo, precio_actual, precio_min_hi
             st.button("🗑️ Eliminar", key=f"del_{id_rastreo}", type="primary", use_container_width=True)
         with btn_col3:
             st.button("📲 Activar Alerta WhatsApp", key=f"wa_{id_rastreo}", use_container_width=True)
-            
+
 def render_profile_section(user_email, plan_actual):
     st.markdown("## 👤 Mi Perfil y Configuración")
     st.markdown("---")
@@ -2378,6 +2378,7 @@ if st.session_state.get("busquedas"):
     with col_t:
         st.subheader(f"🎯 Mis Cacerías ({rules.get('label', 'Monitor')})")
     with col_b:
+        # Actualizado a width="stretch" para evitar warnings de 2026
         if st.button("🔎 Olfatear todas", width="stretch", type="primary", key="btn_massive_hunt_vfinal"):
             busquedas = st.session_state["busquedas"]
             encontro_total = False
@@ -2404,7 +2405,6 @@ if st.session_state.get("busquedas"):
         p_max = b.get("precio_max", 0)
         p_anterior = b.get("last_price", 0)
 
-
         with st.container(border=True):
             c_info, c_btns = st.columns([3, 1])
             with c_info:
@@ -2416,7 +2416,7 @@ if st.session_state.get("busquedas"):
                 b_cols = st.columns(3)
                 
                 # --- BOTÓN OLFATEAR INDIVIDUAL ---
-                if b_cols[0].button("🐺", key=f"olf_f_{rid}", use_container_width=True, help="Olfatear ahora"):
+                if b_cols[0].button("🐺", key=f"olf_f_{rid}", width="stretch", help="Olfatear ahora"):
                     with st.spinner(""):
                         res_ind = run_manual_hunt(b, headless=FORCE_HEADLESS) 
                         st.session_state[f"last_res_{rid}"] = res_ind
@@ -2424,21 +2424,49 @@ if st.session_state.get("busquedas"):
                         if res_ind:
                             p_nuevo = min([r.get('price', 99999999) for r in res_ind])
                             
+                            # --- 🛡️ LÓGICA DE COOLDOWN ANTI-SPAM ---
+                            cooldown_min = int(os.getenv("ALERT_COOLDOWN_MINUTES", 30))
+                            ahora = datetime.now()
+                            
+                            # Consultamos si ya avisamos hace poco para esta cacería específica
+                            check = supabase.table("alerta_cooldown").select("*").eq("caza_id", b["id"]).execute()
+                            
+                            puedo_notificar = True
+                            if check.data:
+                                # Parseamos la fecha del último envío
+                                ultima_alerta = datetime.fromisoformat(check.data[0]['ultimo_envio'].replace('Z', '+00:00'))
+                                # Quitamos tzinfo para comparar con datetime.now() o usamos UTC en ambos
+                                if ahora.timestamp() < (ultima_alerta.timestamp() + (cooldown_min * 60)):
+                                    puedo_notificar = False
+                            
+                            # Si el precio bajó Y no estamos en periodo de cooldown
                             if p_nuevo < p_anterior and p_anterior > 0:
-                                from services.database_service import notificar_presa
-                                notificar_presa(b, p_anterior, p_nuevo, t_id)
-                                st.toast(f"🚨 ¡Presa detectada para {kw}!")
+                                if puedo_notificar:
+                                    from services.database_service import notificar_presa
+                                    notificar_presa(b, p_anterior, p_nuevo, t_id)
+                                    
+                                    # Actualizamos la "memoria" del Lobo en Supabase
+                                    supabase.table("alerta_cooldown").upsert({
+                                        "caza_id": b["id"],
+                                        "ultimo_envio": ahora.isoformat(),
+                                        "precio_notificado": p_nuevo
+                                    }).execute()
+                                    
+                                    st.toast(f"🚨 ¡Presa detectada para {kw}!")
+                                else:
+                                    st.toast(f"⏳ {kw}: Precio bajo, pero ya te avisé hace poco.")
 
                             save_price_history(user_id, b.get("id"), res_ind)
                         st.rerun()
 
                 # --- BOTÓN EDITAR ---
-                if b_cols[1].button("✏️", key=f"edit_f_{rid}", use_container_width=True, help="Editar"):
+                if b_cols[1].button("✏️", key=f"edit_f_{rid}", width="stretch", help="Editar"):
                     st.session_state["editing_caza"] = b
                     st.rerun()
 
                 # --- BOTÓN ELIMINAR ---
-                if b_cols[2].button("🗑️", key=f"del_f_{rid}", use_container_width=True, help="Eliminar"):
+                # Usamos width="stretch" para cumplir con la nueva norma de Streamlit
+                if b_cols[2].button("🗑️", key=f"del_f_{rid}", width="stretch", help="Eliminar"):
                     supabase.table("cazas").delete().eq("id", b["id"]).execute()
                     st.rerun()
 
@@ -2448,7 +2476,9 @@ if st.session_state.get("busquedas"):
                     for r in res[:5]:
                         r1, r2 = st.columns([4, 1])
                         r1.write(f"**{r.get('title')[:65]}** - ${int(r.get('price', 0)):,}")
-                        r2.link_button("Ver", get_affiliate_url(r.get("url")), use_container_width=True)
+                        # Cambiado use_container_width a width="stretch"
+                        r2.link_button("Ver", get_affiliate_url(r.get("url")), width="stretch")
+                        
 # ==========================================================
 # FINAL / SONIDO
 # ==========================================================
