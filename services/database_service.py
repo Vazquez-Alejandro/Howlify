@@ -199,8 +199,20 @@ def armar_texto_reporte(user_id, cazas, familia_plan, nombre_usuario=""):
     
     rules_map = {}
     if familia_plan == "business_monitor":
+        # 1. Traemos las reglas
         res_rules = supabase.table("monitor_rules").select("*").eq("user_id", user_id).execute()
         rules_map = {str(r["caza_id"]): r for r in (res_rules.data or [])}
+        
+        # 2. OPTIMIZACIÓN: Traemos los últimos precios de TODAS las cacerías de una vez
+        caza_ids = [c["id"] for c in cazas]
+        # Esta es una query avanzada: trae el precio más reciente para cada ID de la lista
+        res_precios = supabase.table("price_history")\
+            .select("caza_id, price")\
+            .in_("caza_id", caza_ids)\
+            .order("checked_at", desc=True).execute()
+        
+        # Mapeamos: {caza_id: precio}
+        precios_map = {str(p["caza_id"]): p["price"] for p in (res_precios.data or [])}
 
     for c in cazas:
         cid = str(c["id"])
@@ -210,77 +222,99 @@ def armar_texto_reporte(user_id, cazas, familia_plan, nombre_usuario=""):
             
         if familia_plan == "business_monitor":
             rule = rules_map.get(cid)
+            precio_actual = precios_map.get(cid, 0) # Ya no consultamos la DB acá adentro
+            
             if rule:
-                res_p = supabase.table("price_history").select("price").eq("caza_id", cid).order("checked_at", desc=True).limit(1).execute()
-                precio_actual = res_p.data[0]["price"] if res_p.data else 0
                 min_p = float(rule.get("min_price_allowed") or 0)
                 if precio_actual > 0 and min_p > 0 and precio_actual < min_p:
                     infracciones += 1
-                else: ok += 1
-            else: ok += 1 
-        else: ok += 1
+                else: 
+                    ok += 1
+            else: 
+                ok += 1 
+        else: 
+            ok += 1
 
     saludo = f"🐺 *¡Buen día, {nombre_usuario or 'Cazador'}!* Reporte de Howlify listo.\n\n"
+    
     if familia_plan == "business_monitor":
-        cuerpo = f"📊 *Resumen de Radar:*\n✅ Productos OK: {ok}\n🔴 Infracciones MAP: {infracciones}\n⚠️ Errores técnicos: {errores}\n\n{'🚨 ¡Atención! Hay desviaciones.' if infracciones > 0 else '🟢 Todo OK.'}"
+        cuerpo = (f"📊 *Resumen de Radar:*\n"
+                  f"✅ Productos OK: {ok}\n"
+                  f"🔴 Infracciones MAP: {infracciones}\n"
+                  f"⚠️ Errores técnicos: {errores}\n\n"
+                  f"{'🚨 ¡Atención! Hay desviaciones de precio.' if infracciones > 0 else '🟢 Todo en orden con el MAP.'}")
     else:
-        cuerpo = f"✈️ *Estado:* {total} activas.\n🔎 El Lobo vigiló tus links.\n✅ Todo bajo control."
+        cuerpo = (f"🔍 *Estado de tu Jauría:*\n"
+                  f"🐺 {total} cacerías activas.\n"
+                  f"✅ El Lobo vigiló tus objetivos.\n"
+                  f"✨ Todo bajo control por ahora.")
 
-    return saludo + cuerpo + "\n\n🔗 [Ver mi Panel](https://howlify.com)"
+    return saludo + cuerpo + "\n\n🔗 [Ver mi Panel](https://howlify.onrender.com)"
 
 def ejecutar_reporte_diario_total(force=False):
     import pytz
+    from datetime import datetime
+    # 🐺 Importación local de tu función de Whapi
+    from services.notification_service import enviar_whatsapp 
+    
     tz = pytz.timezone('America/Argentina/Buenos_Aires')
     now = datetime.now(tz)
     dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     dia_actual = dias_semana[now.weekday()]
-    hora_actual = now.strftime("%H:%M:00") 
+    
+    # 🕵️ USAMOS SOLO HORA Y MINUTO PARA EVITAR FALLOS POR SEGUNDOS
+    hora_minuto = now.strftime("%H:%M") 
 
     try:
-        # 🐺 IMPORTACIÓN LOCAL PARA ROMPER LA REFERENCIA CIRCULAR
-        # Esto evita que database_service y engine se bloqueen entre sí al iniciar
+        # 🐺 IMPORTACIÓN LOCAL PARA EVITAR REFERENCIAS CIRCULARES
         from engine.engine import (
-            disparar_alerta_minima, 
-            obtener_ultima_alerta, 
-            too_soon, 
             obtener_contacto_usuario, 
-            enviar_alerta_por_canal, 
-            guardar_alerta
+            enviar_telegram
         )
 
-        print(f"🕒 [{hora_actual}] Iniciando chequeo de reportes (Force={force})...")
+        print(f"🕒 [{now.strftime('%H:%M:%S')}] Chequeando reportes para {dia_actual} {hora_minuto} (Force={force})...")
 
-        # Se agrega la lógica de Force para testear sin importar la hora
         query = (supabase.table("profiles")
-            .select("user_id, username, plan, telegram_id, report_days, report_time")
+            .select("user_id, username, plan, telegram_id, whatsapp_number, report_days, report_time")
             .eq("report_enabled", True))
         
         if not force:
-            query = query.eq("report_time", hora_actual).contains("report_days", [dia_actual])
+            # Buscamos que el report_time EMPIECE con la hora y minuto actual (ej: "09:30%")
+            query = query.ilike("report_time", f"{hora_minuto}%").contains("report_days", [dia_actual])
         
         res_usuarios = query.execute()
         usuarios = res_usuarios.data or []
 
-        if force and not usuarios:
-            print("⚠️ No hay usuarios con reportes habilitados para forzar.")
-
         for u in usuarios:
             uid = u["user_id"]
+            username = u.get('username', 'Cazador')
+            
+            # Buscamos las cacerías del usuario para armar el resumen
             res_cazas = supabase.table("cazas").select("*").eq("user_id", uid).eq("estado", "activa").execute()
             cazas = res_cazas.data or []
             
             if not cazas: 
-                print(f"ℹ️ Usuario {u.get('username')} no tiene cacerías activas.")
+                print(f"ℹ️ {username} no tiene cacerías activas para reportar.")
                 continue 
 
-            mensaje = armar_texto_reporte(uid, cazas, normalize_plan_family(u.get("plan")), u.get("username"))
+            # Armamos el texto del reporte (usa tu función armar_texto_reporte)
+            mensaje = armar_texto_reporte(uid, cazas, u.get("plan", "starter"), username)
             
+            # --- 🚀 ENVÍO MULTICANAL ---
+            
+            # 1. Telegram
             if u.get("telegram_id"):
                 enviar_telegram(u["telegram_id"], mensaje)
-                print(f"✅ Reporte enviado con éxito a {u.get('username')}.")
+                print(f"✅ Reporte Telegram enviado a {username}")
+                
+            # 2. WhatsApp (Whapi)
+            if u.get("whatsapp_number"):
+                # Usamos la función de Whapi que arreglamos hoy
+                enviar_whatsapp(u["whatsapp_number"], mensaje)
+                print(f"✅ Reporte WhatsApp enviado a {username}")
                 
     except Exception as e:
-        print(f"❌ Error en reporte diario: {e}")
+        print(f"❌ Error crítico en reporte diario: {e}")
 
 def guardar_config_reporte(user_id, enabled, hora, dias):
     try:
