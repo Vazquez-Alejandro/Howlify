@@ -33,7 +33,7 @@ load_dotenv()
 # ==========================================================
 # 🚀 2. IMPORTS DE LÓGICA (POST-CONFIG)
 # ==========================================================
-st.info("🚀 App reiniciada, módulos importados")
+#st.info("🚀 App reiniciada, módulos importados")
 
 
 from auth.supabase_client import supabase 
@@ -828,7 +828,6 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
 
         # --- VISUALIZADOR DE EVIDENCIA ---
         st.markdown("#### 🕵️ Inspección de Evidencia")
-
         con_evidencia = df_radar[df_radar["Evidencia"] == "📸 Ver"]["Producto"].unique()
         if len(con_evidencia) > 0:
             with st.expander("📸 Evidencias disponibles", expanded=False):
@@ -857,42 +856,75 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         else:
             st.info("No hay evidencia disponible para mostrar.")
 
-                
-    # ==========================================================
-    # 3. ANÁLISIS DETALLADO & REGLAS
-    # ==========================================================
-    st.divider()
-    nombres_productos = [row["Producto"] for row in radar_rows]
-    producto_elegido = st.selectbox("🔍 Seleccionar para configurar:", nombres_productos)
-    
-    sel = next(item for item in radar_rows if item["Producto"] == producto_elegido)
-    cid, curr_price = sel["ID"], sel["Precio"]
-    
-    res_h = supabase.table("price_history").select("checked_at, price").eq("caza_id", cid).order("checked_at").execute()
-    df_h = pd.DataFrame(res_h.data or [])
-    
-    min_p = float(sel["Mín. MAP"])
-    max_p = float(sel["Máximo"])
+        st.divider()
 
-    k1, k2, k3 = st.columns(3)
-    with k1: st.metric("Precio Actual", f"${int(curr_price):,}".replace(",", "."))
-    with k2: st.metric("Estado", sel["Riesgo"])
-    with k3: st.metric("MAP Configurado", f"${int(min_p):,}".replace(",", "."))
+        # --- SELECCIÓN DE PRODUCTO + CONFIGURACIÓN DE MAP ---
+        nombres_productos = [row["Producto"] for row in radar_rows]
+        producto_elegido = st.selectbox("🔍 Seleccionar para configurar:", nombres_productos)
 
-    # clave única por producto para evitar duplicados
-    with st.form(f"config_rules_{cid}"):
-        st.caption(f"⚙️ Ajustar MAP para: {producto_elegido}")
-        c1, c2 = st.columns(2)
-        f_min = c1.number_input("MAP (Mínimo)", value=int(min_p), step=1000)
-        f_max = c2.number_input("Techo (Máximo)", value=int(max_p), step=1000)
-        if st.form_submit_button("💾 Guardar Cambios", use_container_width=True):
-            supabase.table("monitor_rules").upsert({
-                "caza_id": int(cid), "user_id": user_id,
-                "min_price_allowed": int(f_min), "max_price_allowed": int(f_max),
-                "product_name": producto_elegido, "product_url": sel["URL"]
-            }, on_conflict="caza_id").execute()
-            st.success("✅ ¡Reglas actualizadas!")
-            st.rerun()
+        sel = next(item for item in radar_rows if item["Producto"] == producto_elegido)
+        cid, curr_price = sel["ID"], sel["Precio"]
+
+        min_p = float(sel["Mín. MAP"])
+        max_p = float(sel["Máximo"])
+
+        k1, k2, k3 = st.columns(3)
+        with k1: st.metric("Precio Actual", f"${int(curr_price):,}".replace(",", "."))
+        with k2: st.metric("Estado", sel["Riesgo"])
+        with k3: st.metric("MAP Configurado", f"${int(min_p):,}".replace(",", "."))
+
+        with st.form(f"config_rules_{cid}"):
+            st.caption(f"⚙️ Ajustar MAP para: {producto_elegido}")
+            c1, c2 = st.columns(2)
+            f_min = c1.number_input("MAP (Mínimo)", value=int(min_p), step=1000)
+            f_max = c2.number_input("Techo (Máximo)", value=int(max_p), step=1000)
+            if st.form_submit_button("💾 Guardar Cambios", width="stretch"):
+                supabase.table("monitor_rules").upsert({
+                    "caza_id": int(cid), "user_id": user_id,
+                    "min_price_allowed": int(f_min), "max_price_allowed": int(f_max),
+                    "product_name": producto_elegido, "product_url": sel["URL"]
+                }, on_conflict="caza_id").execute()
+                st.success("✅ ¡Reglas actualizadas!")
+                st.rerun()
+
+        st.divider()
+
+        # --- GRÁFICOS DE ANÁLISIS ---
+        res_h = supabase.table("price_history").select("checked_at, price").eq("caza_id", cid).order("checked_at").execute()
+        df_h = pd.DataFrame(res_h.data or [])
+
+        if df_h.empty:
+            st.warning("⚠️ No hay historial de precios para este producto.")
+        else:
+            # 1. Histórico de precios
+            st.subheader("Histórico de precios")
+            st.line_chart(df_h.set_index("checked_at")["price"])
+
+            # 2. Precio vs MAP
+            st.subheader("Precio vs. rango MAP")
+            scatter_chart = alt.Chart(df_h).mark_circle(size=60).encode(
+                x='checked_at:T',
+                y='price:Q',
+                color=alt.condition(
+                    (alt.datum.price < min_p) | (alt.datum.price > max_p),
+                    alt.value('red'),
+                    alt.value('green')
+                )
+            )
+            st.altair_chart(scatter_chart, width="stretch")
+
+            # 3. Frecuencia de infracciones
+            inf_res = supabase.table("infracciones_log").select("fecha, caza_id").eq("caza_id", cid).execute()
+            df_inf = pd.DataFrame(inf_res.data or [])
+            if not df_inf.empty:
+                st.subheader("Frecuencia de infracciones")
+                bar_chart = alt.Chart(df_inf).mark_bar().encode(
+                    x='fecha:T',
+                    y='count()'
+                )
+                st.altair_chart(bar_chart, width="stretch")
+
+
 
 
 def render_business_dashboard(plan: str, plan_label_text: str, user_id: str, busquedas: list):
