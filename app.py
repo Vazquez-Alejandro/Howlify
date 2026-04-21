@@ -896,11 +896,21 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         if df_h.empty:
             st.warning("⚠️ No hay historial de precios para este producto.")
         else:
-            # 1. Histórico de precios
-            st.subheader("Histórico de precios")
-            st.line_chart(df_h.set_index("checked_at")["price"])
+            # 1. Histórico de precios con líneas de referencia
+            st.subheader("Histórico de precios con referencia MAP")
 
-            # 2. Precio vs MAP
+            line = alt.Chart(df_h).mark_line(point=True).encode(
+                x='checked_at:T',
+                y='price:Q'
+            )
+
+            min_line = alt.Chart(pd.DataFrame({'y': [min_p]})).mark_rule(color='red').encode(y='y')
+            max_line = alt.Chart(pd.DataFrame({'y': [max_p]})).mark_rule(color='blue').encode(y='y')
+
+            chart = line + min_line + max_line
+            st.altair_chart(chart, width="stretch")
+
+            # 2. Precio vs MAP (scatter)
             st.subheader("Precio vs. rango MAP")
             scatter_chart = alt.Chart(df_h).mark_circle(size=60).encode(
                 x='checked_at:T',
@@ -923,7 +933,6 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
                     y='count()'
                 )
                 st.altair_chart(bar_chart, width="stretch")
-
 
 
 
