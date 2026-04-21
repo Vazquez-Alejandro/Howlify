@@ -495,11 +495,8 @@ def _hunt_offers_playwright_dom(
     out: List[Dict[str, Any]] = []
     selector = _join_product_selectors()
 
-    # Aseguramos carpeta temporal para las fotos en tu Linux Mint
-    os.makedirs("temp", exist_ok=True)
-
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True) # HEADLESS para que no moleste
+        browser = p.chromium.launch(headless=True)  # HEADLESS para que no moleste
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             viewport={"width": 1365, "height": 900},
@@ -516,7 +513,7 @@ def _hunt_offers_playwright_dom(
                 pass
             time.sleep(1.0)
 
-            # --- Lógica de Scroll (la mantenemos igual) ---
+            # --- Lógica de Scroll ---
             last_count = 0
             stable = 0
             for _ in range(12):
@@ -524,20 +521,26 @@ def _hunt_offers_playwright_dom(
                 time.sleep(1.0)
                 links = page.locator(selector)
                 cnt = links.count()
-                if cnt <= last_count: stable += 1
-                else: stable = 0; last_count = cnt
-                if stable >= 3: break
+                if cnt <= last_count:
+                    stable += 1
+                else:
+                    stable = 0
+                    last_count = cnt
+                if stable >= 3:
+                    break
 
             links = page.locator(selector)
             total = min(links.count(), 160)
             raw_out: List[Dict[str, Any]] = []
 
             for i in range(total):
-                if len(raw_out) >= limit * 2: break
+                if len(raw_out) >= limit * 2:
+                    break
                 try:
                     a = links.nth(i)
                     href = a.get_attribute("href") or ""
-                    if not href or not _looks_product_link(href): continue
+                    if not href or not _looks_product_link(href):
+                        continue
                     full_url = urljoin(base, href)
 
                     title = (a.get_attribute("title") or a.inner_text() or "").strip()
@@ -554,33 +557,43 @@ def _hunt_offers_playwright_dom(
                     except Exception:
                         price = None
 
-                    if price is None: continue
+                    if price is None:
+                        continue
                     
                     # --- 🐺 LÓGICA DE INFRACCIÓN Y EVIDENCIA ---
-                    # Si el precio es MENOR al permitido (Infracción MAP)
                     if max_price > 0 and price < max_price:
                         print(f"🚨 [MAP VIOLADO] {title}: ${price} < ${max_price}")
-                        
-                        # 1. Sacamos captura SOLO del contenedor del producto
+
                         nombre_foto = f"evidencia_{caza_id}_{int(datetime.now().timestamp())}.jpg"
-                        path_local = os.path.join("temp", nombre_foto)
-                        
+                        ruta = os.path.join("evidence", nombre_foto)
+
                         try:
                             container.scroll_into_view_if_needed()
-                            container.screenshot(path=path_local, type="jpeg", quality=60)
-                            
-                            # 2. Subimos a Supabase Storage
-                            url_evidencia = subir_evidencia_storage(path_local, nombre_foto)
-                            
-                            # 3. Registramos en el historial de reincidentes
-                            if url_evidencia:
-                                registrar_infraccion(user_id, caza_id, price, max_price, url_evidencia)
-                                print(f"✅ Evidencia guardada y registrada: {url_evidencia}")
+                            os.makedirs("evidence", exist_ok=True)
+                            container.screenshot(path=ruta, type="jpeg", quality=60)
+
+                            # Validación de tamaño
+                            size = os.path.getsize(ruta)
+                            if size < 2000:
+                                print(f"⚠️ Captura sospechosa ({size} bytes). Puede ser login/captcha.")
+                                status = "screenshot_failed"
+                                url_evidencia = None
+                            else:
+                                print(f"📸 Captura guardada: {ruta} ({size} bytes)")
+                                status = "detected"
+                                url_evidencia = subir_evidencia_storage(ruta, nombre_foto)
+
+                            # Registro en historial
+                            registrar_infraccion(user_id, caza_id, price, max_price, url_evidencia)
+                            print(f"✅ Evidencia guardada y registrada: {url_evidencia}")
+
                         except Exception as e_snap:
                             print(f"⚠️ Error al capturar foto: {e_snap}")
+                            status = "error"
+                            registrar_infraccion(user_id, caza_id, price, max_price, None)
 
                     # Filtro de seguridad para el output del scraper
-                    if max_price > 0 and price > max_price * 10: # Evitar falsos positivos gigantes
+                    if max_price > 0 and price > max_price * 10:
                         continue
 
                     raw_out.append({
@@ -595,6 +608,7 @@ def _hunt_offers_playwright_dom(
             browser.close()
 
     return out
+
 
 # ----------------------------
 # Public entrypoint

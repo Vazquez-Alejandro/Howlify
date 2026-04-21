@@ -43,6 +43,7 @@ def ejecutar_monitor():
                     ruta = f"evidence/evidencia_{caza_id}.png"
                     page.screenshot(path=ruta, full_page=True)
 
+
                     size = os.path.getsize(ruta)
                     if size < 2000:
                         print(f"⚠️ Captura sospechosa ({size} bytes). Puede ser login/captcha.")

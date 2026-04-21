@@ -2,13 +2,6 @@
 
 📝 Roadmap de mejoras urgentes
 
-
-2. Gestión de errores
-
-    [ ] Reemplazar try/except genérico por manejo específico: timeout, captcha, 403, etc.
-
-    [ ] Guardar en Supabase un estado claro (screenshot_failed, auth_required) en lugar de solo imprimir el error.
-
 3. Rutas de evidencia
 
     [ ] Unificar carpeta evidence en todo el proyecto.
