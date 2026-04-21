@@ -2,11 +2,7 @@
 
 📝 Roadmap de mejoras urgentes
 
-3. Rutas de evidencia
 
-    [ ] Unificar carpeta evidence en todo el proyecto.
-
-    [ ] Validar tamaño de archivo para detectar capturas inválidas (ej. login en lugar de producto).
 
 4. UI/UX del Dashboard
 

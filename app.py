@@ -33,7 +33,8 @@ load_dotenv()
 # ==========================================================
 # 🚀 2. IMPORTS DE LÓGICA (POST-CONFIG)
 # ==========================================================
-print("🚀 APP REINICIADA - IMPORTANDO MÓDULOS...")
+st.info("🚀 App reiniciada, módulos importados")
+
 
 from auth.supabase_client import supabase 
 from auth.auth_supabase import supa_signup, supa_login, supa_reset_password
