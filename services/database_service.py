@@ -1,29 +1,75 @@
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, time as dt_time
+import pytz
 from supabase import create_client
+
 from utils.logic import (
     obtener_dolar_tarjeta, _safe_float, _parse_dt_utc, _effective_minutes,
     parse_price_to_int, get_effective_plan_rules, contar_cazas_activas,
     _extract_product_id, _domain_from_url, normalize_plan_family
 )
 from scraper.scraper_pro import hunt_offers
+from auth.auth_supabase import supa_refresh_session
 
 # 🐺 IMPORTACIÓN CENTRALIZADA DE NOTIFICACIONES
 from services.notification_service import enviar_telegram, enviar_email, enviar_whatsapp
 
-
-
-# Conexión central
+# ==========================================================
+# CONEXIONES SUPABASE
+# ==========================================================
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")              # para usuarios (requiere refresh)
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # para panel admin (no expira)
+
+# Cliente para usuarios (login, cazas, perfiles)
+supabase_user = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+# Cliente para panel admin (usuarios, métricas, reportes globales)
+supabase_admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+# Alias temporal para compatibilidad con código existente
+supabase = supabase_admin
 
 DEFAULT_SOURCE = "mercadolibre"
 ALERT_COOLDOWN_MINUTES = 60
 
 # ==========================================================
+# HELPER PARA CONSULTAS SEGURAS (refresh automático)
+# ==========================================================
+
+
+def safe_query(table_name, filters, refresh_token):
+    """
+    Ejecuta una consulta segura contra Supabase.
+    Si el JWT expira, refresca la sesión y reintenta automáticamente.
+    """
+    try:
+        query = supabase_user.table(table_name).select("*")
+        for f in filters:
+            query = query.eq(f["col"], f["val"])
+        res = query.execute()
+        return res.data
+
+    except Exception as e:
+        error_msg = str(e)
+        if "JWT expired" in error_msg:
+            new_session, msg = supa_refresh_session(refresh_token)
+            if new_session:
+                query = supabase_user.table(table_name).select("*")
+                for f in filters:
+                    query = query.eq(f["col"], f["val"])
+                res = query.execute()
+                return res.data
+            else:
+                return {"error": msg}
+        else:
+            return {"error": error_msg}
+
+
+# ==========================================================
 # GESTIÓN DE CAZAS (Lógica de Negocio)
 # ==========================================================
+
 
 def guardar_caza_supabase(
     user_id: str, producto: str, url: str, precio_max, frecuencia: str,
@@ -253,18 +299,13 @@ def armar_texto_reporte(user_id, cazas, familia_plan, nombre_usuario=""):
     return saludo + cuerpo + "\n\n🔗 [Ver mi Panel](https://howlify.onrender.com)"
 
 def ejecutar_reporte_diario_total(force=False):
-    import pytz
-    from datetime import datetime, time as dt_time
-    # 🐺 IMPORTACIÓN: Asegurate que enviar_whatsapp y enviar_telegram existan en este path
-    from services.notification_service import enviar_whatsapp, enviar_telegram
-    from engine.engine import normalize_plan_family
+
 
     tz = pytz.timezone('America/Argentina/Buenos_Aires')
     now = datetime.now(tz)
     dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     dia_actual = dias_semana[now.weekday()]
     
-    # Extraemos hora y minuto para el log y para armar el rango
     h = now.hour
     m = now.minute
 
@@ -276,13 +317,10 @@ def ejecutar_reporte_diario_total(force=False):
             .eq("report_enabled", True))
         
         if not force:
-            # 🛡️ FIX DEFINITIVO: Rango de tiempo para cubrir todo el minuto sin errores de tipo
-            rango_inicio = dt_time(h, m, 0).isoformat()
-            rango_fin = dt_time(h, m, 59).isoformat()
-            
+            # Comparación simplificada: exacto contra HH:MM:00
+            hora_actual = f"{h:02d}:{m:02d}:00"
             query = (query
-                .gte("report_time", rango_inicio)
-                .lte("report_time", rango_fin)
+                .eq("report_time", hora_actual)
                 .contains("report_days", [dia_actual]))
         
         res_usuarios = query.execute()
@@ -292,7 +330,6 @@ def ejecutar_reporte_diario_total(force=False):
             uid = u["user_id"]
             username = u.get('username', 'Cazador')
             
-            # Buscamos las cacerías activas del usuario
             res_cazas = supabase.table("cazas").select("*").eq("user_id", uid).eq("estado", "activa").execute()
             cazas = res_cazas.data or []
             
@@ -300,12 +337,9 @@ def ejecutar_reporte_diario_total(force=False):
                 print(f"ℹ️ {username} no tiene cacerías activas para reportar.")
                 continue 
 
-            # Armamos el texto (usando la función optimizada que vimos antes)
             mensaje = armar_texto_reporte(uid, cazas, normalize_plan_family(u.get("plan")), username)
             
             # --- 🚀 ENVÍO MULTICANAL ---
-            
-            # 1. Telegram
             if u.get("telegram_id"):
                 try:
                     enviar_telegram(u["telegram_id"], mensaje)
@@ -313,7 +347,6 @@ def ejecutar_reporte_diario_total(force=False):
                 except Exception as e_tg:
                     print(f"⚠️ Falló envío Telegram a {username}: {e_tg}")
                 
-            # 2. WhatsApp (Whapi)
             if u.get("whatsapp_number"):
                 try:
                     enviar_whatsapp(u["whatsapp_number"], mensaje)
@@ -323,6 +356,7 @@ def ejecutar_reporte_diario_total(force=False):
                 
     except Exception as e:
         print(f"❌ Error crítico en reporte diario: {e}")
+
         
 def guardar_config_reporte(user_id, enabled, hora, dias):
     try:
