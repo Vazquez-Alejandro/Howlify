@@ -3,15 +3,6 @@
 📝 Roadmap de mejoras urgentes
 
 
-
-4. UI/UX del Dashboard
-
-    [ ] Migrar configuración de reportes a checkboxes ordenados dentro de un expander (ya lo armamos).
-
-    [ ] Ocultar mensajes de debug en producción, mostrar solo feedback claro al usuario.
-
-    [ ] Confirmación visual al guardar (ejemplo: st.success("✅ Agenda actualizada")).
-
 5. Documentación
 
     [ ] Actualizar README con instrucciones de instalación (dependencias de Playwright en Linux, setup de Supabase, cómo correr el dashboard).
