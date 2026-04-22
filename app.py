@@ -806,28 +806,65 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         })
 
     # ==========================================================
-    # 2. RENDER DE TABLA
+    # 2. RENDER DE TABLA (SOLUCIÓN DEFINITIVA DE COLOR)
     # ==========================================================
     df_radar = pd.DataFrame(radar_rows)
     if not df_radar.empty:
-        modo = st.radio("Modo de visualización:", ["Orden por ID", "Agrupar por Grupo"], horizontal=True)
+        modo = st.radio("Modo de visualización:", ["Orden por ID", "Agrupar"], horizontal=True)
         
+        def get_group_emoji(hex_color):
+            if not hex_color or hex_color == "None": return ""
+            
+            # Limpiamos el HEX y lo pasamos a minúsculas
+            hex_color = str(hex_color).lstrip('#').lower()
+            if len(hex_color) != 6: return "⬜"
+            
+            # Convertimos HEX a valores numéricos RGB (0-255)
+            r = int(hex_color[0:2], 16)
+            g = int(hex_color[2:4], 16)
+            b = int(hex_color[4:6], 16)
+            
+            # DETERMINAR EL COLOR DOMINANTE
+            # 1. Si los tres son muy bajitos -> Negro
+            if r < 50 and g < 50 and b < 50: return "⬛"
+            
+            # 2. Si domina el Azul (como en tu captura)
+            if b > r and b > g: return "🟦"
+            
+            # 3. Si domina el Rojo
+            if r > g and r > b: return "🟥"
+            
+            # 4. Si domina el Verde
+            if g > r and g > b: return "🟩"
+            
+            # 5. Si domina Rojo y Verde (Amarillo/Naranja)
+            if r > 150 and g > 150: return "🟨"
+            
+            # Por defecto, cuadrado blanco
+            return "⬜"
+
         if modo == "Orden por ID":
             df_sorted = df_radar.sort_values("ID")
-            df_display = df_sorted.drop(columns=["raw_data", "screenshot_path", "status", "error", "Color", "Grupo", "GrupoID"], errors='ignore')
+            df_display = df_sorted.drop(columns=["raw_data", "screenshot_path", "status", "error", "Color", "Grupo", "GrupoID", "🎨"], errors='ignore')
         else:
             df_sorted = df_radar.sort_values(["Grupo", "ID"], na_position="last")
-            # Insertar columnas de grupo al principio
-            df_sorted["🎨"] = df_sorted.apply(lambda x: "●" if x["GrupoID"] else "", axis=1)
-            df_display = df_sorted[["🎨", "Grupo", "Riesgo", "ID", "Producto", "Precio", "Mín. MAP", "Máximo", "Evidencia", "Rango", "URL"]]
+            # Aplicamos la nueva lógica que analiza el RGB
+            df_sorted["🎨"] = df_sorted["Color"].apply(get_group_emoji)
+            
+            columnas = ["🎨", "Grupo", "Riesgo", "ID", "Producto", "Precio", "Mín. MAP", "Máximo", "Evidencia", "Rango", "URL"]
+            df_display = df_sorted[columnas]
 
         st.data_editor(
-            df_display, width="stretch", hide_index=True,
+            df_display, 
+            width="stretch", 
+            hide_index=True,
             column_config={
+                "🎨": st.column_config.TextColumn("🎨", width="small"),
                 "Rango": st.column_config.ProgressColumn("Posición", min_value=0, max_value=1),
                 "URL": st.column_config.LinkColumn("Enlace")
             }
         )
+        
 # --- GESTIÓN DE GRUPOS (UNIFICADO) ---
         st.divider()
         with st.expander("⚙️ Gestión de Grupos (Crear / Eliminar)"):
