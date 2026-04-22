@@ -732,13 +732,13 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         return
 
     st.markdown("### 📡 Radar de Precios Global")
-    
+
     # ==========================================================
     # 1. TRAER DATOS (REGLAS + INFRACCIONES)
     # ==========================================================
     rules_res = supabase.table("monitor_rules").select("*").eq("user_id", user_id).execute()
     rules_data = rules_res.data or []
-    
+
     inf_res = supabase.table("infracciones_log").select("caza_id, status, error, url_captura").execute()
     infracciones_map = {
         str(i.get("caza_id")): {
@@ -748,7 +748,7 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         }
         for i in inf_res.data or []
     }
-    
+
     rules_map = {str(r.get("caza_id")): r for r in rules_data if r.get("caza_id")}
     rules_by_url = {str(r.get("product_url")): r for r in rules_data if r.get("product_url")}
 
@@ -757,13 +757,13 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         bid = str(b.get("id") or "").strip()
         if not bid or not bid.isdigit():
             continue
-            
+
         p_url = b.get("link") or b.get("url") or ""
         rule = rules_map.get(bid) or rules_by_url.get(p_url) or {}
-        
+
         res_p = supabase.table("price_history").select("price").eq("caza_id", bid).order("checked_at", desc=True).limit(1).execute()
         curr_p = float(res_p.data[0]["price"]) if res_p.data else 0.0
-        
+
         m_p = float(rule.get("min_price_allowed") or 0.0)
         max_p = float(rule.get("max_price_allowed") or 0.0)
 
@@ -781,19 +781,25 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
             else:
                 progreso = 1.0 if curr_p >= m_p else 0.0
 
-        # 📸 EVIDENCIA DEL LOBO
         info_evidencia = infracciones_map.get(bid, {})
         foto_path_db = info_evidencia.get("url")
         status = info_evidencia.get("status")
         error_msg = info_evidencia.get("error")
 
-        # Mostrar el emoji 📸 siempre que haya status relevante
         if status in ("detected", "error", "screenshot_failed") or foto_path_db:
             evidencia_val = "📸 Ver"
         else:
             evidencia_val = ""
 
+        # Aquí traemos grupo y color desde Supabase si existe
+        grupo_res = supabase.table("grupo_cazas").select("grupo_id, grupos(nombre, color)").eq("caza_id", bid).execute()
+        grupo_info = grupo_res.data[0] if grupo_res.data else {}
+        grupo_nombre = grupo_info.get("grupos", {}).get("nombre") if grupo_info else None
+        grupo_color = grupo_info.get("grupos", {}).get("color") if grupo_info else None
+
         radar_rows.append({
+            "Grupo": grupo_nombre,
+            "Color": grupo_color,
             "Riesgo": riesgo,
             "ID": bid,
             "Producto": (b.get("producto") or b.get("keyword") or "SIN NOMBRE").upper(),
@@ -808,23 +814,64 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
             "error": error_msg,
             "raw_data": b
         })
-
+        
     # ==========================================================
     # 2. RENDER DE TABLA
     # ==========================================================
     df_radar = pd.DataFrame(radar_rows)
     if not df_radar.empty:
-        df_display = df_radar.drop(columns=["raw_data", "screenshot_path", "status", "error"], errors='ignore')
+        # Switch de vista
+        modo = st.radio("Modo de visualización:", ["Orden por ID", "Agrupar por Grupo"])
+        if modo == "Orden por ID":
+            df_sorted = df_radar.sort_values("ID")
+        else:
+            df_sorted = df_radar.sort_values(["Grupo", "ID"], na_position="last")
+
+        # Render columna de grupo con cuadradito simbólico
+        def render_grupo(row):
+            if row["Grupo"]:
+                if row["Color"]:
+                    # Podés mapear colores a emojis según el valor real
+                    return f"⬛ {row['Grupo']}"
+                else:
+                    return row["Grupo"]
+            return "—"
+
+        df_sorted["GrupoDisplay"] = df_sorted.apply(render_grupo, axis=1)
+
+        df_display = df_sorted.drop(
+            columns=["raw_data", "screenshot_path", "status", "error", "Color", "Grupo"],
+            errors='ignore'
+        )
+
         st.data_editor(
-            df_display, width="stretch", hide_index=True,
+            df_display.rename(columns={"GrupoDisplay": "Grupo"}),
+            width="stretch",
+            hide_index=True,
             column_config={
+                "Grupo": st.column_config.TextColumn("Grupo", width="small"),
                 "Evidencia": st.column_config.TextColumn("Evidencia", width="small"),
                 "Rango": st.column_config.ProgressColumn("Posición", min_value=0, max_value=1),
                 "URL": st.column_config.LinkColumn("Enlace")
             }
         )
 
+        # Botón para crear grupo
         st.divider()
+        if st.button("+ Crear grupo"):
+            with st.form("crear_grupo"):
+                nombre = st.text_input("Nombre del grupo")
+                descripcion = st.text_area("Descripción")
+                color = st.color_picker("Color del grupo", "#000000")
+                submit = st.form_submit_button("Guardar")
+                if submit:
+                    supabase.table("grupos").insert({
+                        "nombre": nombre,
+                        "descripcion": descripcion,
+                        "color": color
+                    }).execute()
+                    st.success(f"Grupo '{nombre}' creado con color {color}")
+                    st.rerun()
 
         # --- VISUALIZADOR DE EVIDENCIA ---
         st.markdown("#### 🕵️ Inspección de Evidencia")
@@ -869,25 +916,62 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         max_p = float(sel["Máximo"])
 
         k1, k2, k3 = st.columns(3)
-        with k1: st.metric("Precio Actual", f"${int(curr_price):,}".replace(",", "."))
-        with k2: st.metric("Estado", sel["Riesgo"])
-        with k3: st.metric("MAP Configurado", f"${int(min_p):,}".replace(",", "."))
+        # Precio actual siempre en verde (positivo)
+        with k1:
+            st.markdown(
+                f"<div style='color:green; font-weight:bold; font-size:18px;'>💰 Precio Actual: ${int(curr_price):,}</div>",
+                unsafe_allow_html=True
+            )
+        # Estado dinámico: verde si está bien, rojo si está fuera de rango
+        with k2:
+            if sel["Riesgo"] in ["🟢","🟡"]:
+                st.markdown(
+                    f"<div style='color:green; font-weight:bold; font-size:18px;'>📊 Estado: {sel['Riesgo']}</div>",
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    f"<div style='color:red; font-weight:bold; font-size:18px;'>📊 Estado: {sel['Riesgo']}</div>",
+                    unsafe_allow_html=True
+                )
+        # MAP configurado en azul para diferenciar
+        with k3:
+            st.markdown(
+                f"<div style='color:blue; font-weight:bold; font-size:18px;'>⚙️ MAP Configurado: ${int(min_p):,}</div>",
+                unsafe_allow_html=True
+            )
+
+        # Traer grupos existentes
+        grupos_res = supabase.table("grupos").select("id, nombre, color").execute()
+        grupos = grupos_res.data or []
+        opciones = {g["id"]: g["nombre"] for g in grupos}
 
         with st.form(f"config_rules_{cid}"):
             st.caption(f"⚙️ Ajustar MAP para: {producto_elegido}")
-            c1, c2 = st.columns(2)
+            c1, c2, c3 = st.columns(3)
             f_min = c1.number_input("MAP (Mínimo)", value=int(min_p), step=1000)
             f_max = c2.number_input("Techo (Máximo)", value=int(max_p), step=1000)
+            grupo_id = c3.selectbox("Grupo", options=list(opciones.keys()), format_func=lambda x: opciones[x])
+
             if st.form_submit_button("💾 Guardar Cambios", width="stretch"):
+                # Guardar reglas
                 supabase.table("monitor_rules").upsert({
                     "caza_id": int(cid), "user_id": user_id,
                     "min_price_allowed": int(f_min), "max_price_allowed": int(f_max),
                     "product_name": producto_elegido, "product_url": sel["URL"]
                 }, on_conflict="caza_id").execute()
-                st.success("✅ ¡Reglas actualizadas!")
+
+                # Guardar relación grupo-producto
+                supabase.table("grupo_cazas").upsert({
+                    "caza_id": int(cid),
+                    "grupo_id": grupo_id
+                }, on_conflict="caza_id").execute()
+
+                st.success("✅ ¡Reglas y grupo actualizados!")
                 st.rerun()
 
         st.divider()
+
 
         # --- DASHBOARD ORGANIZADO EN 4 GRUPOS CON AYUDA ---
         res_h = supabase.table("price_history").select("checked_at, price").eq("caza_id", cid).order("checked_at").execute()
@@ -906,33 +990,46 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
                 "🔍 Comparaciones y Detalle"
             ])
 
-            # --- 1. VISIÓN GENERAL ---
-            with tab1:
-                st.subheader("Snapshot Ejecutivo")
-                st.caption("Muestra cuántos precios están dentro o fuera del rango permitido.")
-                dentro = df_h[(df_h['price'] >= min_p) & (df_h['price'] <= max_p)].shape[0]
-                fuera = df_h.shape[0] - dentro
-                resumen_df = pd.DataFrame({
-                    'Estado': ['Dentro de rango','Fuera de rango'],
-                    'Cantidad':[dentro,fuera],
-                    'Color': ['green','red']
-                })
-                pie_chart = alt.Chart(resumen_df).mark_arc().encode(
-                    theta='Cantidad',
-                    color=alt.Color('Estado', scale=alt.Scale(domain=['Dentro de rango','Fuera de rango'], range=['green','red']))
-                )
-                st.altair_chart(pie_chart, width="stretch")
+      # --- 1. VISIÓN GENERAL ---
+        with tab1:
+            st.subheader("Cumplimiento de precios")
+            st.caption("Porcentaje de registros dentro del rango permitido.")
 
-                st.subheader("KPIs rápidos")
-                st.caption("Indicadores clave: resumen numérico de productos y alertas.")
-                st.metric("Productos monitoreados", df_h.shape[0])
-                st.metric("Alertas activas", fuera)
+            dentro = df_h[(df_h['price'] >= min_p) & (df_h['price'] <= max_p)].shape[0]
+            fuera = df_h.shape[0] - dentro
+            porcentaje_dentro = round((dentro / df_h.shape[0]) * 100, 1) if df_h.shape[0] > 0 else 0
 
-                st.subheader("Top 5 productos más monitoreados")
-                st.caption("Muestra los productos con más registros de monitoreo.")
-                top_df = pd.DataFrame({'Producto':['Prod A','Prod B','Prod C','Prod D','Prod E'],'Monitoreos':[50,40,30,20,10]})
-                bar_top = alt.Chart(top_df).mark_bar(color='green').encode(x='Producto',y='Monitoreos')
-                st.altair_chart(bar_top, width="stretch")
+            # Color dinámico según nivel de cumplimiento
+            color = "green" if porcentaje_dentro >= 80 else "red"
+
+            # Barra de progreso simple
+            progress_df = pd.DataFrame({
+                'Estado': ['Cumplimiento', 'Restante'],
+                'Valor': [porcentaje_dentro, 100 - porcentaje_dentro]
+            })
+
+            progress_chart = alt.Chart(progress_df).mark_bar().encode(
+                x=alt.X('Estado', sort=None),
+                y='Valor',
+                color=alt.Color('Estado', scale=alt.Scale(domain=['Cumplimiento','Restante'], range=[color,'lightgray']))
+            )
+            st.altair_chart(progress_chart, width="stretch")
+            st.markdown(f"**{porcentaje_dentro}%** de los precios están dentro del rango permitido.", unsafe_allow_html=True)
+
+            st.subheader("KPIs rápidos")
+            st.caption("Indicadores clave: resumen numérico de productos y alertas.")
+            st.metric("Productos monitoreados", df_h.shape[0])
+            st.metric("Alertas activas", fuera)
+
+            st.subheader("Top 5 productos más monitoreados")
+            st.caption("Muestra los productos con más registros de monitoreo.")
+            top_df = pd.DataFrame({
+                'Producto':['Prod A','Prod B','Prod C','Prod D','Prod E'],
+                'Monitoreos':[50,40,30,20,10]
+            })
+            bar_top = alt.Chart(top_df).mark_bar(color='green').encode(x='Producto',y='Monitoreos')
+            st.altair_chart(bar_top, width="stretch")
+
 
             # --- 2. HISTÓRICO DE PRECIOS ---
             with tab2:

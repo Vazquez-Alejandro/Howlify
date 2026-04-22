@@ -32,6 +32,16 @@ def ejecutar_monitor():
 
                 print(f"🎯 Procesando Caza ID: {caza_id}...")
 
+                # Validar que el caza_id exista en cazas
+                exists = supabase.table("cazas").select("id").eq("id", caza_id).execute()
+                if not exists.data:
+                    supabase.table("cazas").insert({
+                        "id": caza_id,
+                        "producto": regla.get("producto") or "SIN NOMBRE",
+                        "user_id": regla.get("user_id")
+                    }).execute()
+                    print(f"📝 Insertado nuevo registro en cazas con ID {caza_id}")
+
                 context = browser.new_context(user_agent=get_random_user_agent())
                 page = context.new_page()
 
@@ -42,7 +52,6 @@ def ejecutar_monitor():
                     os.makedirs("evidence", exist_ok=True)
                     ruta = f"evidence/evidencia_{caza_id}.png"
                     page.screenshot(path=ruta, full_page=True)
-
 
                     size = os.path.getsize(ruta)
                     if size < 2000:
@@ -85,4 +94,3 @@ def ejecutar_monitor():
 
 if __name__ == "__main__":
     ejecutar_monitor()
-
