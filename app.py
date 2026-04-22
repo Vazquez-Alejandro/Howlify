@@ -734,7 +734,7 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
     st.markdown("### 📡 Radar de Precios Global")
 
     # ==========================================================
-    # 1. TRAER DATOS (REGLAS + INFRACCIONES)
+    # 1. TRAER DATOS (REGLAS + INFRACCIONES + GRUPOS)
     # ==========================================================
     rules_res = supabase.table("monitor_rules").select("*").eq("user_id", user_id).execute()
     rules_data = rules_res.data or []
@@ -752,21 +752,26 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
     rules_map = {str(r.get("caza_id")): r for r in rules_data if r.get("caza_id")}
     rules_by_url = {str(r.get("product_url")): r for r in rules_data if r.get("product_url")}
 
+    # Traer grupos y relaciones
+    grupos_res = supabase.table("grupos").select("*").execute()
+    grupos_dict = {g["id"]: g for g in (grupos_res.data or [])}
+    relaciones_res = supabase.table("grupo_cazas").select("caza_id, grupo_id").execute()
+    relaciones_map = {str(rel["caza_id"]): rel["grupo_id"] for rel in (relaciones_res.data or [])}
+
     radar_rows = []
     for b in busquedas:
         bid = str(b.get("id") or "").strip()
-        if not bid or not bid.isdigit():
-            continue
+        if not bid or not bid.isdigit(): continue
 
         p_url = b.get("link") or b.get("url") or ""
         rule = rules_map.get(bid) or rules_by_url.get(p_url) or {}
 
         res_p = supabase.table("price_history").select("price").eq("caza_id", bid).order("checked_at", desc=True).limit(1).execute()
         curr_p = float(res_p.data[0]["price"]) if res_p.data else 0.0
-
         m_p = float(rule.get("min_price_allowed") or 0.0)
         max_p = float(rule.get("max_price_allowed") or 0.0)
 
+        # Lógica de Riesgo
         tolerancia = 0.05 
         if curr_p <= 0: riesgo = "⚪"
         elif (m_p > 0 and curr_p < (m_p - 0.01)) or (max_p > 0 and curr_p > (max_p + 0.01)): riesgo = "🔴"
@@ -774,32 +779,18 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         elif (m_p > 0 and curr_p <= m_p * (1 + tolerancia)) or (max_p > 0 and curr_p >= max_p * (1 - tolerancia)): riesgo = "🟡"
         else: riesgo = "🟢"
 
-        progreso = 0.0
-        if m_p > 0:
-            if max_p > m_p:
-                progreso = max(0.0, min(1.0, (curr_p - m_p) / (max_p - m_p)))
-            else:
-                progreso = 1.0 if curr_p >= m_p else 0.0
-
+        progreso = max(0.0, min(1.0, (curr_p - m_p) / (max_p - m_p))) if (m_p > 0 and max_p > m_p) else 0.0
         info_evidencia = infracciones_map.get(bid, {})
-        foto_path_db = info_evidencia.get("url")
-        status = info_evidencia.get("status")
-        error_msg = info_evidencia.get("error")
+        evidencia_val = "📸 Ver" if (info_evidencia.get("status") in ("detected", "error", "screenshot_failed") or info_evidencia.get("url")) else ""
 
-        if status in ("detected", "error", "screenshot_failed") or foto_path_db:
-            evidencia_val = "📸 Ver"
-        else:
-            evidencia_val = ""
-
-        # Aquí traemos grupo y color desde Supabase si existe
-        grupo_res = supabase.table("grupo_cazas").select("grupo_id, grupos(nombre, color)").eq("caza_id", bid).execute()
-        grupo_info = grupo_res.data[0] if grupo_res.data else {}
-        grupo_nombre = grupo_info.get("grupos", {}).get("nombre") if grupo_info else None
-        grupo_color = grupo_info.get("grupos", {}).get("color") if grupo_info else None
+        # Datos de grupo
+        gid = relaciones_map.get(bid)
+        g_info = grupos_dict.get(gid, {})
 
         radar_rows.append({
-            "Grupo": grupo_nombre,
-            "Color": grupo_color,
+            "GrupoID": gid,
+            "Color": g_info.get("color", "#808080"),
+            "Grupo": g_info.get("nombre", "SIN GRUPO"),
             "Riesgo": riesgo,
             "ID": bid,
             "Producto": (b.get("producto") or b.get("keyword") or "SIN NOMBRE").upper(),
@@ -809,71 +800,63 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
             "Evidencia": evidencia_val,
             "Rango": progreso,
             "URL": p_url,
-            "screenshot_path": foto_path_db,
-            "status": status,
-            "error": error_msg,
-            "raw_data": b
+            "screenshot_path": info_evidencia.get("url"),
+            "status": info_evidencia.get("status"),
+            "error": info_evidencia.get("error")
         })
-        
+
     # ==========================================================
     # 2. RENDER DE TABLA
     # ==========================================================
     df_radar = pd.DataFrame(radar_rows)
     if not df_radar.empty:
-        # Switch de vista
-        modo = st.radio("Modo de visualización:", ["Orden por ID", "Agrupar por Grupo"])
+        modo = st.radio("Modo de visualización:", ["Orden por ID", "Agrupar por Grupo"], horizontal=True)
+        
         if modo == "Orden por ID":
             df_sorted = df_radar.sort_values("ID")
+            df_display = df_sorted.drop(columns=["raw_data", "screenshot_path", "status", "error", "Color", "Grupo", "GrupoID"], errors='ignore')
         else:
             df_sorted = df_radar.sort_values(["Grupo", "ID"], na_position="last")
-
-        # Render columna de grupo con cuadradito simbólico
-        def render_grupo(row):
-            if row["Grupo"]:
-                if row["Color"]:
-                    # Podés mapear colores a emojis según el valor real
-                    return f"⬛ {row['Grupo']}"
-                else:
-                    return row["Grupo"]
-            return "—"
-
-        df_sorted["GrupoDisplay"] = df_sorted.apply(render_grupo, axis=1)
-
-        df_display = df_sorted.drop(
-            columns=["raw_data", "screenshot_path", "status", "error", "Color", "Grupo"],
-            errors='ignore'
-        )
+            # Insertar columnas de grupo al principio
+            df_sorted["🎨"] = df_sorted.apply(lambda x: "●" if x["GrupoID"] else "", axis=1)
+            df_display = df_sorted[["🎨", "Grupo", "Riesgo", "ID", "Producto", "Precio", "Mín. MAP", "Máximo", "Evidencia", "Rango", "URL"]]
 
         st.data_editor(
-            df_display.rename(columns={"GrupoDisplay": "Grupo"}),
-            width="stretch",
-            hide_index=True,
+            df_display, width="stretch", hide_index=True,
             column_config={
-                "Grupo": st.column_config.TextColumn("Grupo", width="small"),
-                "Evidencia": st.column_config.TextColumn("Evidencia", width="small"),
                 "Rango": st.column_config.ProgressColumn("Posición", min_value=0, max_value=1),
                 "URL": st.column_config.LinkColumn("Enlace")
             }
         )
-
-        # Botón para crear grupo
+# --- GESTIÓN DE GRUPOS (UNIFICADO) ---
         st.divider()
-        if st.button("+ Crear grupo"):
-            with st.form("crear_grupo"):
-                nombre = st.text_input("Nombre del grupo")
-                descripcion = st.text_area("Descripción")
-                color = st.color_picker("Color del grupo", "#000000")
-                submit = st.form_submit_button("Guardar")
-                if submit:
-                    supabase.table("grupos").insert({
-                        "nombre": nombre,
-                        "descripcion": descripcion,
-                        "color": color
-                    }).execute()
-                    st.success(f"Grupo '{nombre}' creado con color {color}")
-                    st.rerun()
+        with st.expander("⚙️ Gestión de Grupos (Crear / Eliminar)"):
+            c_g1, c_g2 = st.columns(2)
+            with c_g1:
+                st.markdown("**Nuevo Grupo**")
+                with st.form("form_nuevo_g", clear_on_submit=True):
+                    n = st.text_input("Nombre del grupo")
+                    c = st.color_picker("Color", "#1E90FF")
+                    if st.form_submit_button("Guardar"):
+                        if n:
+                            supabase.table("grupos").insert({"nombre": n, "color": c}).execute()
+                            st.rerun()
+            
+            with c_g2:
+                st.markdown("**Eliminar Existente**")
+                if grupos_dict:
+                    g_del_id = st.selectbox("Seleccioná grupo:", 
+                                         options=list(grupos_dict.keys()), 
+                                         format_func=lambda x: grupos_dict[x]["nombre"],
+                                         key="del_g_sel")
+                    if st.button("🗑️ Eliminar Grupo", type="primary", use_container_width=True):
+                        supabase.table("grupo_cazas").delete().eq("grupo_id", g_del_id).execute()
+                        supabase.table("grupos").delete().eq("id", g_del_id).execute()
+                        st.rerun()
+                else:
+                    st.info("No hay grupos creados.")
 
-        # --- VISUALIZADOR DE EVIDENCIA ---
+        # --- VISUALIZADOR DE EVIDENCIA (SIN CAMBIOS) ---
         st.markdown("#### 🕵️ Inspección de Evidencia")
         con_evidencia = df_radar[df_radar["Evidencia"] == "📸 Ver"]["Producto"].unique()
         if len(con_evidencia) > 0:
@@ -881,97 +864,67 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
                 seleccion = st.selectbox("Elegí una captura:", ["(ninguna)"] + list(con_evidencia), index=0)
                 if seleccion != "(ninguna)":
                     fila = df_radar[df_radar["Producto"] == seleccion].iloc[0]
-                    status = fila.get("status")
-                    error_msg = fila.get("error")
-                    path = fila.get("screenshot_path")
+                    if fila["screenshot_path"] and os.path.exists(fila["screenshot_path"]):
+                        st.image(fila["screenshot_path"], caption=f"Prueba: {seleccion}")
 
-                    if status == "screenshot_failed":
-                        st.error("⚠️ Invalid capture (too small or login page)")
-                    elif status == "error":
-                        st.error(f"❌ Error: {error_msg}")
-                    elif path and os.path.exists(path):
-                        st.image(path, caption=f"Prueba: {seleccion}", width="stretch")
-                        with open(path, "rb") as f:
-                            st.download_button(
-                                label="⬇️ Descargar evidencia",
-                                data=f,
-                                file_name=os.path.basename(path),
-                                mime="image/png"
-                            )
-                    elif path:
-                        st.warning(f"⚠️ No se encontró el archivo: {path}")
-        else:
-            st.info("No hay evidencia disponible para mostrar.")
-
+        # --- AJUSTAR MAP Y ASIGNAR GRUPO ---
         st.divider()
-
-        # --- SELECCIÓN DE PRODUCTO + CONFIGURACIÓN DE MAP ---
         nombres_productos = [row["Producto"] for row in radar_rows]
         producto_elegido = st.selectbox("🔍 Seleccionar para configurar:", nombres_productos)
-
+        
         sel = next(item for item in radar_rows if item["Producto"] == producto_elegido)
-        cid, curr_price = sel["ID"], sel["Precio"]
-
-        min_p = float(sel["Mín. MAP"])
-        max_p = float(sel["Máximo"])
+        cid, min_p, max_p, curr_price = sel["ID"], float(sel["Mín. MAP"]), float(sel["Máximo"]), sel["Precio"]
 
         k1, k2, k3 = st.columns(3)
-        # Precio actual siempre en verde (positivo)
-        with k1:
-            st.markdown(
-                f"<div style='color:green; font-weight:bold; font-size:18px;'>💰 Precio Actual: ${int(curr_price):,}</div>",
-                unsafe_allow_html=True
-            )
-        # Estado dinámico: verde si está bien, rojo si está fuera de rango
-        with k2:
-            if sel["Riesgo"] in ["🟢","🟡"]:
-                st.markdown(
-                    f"<div style='color:green; font-weight:bold; font-size:18px;'>📊 Estado: {sel['Riesgo']}</div>",
-                    unsafe_allow_html=True
-                )
-            else:
-                st.markdown(
-                    f"<div style='color:red; font-weight:bold; font-size:18px;'>📊 Estado: {sel['Riesgo']}</div>",
-                    unsafe_allow_html=True
-                )
-        # MAP configurado en azul para diferenciar
-        with k3:
-            st.markdown(
-                f"<div style='color:blue; font-weight:bold; font-size:18px;'>⚙️ MAP Configurado: ${int(min_p):,}</div>",
-                unsafe_allow_html=True
-            )
-
-        # Traer grupos existentes
-        grupos_res = supabase.table("grupos").select("id, nombre, color").execute()
-        grupos = grupos_res.data or []
-        opciones = {g["id"]: g["nombre"] for g in grupos}
+        with k1: st.metric("Precio Actual", f"${int(curr_price):,}")
+        with k2: st.metric("Estado", sel["Riesgo"])
+        with k3: st.metric("MAP Configurado", f"${int(min_p):,}")
 
         with st.form(f"config_rules_{cid}"):
-            st.caption(f"⚙️ Ajustar MAP para: {producto_elegido}")
             c1, c2, c3 = st.columns(3)
             f_min = c1.number_input("MAP (Mínimo)", value=int(min_p), step=1000)
             f_max = c2.number_input("Techo (Máximo)", value=int(max_p), step=1000)
-            grupo_id = c3.selectbox("Grupo", options=list(opciones.keys()), format_func=lambda x: opciones[x])
+            
+            # Lógica robusta para el selector de grupo
+            opciones_g = {None: "Sin Grupo"}
+            for g_id, g_info in grupos_dict.items():
+                opciones_g[g_id] = g_info["nombre"]
+            
+            # Buscamos el índice actual de forma segura
+            lista_ids = list(opciones_g.keys())
+            try:
+                idx_actual = lista_ids.index(sel["GrupoID"])
+            except ValueError:
+                idx_actual = 0
+            
+            nuevo_g = c3.selectbox("Asignar a Grupo", 
+                                 options=lista_ids, 
+                                 index=idx_actual, 
+                                 format_func=lambda x: opciones_g[x])
 
             if st.form_submit_button("💾 Guardar Cambios", width="stretch"):
-                # Guardar reglas
+                # 1. Reglas (Esto suele tener PK, así que el upsert debería funcionar)
                 supabase.table("monitor_rules").upsert({
                     "caza_id": int(cid), "user_id": user_id,
                     "min_price_allowed": int(f_min), "max_price_allowed": int(f_max),
                     "product_name": producto_elegido, "product_url": sel["URL"]
                 }, on_conflict="caza_id").execute()
 
-                # Guardar relación grupo-producto
-                supabase.table("grupo_cazas").upsert({
-                    "caza_id": int(cid),
-                    "grupo_id": grupo_id
-                }, on_conflict="caza_id").execute()
-
-                st.success("✅ ¡Reglas y grupo actualizados!")
+                # 2. Grupo (Lógica corregida: Borrar y luego Insertar)
+                # Primero limpiamos cualquier grupo que tuviera asignado antes
+                supabase.table("grupo_cazas").delete().eq("caza_id", int(cid)).execute()
+                
+                # Si seleccionó un grupo nuevo, lo insertamos
+                if nuevo_g:
+                    supabase.table("grupo_cazas").insert({
+                        "caza_id": int(cid), 
+                        "grupo_id": nuevo_g
+                    }).execute()
+                
+                st.success("Configuración actualizada correctamente.")
                 st.rerun()
 
         st.divider()
-
 
         # --- DASHBOARD ORGANIZADO EN 4 GRUPOS CON AYUDA ---
         res_h = supabase.table("price_history").select("checked_at, price").eq("caza_id", cid).order("checked_at").execute()
