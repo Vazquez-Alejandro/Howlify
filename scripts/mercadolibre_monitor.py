@@ -9,7 +9,8 @@ from utils.logic import get_random_user_agent, apply_human_jitter
 
 # CONFIGURACIÓN
 URL = "https://aqzkysgzljxqmckzfpfq.supabase.co"
-KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFxemt5c2d6bGp4cW1ja3pmcGZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMTU4NTMsImV4cCI6MjA4NzY5MTg1M30.XDqg5IG1ES_4UWAuWxwdGws43siLhYkDZciIRVzr3Lc"
+# ⚠️ Usar la service_role key aquí, no la anon key
+KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFxemt5c2d6bGp4cW1ja3pmcGZxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjExNTg1MywiZXhwIjoyMDg3NjkxODUzfQ.MYm8yQBoLPGrXomVhrO56gRA26EkCz1Z1ZZ6wPm1RpM"
 supabase = create_client(URL, KEY)
 
 def ejecutar_monitor():
@@ -50,6 +51,14 @@ def ejecutar_monitor():
                     page.goto(url, timeout=60000, wait_until="domcontentloaded")
                     time.sleep(random.uniform(3, 5))
 
+                    # 📊 Scraping del título del producto
+                    try:
+                        titulo = page.query_selector("h1.ui-pdp-title").inner_text()
+                        if titulo:
+                            supabase.table("cazas").update({"producto": titulo}).eq("id", caza_id).execute()
+                    except Exception as e_titulo:
+                        print(f"⚠️ No se pudo extraer título: {e_titulo}")
+
                     # 📊 Scraping del precio actual
                     precio_real = 0
                     try:
@@ -63,6 +72,7 @@ def ejecutar_monitor():
                     if precio_real > 0:
                         supabase.table("price_history").insert({
                             "caza_id": caza_id,
+                            "user_id": regla.get("user_id"),  # incluir user_id si la tabla lo requiere
                             "price": precio_real,
                             "checked_at": time.strftime("%Y-%m-%d %H:%M:%S")
                         }).execute()

@@ -948,14 +948,43 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
 
         st.divider()
 
-# --- DASHBOARD ORGANIZADO EN 4 GRUPOS CON AYUDA ---
-        res_h = supabase.table("price_history").select("checked_at, price").eq("caza_id", cid).order("checked_at").execute()
-        df_h = pd.DataFrame(res_h.data or [])
+        # --- SELECTOR DE MODO ---
+        modo = st.radio("Visualización:", ["Individual", "Por grupo"], index=0)
 
-        inf_res = supabase.table("infracciones_log").select("fecha, caza_id").eq("caza_id", cid).execute()
-        df_inf = pd.DataFrame(inf_res.data or [])
+        if modo == "Por grupo":
+            grupos_res = supabase.table("grupos").select("id, nombre").execute()
+            grupos = {g["nombre"]: g["id"] for g in grupos_res.data}
 
-        # 1. CREAMOS LOS TABS FUERA DE CUALQUIER IF (Para que existan siempre)
+            if grupos:
+                grupo_sel_nombre = st.selectbox("Seleccionar grupo:", list(grupos.keys()))
+                grupo_sel_id = grupos[grupo_sel_nombre]
+
+                # Filtrar cazas por grupo
+                cazas_res = supabase.table("grupo_cazas").select("caza_id").eq("grupo_id", grupo_sel_id).execute()
+                ids_cazas = [c["caza_id"] for c in cazas_res.data]
+
+                # Historial e infracciones para todos los cazas del grupo
+                res_h = supabase.table("price_history").select("checked_at, price, caza_id").in_("caza_id", ids_cazas).order("checked_at").execute()
+                df_h = pd.DataFrame(res_h.data or [])
+
+                inf_res = supabase.table("infracciones_log").select("fecha, caza_id").in_("caza_id", ids_cazas).execute()
+                df_inf = pd.DataFrame(inf_res.data or [])
+
+                st.write(f"📊 Mostrando gráficos para grupo: {grupo_sel_nombre}")
+
+            else:
+                st.warning("No hay grupos definidos.")
+                df_h, df_inf = pd.DataFrame(), pd.DataFrame()
+
+        else:
+            # Modo individual
+            res_h = supabase.table("price_history").select("checked_at, price").eq("caza_id", cid).order("checked_at").execute()
+            df_h = pd.DataFrame(res_h.data or [])
+
+            inf_res = supabase.table("infracciones_log").select("fecha, caza_id").eq("caza_id", cid).execute()
+            df_inf = pd.DataFrame(inf_res.data or [])
+
+        # --- TABS ---
         tab1, tab2, tab3, tab4 = st.tabs([
             "📊 Visión General",
             "📈 Histórico de Precios",
@@ -963,48 +992,30 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
             "🔍 Comparaciones y Detalle"
         ])
 
-        if df_h.empty:
-            st.warning("⚠️ No hay historial de precios para este producto.")
-            # Opcional: Podés poner st.stop() aquí si no querés mostrar tabs vacíos
-        
         # --- 1. VISIÓN GENERAL ---
         with tab1:
             if df_h.empty:
                 st.info("No hay datos suficientes para mostrar la visión general.")
             else:
                 st.subheader("Cumplimiento de precios")
-                st.caption("Porcentaje de registros dentro del rango permitido.")
-
                 dentro = df_h[(df_h['price'] >= min_p) & (df_h['price'] <= max_p)].shape[0]
                 fuera = df_h.shape[0] - dentro
                 porcentaje_dentro = round((dentro / df_h.shape[0]) * 100, 1) if df_h.shape[0] > 0 else 0
-
                 color = "green" if porcentaje_dentro >= 80 else "red"
 
                 progress_df = pd.DataFrame({
                     'Estado': ['Cumplimiento', 'Restante'],
                     'Valor': [porcentaje_dentro, 100 - porcentaje_dentro]
                 })
-
                 progress_chart = alt.Chart(progress_df).mark_bar().encode(
                     x=alt.X('Estado', sort=None),
                     y='Valor',
                     color=alt.Color('Estado', scale=alt.Scale(domain=['Cumplimiento','Restante'], range=[color,'lightgray']))
                 )
                 st.altair_chart(progress_chart, width="stretch")
-                st.markdown(f"**{porcentaje_dentro}%** de los precios están dentro del rango permitido.", unsafe_allow_html=True)
-
-                st.subheader("KPIs rápidos")
-                st.metric("Productos monitoreados", df_h.shape[0])
+                st.metric("Productos monitoreados", df_h['caza_id'].nunique() if 'caza_id' in df_h else df_h.shape[0])
                 st.metric("Alertas activas", fuera)
 
-                st.subheader("Top 5 productos más monitoreados")
-                top_df = pd.DataFrame({
-                    'Producto':['Prod A','Prod B','Prod C','Prod D','Prod E'],
-                    'Monitoreos':[50,40,30,20,10]
-                })
-                bar_top = alt.Chart(top_df).mark_bar(color='green').encode(x='Producto',y='Monitoreos')
-                st.altair_chart(bar_top, width="stretch")
 
         # --- 2. HISTÓRICO DE PRECIOS ---
         with tab2:
@@ -1036,7 +1047,7 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
                     bar_chart = alt.Chart(df_inf).mark_bar(color='red').encode(x='fecha:T',y='count()')
                     st.altair_chart(bar_chart, width="stretch")
 
-        # --- 4. COMPARACIONES Y DETALLE ---  
+        # --- 4. COMPARACIONES Y DETALLE ---
         with tab4:
             st.subheader("Ranking de productos más problemáticos")
             rank_res = supabase.table("infracciones_log").select("caza_id").execute()
@@ -1052,14 +1063,6 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
                     y='Infracciones:Q'
                 )
                 st.altair_chart(rank_chart, width="stretch")
-
-            st.subheader("Tabla de evidencia detallada")
-            st.table(pd.DataFrame({
-                'Fecha':['2026-04-01','2026-04-02'],
-                'Producto':['Prod A','Prod B'],
-                'Precio':[95,120],
-                'Infracción':['Debajo de MAP','Encima de MAP']
-            }))
 
 
 def render_business_dashboard(plan: str, plan_label_text: str, user_id: str, busquedas: list):
