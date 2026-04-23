@@ -806,53 +806,24 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         })
 
     # ==========================================================
-    # 2. RENDER DE TABLA (SOLUCIÓN DEFINITIVA DE COLOR)
+    # 2. RENDER DE TABLA (MODO EMOJI COMPLETO)
     # ==========================================================
     df_radar = pd.DataFrame(radar_rows)
     if not df_radar.empty:
         modo = st.radio("Modo de visualización:", ["Orden por ID", "Agrupar"], horizontal=True)
         
-        def get_group_emoji(hex_color):
-            if not hex_color or hex_color == "None": return ""
-            
-            # Limpiamos el HEX y lo pasamos a minúsculas
-            hex_color = str(hex_color).lstrip('#').lower()
-            if len(hex_color) != 6: return "⬜"
-            
-            # Convertimos HEX a valores numéricos RGB (0-255)
-            r = int(hex_color[0:2], 16)
-            g = int(hex_color[2:4], 16)
-            b = int(hex_color[4:6], 16)
-            
-            # DETERMINAR EL COLOR DOMINANTE
-            # 1. Si los tres son muy bajitos -> Negro
-            if r < 50 and g < 50 and b < 50: return "⬛"
-            
-            # 2. Si domina el Azul (como en tu captura)
-            if b > r and b > g: return "🟦"
-            
-            # 3. Si domina el Rojo
-            if r > g and r > b: return "🟥"
-            
-            # 4. Si domina el Verde
-            if g > r and g > b: return "🟩"
-            
-            # 5. Si domina Rojo y Verde (Amarillo/Naranja)
-            if r > 150 and g > 150: return "🟨"
-            
-            # Por defecto, cuadrado blanco
-            return "⬜"
-
         if modo == "Orden por ID":
             df_sorted = df_radar.sort_values("ID")
-            df_display = df_sorted.drop(columns=["raw_data", "screenshot_path", "status", "error", "Color", "Grupo", "GrupoID", "🎨"], errors='ignore')
+            columnas_drop = ["raw_data", "screenshot_path", "status", "error", "Color", "Grupo", "GrupoID", "🎨"]
+            df_display = df_sorted.drop(columns=columnas_drop, errors='ignore')
         else:
             df_sorted = df_radar.sort_values(["Grupo", "ID"], na_position="last")
-            # Aplicamos la nueva lógica que analiza el RGB
-            df_sorted["🎨"] = df_sorted["Color"].apply(get_group_emoji)
             
-            columnas = ["🎨", "Grupo", "Riesgo", "ID", "Producto", "Precio", "Mín. MAP", "Máximo", "Evidencia", "Rango", "URL"]
-            df_display = df_sorted[columnas]
+            # Si el valor en 'Color' es un HEX (empieza con #), mostramos carpeta default, sino el emoji
+            df_sorted["🎨"] = df_sorted["Color"].apply(lambda x: x if x and not str(x).startswith('#') else "📁")
+            
+            columnas_orden = ["🎨", "Grupo", "Riesgo", "ID", "Producto", "Precio", "Mín. MAP", "Máximo", "Evidencia", "Rango", "URL"]
+            df_display = df_sorted[columnas_orden]
 
         st.data_editor(
             df_display, 
@@ -865,33 +836,47 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
             }
         )
         
-# --- GESTIÓN DE GRUPOS (UNIFICADO) ---
-        st.divider()
-        with st.expander("⚙️ Gestión de Grupos (Crear / Eliminar)"):
+# --- GESTIÓN DE GRUPOS (SIMETRÍA Y FIX BUGS) ---
+        with st.expander("⚙️ Gestión de Grupos"):
             c_g1, c_g2 = st.columns(2)
+            
             with c_g1:
-                st.markdown("**Nuevo Grupo**")
-                with st.form("form_nuevo_g", clear_on_submit=True):
-                    n = st.text_input("Nombre del grupo")
-                    c = st.color_picker("Color", "#1E90FF")
-                    if st.form_submit_button("Guardar"):
-                        if n:
-                            supabase.table("grupos").insert({"nombre": n, "color": c}).execute()
-                            st.rerun()
+                # Usamos container para crear el marco visual
+                with st.container(border=True):
+                    st.markdown("**Nuevo Grupo**")
+                    with st.form("form_nuevo_g", clear_on_submit=True):
+                        n = st.text_input("Nombre del grupo", placeholder="Ej: Importaciones")
+                        lista_emojis = [
+                            "📁", "🏷️", "🔥", "📦", "🛒", "💎", "🚀", "📊", "🔍", "✅", "⚠️",
+                            "✈️", "🛫", "🛬", "🌍", "🗺️", "🚗", "🚚", "🏔️", "⛰️", "🇦🇷", "🇺🇸", "🎸", "🎮"
+                        ]
+                        e = st.selectbox("Seleccioná un icono:", options=lista_emojis)
+                        if st.form_submit_button("Guardar", use_container_width=True):
+                            if n:
+                                supabase.table("grupos").insert({"nombre": n, "color": e}).execute()
+                                st.rerun()
             
             with c_g2:
-                st.markdown("**Eliminar Existente**")
-                if grupos_dict:
-                    g_del_id = st.selectbox("Seleccioná grupo:", 
-                                         options=list(grupos_dict.keys()), 
-                                         format_func=lambda x: grupos_dict[x]["nombre"],
-                                         key="del_g_sel")
-                    if st.button("🗑️ Eliminar Grupo", type="primary", use_container_width=True):
-                        supabase.table("grupo_cazas").delete().eq("grupo_id", g_del_id).execute()
-                        supabase.table("grupos").delete().eq("id", g_del_id).execute()
-                        st.rerun()
-                else:
-                    st.info("No hay grupos creados.")
+                # Marco visual para Eliminar (espejado al de Nuevo Grupo)
+                with st.container(border=True):
+                    st.markdown("**Eliminar Existente**")
+                    # FIX: Verificamos si grupos_dict tiene contenido real
+                    if grupos_dict and len(grupos_dict) > 0:
+                        g_del_id = st.selectbox(
+                            "Seleccioná grupo para borrar:", 
+                            options=list(grupos_dict.keys()), 
+                            format_func=lambda x: f"{grupos_dict[x].get('color', '📁')} {grupos_dict[x]['nombre']}",
+                            key="del_g_sel"
+                        )
+                        # Espaciador visual para alinear el botón con el del form de al lado
+                        st.write("") 
+                        if st.button("🗑️ Eliminar Grupo", type="primary", use_container_width=True):
+                            supabase.table("grupo_cazas").delete().eq("grupo_id", g_del_id).execute()
+                            supabase.table("grupos").delete().eq("id", g_del_id).execute()
+                            st.rerun()
+                    else:
+                        # Este cartel solo sale si de verdad no hay nada
+                        st.info("No hay grupos creados actualmente.")
 
         # --- VISUALIZADOR DE EVIDENCIA (SIN CAMBIOS) ---
         st.markdown("#### 🕵️ Inspección de Evidencia")
