@@ -96,7 +96,7 @@ def guardar_caza_supabase(
         max_cazas = int(rules["max_cazas_activas"])
         source_final = (source or "generic").strip().lower()
 
-        # ✅ ahora usa safe_query para contar cazas activas
+        # contar cazas activas
         activas, err = contar_cazas_activas(user_id, refresh_token)
         if err:
             print(f"⚠️ [guardar_caza_supabase] error al contar cazas: {err}")
@@ -122,17 +122,34 @@ def guardar_caza_supabase(
             "hora_rep": hora_rep
         }
 
-        # ✅ inserción con safe_query para manejar refresh automático
-        res = safe_query("cazas_insert", [{"col": "payload", "val": payload}], refresh_token)
-        if isinstance(res, dict) and "error" in res:
-            print(f"❌ [guardar_caza_supabase] error: {res['error']}")
+        # === DEBUG LOG ===
+        print("-----------------------------------------")
+        print(f"🚀 INTENTANDO INSERCIÓN DIRECTA:")
+        print(f"Payload: {payload}")
+        print("-----------------------------------------")
+
+        # Inserción directa usando el cliente global de supabase
+        # Esto evita el error 'col' de safe_query
+        try:
+            res = supabase.table("cazas").insert(payload).execute()
+            
+            if res.data:
+                print("✅ [guardar_caza_supabase] Inserción exitosa.")
+                return True
+            else:
+                print(f"⚠️ [guardar_caza_supabase] No se devolvieron datos: {res}")
+                return False
+
+        except Exception as db_err:
+            # Si el error es por una columna inexistente, acá te va a decir el nombre
+            print(f"❌ [guardar_caza_supabase] Error de base de datos: {db_err}")
             return False
-        return True if res else False
 
     except Exception as e:
         print(f"❌ [guardar_caza_supabase] error fatal: {e}")
+        import traceback
+        traceback.print_exc()
         return False
-
 
 def run_manual_hunt(b, headless=True):
     url = b.get("link") or b.get("url") or ""

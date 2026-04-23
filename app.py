@@ -120,7 +120,7 @@ if params.get("type") == "recovery" and "token" in params:
             confirmar = st.text_input("Confirmar contraseña", type="password", placeholder="Repetí tu contraseña")
             
             st.markdown("---")
-            if st.button("Actualizar y Entrar", use_container_width=True, type="primary"):
+            if st.button("Actualizar y Entrar", width='stretch', type="primary"):
                 if nueva_pass == confirmar and len(nueva_pass) >= 8:
                     try:
                         # Validación del token
@@ -141,7 +141,7 @@ if params.get("type") == "recovery" and "token" in params:
                 else:
                     st.error("Las claves no coinciden o no cumplen los requisitos (min 8 caracteres).")
                     
-        if st.button("Cancelar", use_container_width=True):
+        if st.button("Cancelar", width='stretch'):
             st.query_params.clear()
             st.rerun()
             
@@ -225,7 +225,7 @@ if "editing_caza" in st.session_state and st.session_state["editing_caza"] is no
         c1, c2 = st.columns(2)
         
         with c1:
-            if st.button("💾 Guardar", use_container_width=True, type="primary"):
+            if st.button("💾 Guardar", width='stretch', type="primary"):
                 try:
                     # 1. DATA PURA PARA LA BASE DE DATOS (Usando los nombres reales)
                     data_db = {
@@ -256,7 +256,7 @@ if "editing_caza" in st.session_state and st.session_state["editing_caza"] is no
                     st.error(f"Error al guardar: {e}")
         
         with c2:
-            if st.button("❌ Cancelar", use_container_width=True):
+            if st.button("❌ Cancelar", width='stretch'):
                 st.session_state["editing_caza"] = None
                 st.rerun()
 
@@ -645,11 +645,11 @@ def mostrar_tarjeta_oportunidad(id_rastreo, titulo, precio_actual, precio_min_hi
                 
         btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 2])
         with btn_col1:
-            st.button("✏️ Editar", key=f"edit_{id_rastreo}", use_container_width=True)
+            st.button("✏️ Editar", key=f"edit_{id_rastreo}", width='stretch')
         with btn_col2:
-            st.button("🗑️ Eliminar", key=f"del_{id_rastreo}", type="primary", use_container_width=True)
+            st.button("🗑️ Eliminar", key=f"del_{id_rastreo}", type="primary", width='stretch')
         with btn_col3:
-            st.button("📲 Activar Alerta WhatsApp", key=f"wa_{id_rastreo}", use_container_width=True)
+            st.button("📲 Activar Alerta WhatsApp", key=f"wa_{id_rastreo}", width='stretch')
 
 def render_profile_section(user_email, plan_actual):
     st.markdown("## 👤 Mi Perfil y Configuración")
@@ -662,7 +662,7 @@ def render_profile_section(user_email, plan_actual):
         st.text_input("Correo electrónico", value=user_email, disabled=True)
         st.write("")
         
-        if st.button("🚪 Cerrar Sesión", type="primary", use_container_width=True):
+        if st.button("🚪 Cerrar Sesión", type="primary", width='stretch'):
             st.session_state.clear()
             st.rerun()
 
@@ -673,11 +673,11 @@ def render_profile_section(user_email, plan_actual):
         col1, col2 = st.columns(2)
         with col1:
             
-            if st.button("🚀 Cambiar o Mejorar Plan", use_container_width=True):
+            if st.button("🚀 Cambiar o Mejorar Plan", width='stretch'):
                 st.toast("En breve: Redirigiendo a MercadoPago/Stripe...")
         with col2:
           
-            if st.button("📄 Historial de Facturas", use_container_width=True):
+            if st.button("📄 Historial de Facturas", width='stretch'):
                 st.toast("En breve: Abriendo portal de facturación...")
 
     with tab_ayuda:
@@ -690,8 +690,8 @@ def render_profile_section(user_email, plan_actual):
             
             col_submit, _ = st.columns([1, 2])
             with col_submit:
-                # Este ya estaba bien (use_container_width=True)
-                enviado = st.form_submit_button("Enviar Reporte", use_container_width=True)
+                # Este ya estaba bien (width='stretch')
+                enviado = st.form_submit_button("Enviar Reporte", width='stretch')
             
             if enviado:
                 if url_rota and descripcion:
@@ -851,7 +851,7 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
                             "✈️", "🛫", "🛬", "🌍", "🗺️", "🚗", "🚚", "🏔️", "⛰️", "🇦🇷", "🇺🇸", "🎸", "🎮"
                         ]
                         e = st.selectbox("Seleccioná un icono:", options=lista_emojis)
-                        if st.form_submit_button("Guardar", use_container_width=True):
+                        if st.form_submit_button("Guardar", width='stretch'):
                             if n:
                                 supabase.table("grupos").insert({"nombre": n, "color": e}).execute()
                                 st.rerun()
@@ -870,7 +870,7 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
                         )
                         # Espaciador visual para alinear el botón con el del form de al lado
                         st.write("") 
-                        if st.button("🗑️ Eliminar Grupo", type="primary", use_container_width=True):
+                        if st.button("🗑️ Eliminar Grupo", type="primary", width='stretch'):
                             supabase.table("grupo_cazas").delete().eq("grupo_id", g_del_id).execute()
                             supabase.table("grupos").delete().eq("id", g_del_id).execute()
                             st.rerun()
@@ -1111,7 +1111,7 @@ def render_business_dashboard(plan: str, plan_label_text: str, user_id: str, bus
 
     elif plan_normalizado == "reseller":
         st.subheader("📊 Business Dashboard · Reseller")
-        if st.button("Buscar Oportunidades 🚀", use_container_width=True):
+        if st.button("Buscar Oportunidades 🚀", width='stretch'):
             with st.spinner("Olfateando mercado..."):
                 ops = obtener_top_oportunidades(user_id)
                 if ops:
@@ -1677,7 +1677,7 @@ def render_business_reseller_dashboard(plan_label_text: str):
                 }
             )
 
-        st.dataframe(rows, use_container_width=True, hide_index=True)
+        st.dataframe(rows, width='stretch', hide_index=True)
 
 
 
@@ -1851,7 +1851,7 @@ def mostrar_selector_producto():
             """,
             unsafe_allow_html=True,
         )
-        if st.button("Elegir Howlify", use_container_width=True, key="choose_consumer"):
+        if st.button("Elegir Howlify", width='stretch', key="choose_consumer"):
             st.session_state["product_type"] = "consumer"
             st.rerun()
 
@@ -1867,7 +1867,7 @@ def mostrar_selector_producto():
             """,
             unsafe_allow_html=True,
         )
-        if st.button("Elegir Business", use_container_width=True, key="choose_business"):
+        if st.button("Elegir Business", width='stretch', key="choose_business"):
             st.session_state["product_type"] = "business"
             st.rerun()
 
@@ -1895,7 +1895,7 @@ def mostrar_planes_consumer():
             """,
             unsafe_allow_html=True,
         )
-        if st.button("Elegir Starter", use_container_width=True, key="choose_starter"):
+        if st.button("Elegir Starter", width='stretch', key="choose_starter"):
             st.session_state["plan_elegido"] = "starter"
             st.rerun()
 
@@ -1914,7 +1914,7 @@ def mostrar_planes_consumer():
             """,
             unsafe_allow_html=True,
         )
-        if st.button("Elegir Pro", use_container_width=True, key="choose_pro"):
+        if st.button("Elegir Pro", width='stretch', key="choose_pro"):
             st.session_state["plan_elegido"] = "pro"
             st.rerun()
 
@@ -1942,7 +1942,7 @@ def mostrar_planes_business():
             """,
             unsafe_allow_html=True,
         )
-        if st.button("Elegir Business Reseller", use_container_width=True, key="choose_business_reseller"):
+        if st.button("Elegir Business Reseller", width='stretch', key="choose_business_reseller"):
             st.session_state["plan_elegido"] = "business_reseller"
             st.rerun()
 
@@ -1961,7 +1961,7 @@ def mostrar_planes_business():
             """,
             unsafe_allow_html=True,
         )
-        if st.button("Elegir Business Monitor", use_container_width=True, key="choose_business_monitor"):
+        if st.button("Elegir Business Monitor", width='stretch', key="choose_business_monitor"):
             st.session_state["plan_elegido"] = "business_monitor"
             st.rerun()
 
@@ -2061,7 +2061,7 @@ if "user_logged" not in st.session_state:
         u = st.text_input("Usuario o Email", key="l_u")
         p = st.text_input("Contraseña", type="password", key="l_p")
 
-        if st.button("Entrar", use_container_width=True, type="primary", key="l_submit"):
+        if st.button("Entrar", width='stretch', type="primary", key="l_submit"):
             user, msg, refresh_token = supa_login(u, p)
             if user:
                 st.session_state["user_logged"] = user
@@ -2088,7 +2088,7 @@ if "user_logged" not in st.session_state:
                 st.error(msg)     # mostramos el mensaje de error
 
 
-        if st.button("Olvidé mi contraseña", use_container_width=True, key="l_reset"):
+        if st.button("Olvidé mi contraseña", width='stretch', key="l_reset"):
             if "@" in (u or ""):
                 # Ahora devuelve (bool, mensaje)
                 ok, msg = supa_reset_password(u)
@@ -2111,7 +2111,7 @@ if "user_logged" not in st.session_state:
 
             c1, c2, c3 = st.columns([1, 1.2, 1])
             with c2:
-                if st.button("← Volver", use_container_width=True, key="back_product_type"):
+                if st.button("← Volver", width='stretch', key="back_product_type"):
                     st.session_state["product_type"] = None
                     st.rerun()
 
@@ -2133,7 +2133,7 @@ if "user_logged" not in st.session_state:
                 level, icon = password_strength(np)
                 st.caption(f"Seguridad: {icon} {level}")
 
-            if st.button("Finalizar Registro", use_container_width=True, key="r_submit", type="primary"):
+            if st.button("Finalizar Registro", width='stretch', key="r_submit", type="primary"):
                 # Validamos que no falte nada antes de llamar a la función
                 if not nu or not em or not np or not np_confirm:
                     st.warning("⚠️ No te olvides de completar todos los campos.")
@@ -2148,7 +2148,7 @@ if "user_logged" not in st.session_state:
                     elif err:
                         st.error(err) # Acá sale el mensaje en criollo (ya registrado, etc)
 
-            if st.button("← Cambiar plan", use_container_width=True, key="back_to_plans"):
+            if st.button("← Cambiar plan", width='stretch', key="back_to_plans"):
                 st.session_state["plan_elegido"] = None
                 st.rerun()
 
@@ -2223,7 +2223,7 @@ with st.sidebar:
     st.markdown("### ⚙️ Utilidades")
     st.session_state["sound_enabled"] = st.checkbox("🔊 Sonido", value=st.session_state["sound_enabled"])
 
-    if st.button("🧩 Conectar MercadoLibre (resolver captcha/login)", use_container_width=True):
+    if st.button("🧩 Conectar MercadoLibre (resolver captcha/login)", width='stretch'):
         try:
             proc = subprocess.run(
                 [sys.executable, "scripts/ml_connect.py"],
@@ -2251,7 +2251,7 @@ with st.sidebar:
         st.divider()
         st.subheader("🛠️ Panel de Admin")
 
-        if st.button("🔄 Refrescar panel", use_container_width=True):
+        if st.button("🔄 Refrescar panel", width='stretch'):
             st.rerun()
 
         plan_simulado = st.radio(
@@ -2290,7 +2290,7 @@ with st.sidebar:
             if not rows:
                 st.caption("No hay usuarios.")
             else:
-                st.dataframe(rows, use_container_width=True, hide_index=True)
+                st.dataframe(rows, width='stretch', hide_index=True)
         except Exception as e:
             st.error(f"Error cargando usuarios: {e}")
 
@@ -2466,7 +2466,7 @@ with st.expander("📲 Configurar Notificaciones", expanded=False):
             url_bot = f"https://t.me/howlify_bot?start={user_id}" 
             
             st.info("Para activar Telegram, hacé clic en el botón y luego tocá 'INICIAR' en la app.")
-            st.link_button("🐺 Vincular Telegram ahora", url_bot, use_container_width=True)
+            st.link_button("🐺 Vincular Telegram ahora", url_bot, width='stretch')
             
             if st.button("🔄 Verificar Vinculación", key="btn_verify_tg_vfinal"):
                 # Limpiamos cualquier caché de datos de perfil para forzar la lectura de Supabase
@@ -2476,11 +2476,11 @@ with st.expander("📲 Configurar Notificaciones", expanded=False):
             st.success(f"✅ Vinculado (ID: {t_id})")
             col_tel1, col_tel2 = st.columns(2)
             with col_tel1:
-                if st.button("🧪 Probar Alerta", use_container_width=True, key="btn_test_tg_vfinal"): 
+                if st.button("🧪 Probar Alerta", width='stretch', key="btn_test_tg_vfinal"): 
                     exito = enviar_telegram(t_id, "¡Aullido de prueba exitoso! 🐺")
                     if exito: st.toast("✅ ¡Mensaje enviado!")
             with col_tel2:
-                if st.button("🗑️ Desvincular", use_container_width=True, key="btn_unlink_tg"):
+                if st.button("🗑️ Desvincular", width='stretch', key="btn_unlink_tg"):
                     # Limpiamos la columna telegram_id en la tabla profiles
                     supabase.table("profiles").update({"telegram_id": None}).eq("user_id", user_id).execute()
                     st.rerun()
