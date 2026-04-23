@@ -3,6 +3,9 @@ import random
 import time
 import requests
 from datetime import datetime, timezone
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from auth.supabase_client import supabase
 
 # ==========================================================
 # 1. UTILIDADES DE LIMPIEZA Y FORMATO
@@ -50,7 +53,7 @@ def get_effective_plan_rules(plan_name):
     return PLAN_RULES.get(family, PLAN_RULES["starter"])
 
 def _effective_minutes(plan, freq_str):
-    """Traduce la frecuencia a minutos reales (La que faltaba)."""
+    """Traduce la frecuencia a minutos reales."""
     if freq_str == "15min": return 15
     if freq_str == "1h": return 60
     if freq_str == "6h": return 360
@@ -58,7 +61,6 @@ def _effective_minutes(plan, freq_str):
     return 1440
 
 def contar_cazas_activas(user_id):
-    from auth.supabase_client import supabase
     try:
         res = supabase.table("cazas").select("id", count="exact").eq("user_id", user_id).eq("estado", "activa").execute()
         return res.count if res.count is not None else 0
@@ -123,7 +125,6 @@ def obtener_dolar_tarjeta():
         return 1860.0
 
 def upsert_monitor_rule(user_id, caza_id, product_name, product_url, source, target_price, min_price_allowed, max_price_allowed):
-    from auth.supabase_client import supabase
     try:
         data = {
             "user_id": user_id, "caza_id": caza_id, "product_name": product_name,
@@ -134,4 +135,65 @@ def upsert_monitor_rule(user_id, caza_id, product_name, product_url, source, tar
         return True if res.data else False
     except Exception as e:
         print(f"❌ Error en upsert_monitor_rule: {e}")
+        return False
+
+# ==========================================================
+# 6. VALIDACIONES DE INTEGRIDAD
+# ==========================================================
+
+def id_valido(caza_id: int) -> bool:
+    """Chequea si el caza_id existe en la tabla cazas."""
+    try:
+        res = supabase.table("cazas").select("id").eq("id", caza_id).execute()
+        return len(res.data) > 0
+    except:
+        return False
+
+def insertar_price_history(caza_id: int, payload: dict):
+    """Inserta en price_history solo si el caza_id existe."""
+    if id_valido(caza_id):
+        supabase.table("price_history").insert(payload).execute()
+    else:
+        print(f"⚠️ caza_id {caza_id} no existe en cazas, se saltea")
+
+def insertar_infraccion(caza_id: int, payload: dict):
+    """Inserta en infracciones_log solo si el caza_id existe."""
+    if id_valido(caza_id):
+        supabase.table("infracciones_log").insert(payload).execute()
+    else:
+        print(f"⚠️ caza_id {caza_id} no existe en cazas, se saltea")
+
+def insertar_caza(payload: dict):
+    """Inserta en cazas solo si el producto tiene nombre."""
+    if payload.get("producto") and payload["producto"].strip():
+        supabase.table("cazas").insert(payload).execute()
+    else:
+        print("⚠️ Producto sin nombre, no se inserta")
+
+# ==========================================================
+# 7. EXPORTACIÓN
+# ==========================================================
+
+def exportar_a_sheets(df, nombre_hoja="Reporte Monitor Howlify"):
+    """
+    Exporta un DataFrame de pandas a una hoja de Google Sheets.
+    Requiere credenciales de servicio en credenciales.json.
+    """
+    try:
+        scope = [
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/drive"
+        ]
+        creds = ServiceAccountCredentials.from_json_keyfile_name("credenciales.json", scope)
+        client = gspread.authorize(creds)
+
+        # Crear nueva hoja
+        sheet = client.create(nombre_hoja)
+        worksheet = sheet.get_worksheet(0)
+
+        # Subir DataFrame
+        worksheet.update([df.columns.values.tolist()] + df.values.tolist())
+        return True
+    except Exception as e:
+        print(f"❌ Error exportando a Google Sheets: {e}")
         return False

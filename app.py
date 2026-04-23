@@ -4,6 +4,7 @@ import base64
 import subprocess
 import time
 import re
+import io
 import pandas as pd
 import altair as alt
 from datetime import datetime, timedelta
@@ -60,7 +61,8 @@ from db.database import (
 from utils.logic import (
     normalize_plan_family,
     clean_ml_url, 
-    upsert_monitor_rule 
+    upsert_monitor_rule,
+    exportar_a_sheets, 
 )
 
 # ==========================================================
@@ -752,7 +754,7 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
     rules_map = {str(r.get("caza_id")): r for r in rules_data if r.get("caza_id")}
     rules_by_url = {str(r.get("product_url")): r for r in rules_data if r.get("product_url")}
 
-    # Traer grupos y relaciones
+   # Traer grupos y relaciones
     grupos_res = supabase.table("grupos").select("*").execute()
     grupos_dict = {g["id"]: g for g in (grupos_res.data or [])}
     relaciones_res = supabase.table("grupo_cazas").select("caza_id, grupo_id").execute()
@@ -835,7 +837,35 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
                 "URL": st.column_config.LinkColumn("Enlace")
             }
         )
-        
+
+        # --- BOTONES DE EXPORTACIÓN ---
+
+        with st.expander("📤 Opciones de exportación"):
+            # Google Sheets (placeholder)
+            if st.button("📤 Exportar a Google Sheets (Próximamente)"):
+                st.info("Funcionalidad de exportación a Google Sheets disponible próximamente.")
+
+            # CSV
+            st.download_button(
+                label="📥 Descargar CSV",
+                data=df_display.to_csv(index=False).encode("utf-8"),
+                file_name="radar_export.csv",
+                mime="text/csv"
+            )
+
+            # Excel
+            buffer = io.BytesIO()
+            df_display.to_excel(buffer, index=False)
+            buffer.seek(0)
+
+            st.download_button(
+                label="📥 Descargar Excel",
+                data=buffer,
+                file_name="radar_export.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+
 # --- GESTIÓN DE GRUPOS (SIMETRÍA Y FIX BUGS) ---
         with st.expander("⚙️ Gestión de Grupos"):
             c_g1, c_g2 = st.columns(2)
