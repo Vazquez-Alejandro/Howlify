@@ -948,84 +948,82 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
 
         st.divider()
 
-        # --- DASHBOARD ORGANIZADO EN 4 GRUPOS CON AYUDA ---
+# --- DASHBOARD ORGANIZADO EN 4 GRUPOS CON AYUDA ---
         res_h = supabase.table("price_history").select("checked_at, price").eq("caza_id", cid).order("checked_at").execute()
         df_h = pd.DataFrame(res_h.data or [])
 
         inf_res = supabase.table("infracciones_log").select("fecha, caza_id").eq("caza_id", cid).execute()
         df_inf = pd.DataFrame(inf_res.data or [])
 
+        # 1. CREAMOS LOS TABS FUERA DE CUALQUIER IF (Para que existan siempre)
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "📊 Visión General",
+            "📈 Histórico de Precios",
+            "🚨 Alertas y Oportunidades",
+            "🔍 Comparaciones y Detalle"
+        ])
+
         if df_h.empty:
             st.warning("⚠️ No hay historial de precios para este producto.")
-        else:
-            tab1, tab2, tab3, tab4 = st.tabs([
-                "📊 Visión General",
-                "📈 Histórico de Precios",
-                "🚨 Alertas y Oportunidades",
-                "🔍 Comparaciones y Detalle"
-            ])
-
-      # --- 1. VISIÓN GENERAL ---
+            # Opcional: Podés poner st.stop() aquí si no querés mostrar tabs vacíos
+        
+        # --- 1. VISIÓN GENERAL ---
         with tab1:
-            st.subheader("Cumplimiento de precios")
-            st.caption("Porcentaje de registros dentro del rango permitido.")
+            if df_h.empty:
+                st.info("No hay datos suficientes para mostrar la visión general.")
+            else:
+                st.subheader("Cumplimiento de precios")
+                st.caption("Porcentaje de registros dentro del rango permitido.")
 
-            dentro = df_h[(df_h['price'] >= min_p) & (df_h['price'] <= max_p)].shape[0]
-            fuera = df_h.shape[0] - dentro
-            porcentaje_dentro = round((dentro / df_h.shape[0]) * 100, 1) if df_h.shape[0] > 0 else 0
+                dentro = df_h[(df_h['price'] >= min_p) & (df_h['price'] <= max_p)].shape[0]
+                fuera = df_h.shape[0] - dentro
+                porcentaje_dentro = round((dentro / df_h.shape[0]) * 100, 1) if df_h.shape[0] > 0 else 0
 
-            # Color dinámico según nivel de cumplimiento
-            color = "green" if porcentaje_dentro >= 80 else "red"
+                color = "green" if porcentaje_dentro >= 80 else "red"
 
-            # Barra de progreso simple
-            progress_df = pd.DataFrame({
-                'Estado': ['Cumplimiento', 'Restante'],
-                'Valor': [porcentaje_dentro, 100 - porcentaje_dentro]
-            })
+                progress_df = pd.DataFrame({
+                    'Estado': ['Cumplimiento', 'Restante'],
+                    'Valor': [porcentaje_dentro, 100 - porcentaje_dentro]
+                })
 
-            progress_chart = alt.Chart(progress_df).mark_bar().encode(
-                x=alt.X('Estado', sort=None),
-                y='Valor',
-                color=alt.Color('Estado', scale=alt.Scale(domain=['Cumplimiento','Restante'], range=[color,'lightgray']))
-            )
-            st.altair_chart(progress_chart, width="stretch")
-            st.markdown(f"**{porcentaje_dentro}%** de los precios están dentro del rango permitido.", unsafe_allow_html=True)
+                progress_chart = alt.Chart(progress_df).mark_bar().encode(
+                    x=alt.X('Estado', sort=None),
+                    y='Valor',
+                    color=alt.Color('Estado', scale=alt.Scale(domain=['Cumplimiento','Restante'], range=[color,'lightgray']))
+                )
+                st.altair_chart(progress_chart, width="stretch")
+                st.markdown(f"**{porcentaje_dentro}%** de los precios están dentro del rango permitido.", unsafe_allow_html=True)
 
-            st.subheader("KPIs rápidos")
-            st.caption("Indicadores clave: resumen numérico de productos y alertas.")
-            st.metric("Productos monitoreados", df_h.shape[0])
-            st.metric("Alertas activas", fuera)
+                st.subheader("KPIs rápidos")
+                st.metric("Productos monitoreados", df_h.shape[0])
+                st.metric("Alertas activas", fuera)
 
-            st.subheader("Top 5 productos más monitoreados")
-            st.caption("Muestra los productos con más registros de monitoreo.")
-            top_df = pd.DataFrame({
-                'Producto':['Prod A','Prod B','Prod C','Prod D','Prod E'],
-                'Monitoreos':[50,40,30,20,10]
-            })
-            bar_top = alt.Chart(top_df).mark_bar(color='green').encode(x='Producto',y='Monitoreos')
-            st.altair_chart(bar_top, width="stretch")
+                st.subheader("Top 5 productos más monitoreados")
+                top_df = pd.DataFrame({
+                    'Producto':['Prod A','Prod B','Prod C','Prod D','Prod E'],
+                    'Monitoreos':[50,40,30,20,10]
+                })
+                bar_top = alt.Chart(top_df).mark_bar(color='green').encode(x='Producto',y='Monitoreos')
+                st.altair_chart(bar_top, width="stretch")
 
-
-            # --- 2. HISTÓRICO DE PRECIOS ---
-            with tab2:
+        # --- 2. HISTÓRICO DE PRECIOS ---
+        with tab2:
+            if df_h.empty:
+                st.info("Sin historial disponible.")
+            else:
                 st.subheader("Histórico de precios con referencia MAP")
-                st.caption("Evolución del precio en el tiempo comparado con el rango permitido.")
                 line = alt.Chart(df_h).mark_line(point=True, color='green').encode(x='checked_at:T',y='price:Q')
                 min_line = alt.Chart(pd.DataFrame({'y':[min_p]})).mark_rule(color='red').encode(y='y')
                 max_line = alt.Chart(pd.DataFrame({'y':[max_p]})).mark_rule(color='red').encode(y='y')
                 chart = line + min_line + max_line
                 st.altair_chart(chart, width="stretch")
 
-                st.subheader("Variación porcentual semana a semana")
-                st.caption("Muestra cómo cambia el precio en porcentaje semana a semana.")
-                var_df = pd.DataFrame({'Semana':['Semana 1','Semana 2','Semana 3','Semana 4'],'Variación %':[2.5,-1.2,3.1,0.8]})
-                var_chart = alt.Chart(var_df).mark_line(point=True, color='green').encode(x='Semana',y='Variación %')
-                st.altair_chart(var_chart, width="stretch")
-
-            # --- 3. ALERTAS Y OPORTUNIDADES ---
-            with tab3:
+        # --- 3. ALERTAS Y OPORTUNIDADES ---
+        with tab3:
+            if df_h.empty:
+                st.info("No se pueden calcular alertas sin historial.")
+            else:
                 st.subheader("Precio vs. rango MAP (Scatter)")
-                st.caption("Cada punto es un precio detectado; rojo indica infracción.")
                 scatter_chart = alt.Chart(df_h).mark_circle(size=60).encode(
                     x='checked_at:T',
                     y='price:Q',
@@ -1035,58 +1033,33 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
 
                 if not df_inf.empty:
                     st.subheader("Frecuencia de infracciones")
-                    st.caption("Cantidad de infracciones detectadas por fecha.")
                     bar_chart = alt.Chart(df_inf).mark_bar(color='red').encode(x='fecha:T',y='count()')
                     st.altair_chart(bar_chart, width="stretch")
 
-                st.subheader("Heatmap de infracciones por día/hora")
-                st.caption("Visualiza en qué días y horarios ocurren más infracciones.")
-                heat_df = pd.DataFrame({'Día':['Lun','Mar','Mié','Jue','Vie'],'Hora':[10,12,14,16,18],'Infracciones':[5,8,3,6,4]})
-                heat_chart = alt.Chart(heat_df).mark_rect().encode(x='Día',y='Hora',color=alt.Color('Infracciones', scale=alt.Scale(scheme='reds')))
-                st.altair_chart(heat_chart, width="stretch")
+        # --- 4. COMPARACIONES Y DETALLE ---  
+        with tab4:
+            st.subheader("Ranking de productos más problemáticos")
+            rank_res = supabase.table("infracciones_log").select("caza_id").execute()
+            df_rank = pd.DataFrame(rank_res.data or [])
 
-                st.subheader("Oportunidades de reventa")
-                st.caption("Productos con margen positivo para reventa.")
-                opp_df = pd.DataFrame({'Producto':['Prod A','Prod B','Prod C'],'Margen %':[15,20,10]})
-                opp_chart = alt.Chart(opp_df).mark_bar(color='green').encode(x='Producto',y='Margen %')
-                st.altair_chart(opp_chart, width="stretch")
+            if df_rank.empty:
+                st.info("No hay infracciones registradas para ranking.")
+            else:
+                df_rank = df_rank.groupby("caza_id").size().reset_index(name="Infracciones")
+                df_rank = df_rank.sort_values("Infracciones", ascending=False).head(10)
+                rank_chart = alt.Chart(df_rank).mark_bar(color='red').encode(
+                    x='caza_id:N',
+                    y='Infracciones:Q'
+                )
+                st.altair_chart(rank_chart, width="stretch")
 
-            # --- 4. COMPARACIONES Y DETALLE ---  
-            with tab4:
-                st.subheader("Ranking de productos más problemáticos")
-                st.caption("Ordena los productos según la cantidad de infracciones registradas.")
-                rank_res = supabase.table("infracciones_log").select("caza_id").execute()
-                df_rank = pd.DataFrame(rank_res.data or [])
-
-                if df_rank.empty:
-                    st.info("No hay infracciones registradas para ranking.")
-                else:
-                    df_rank = df_rank.groupby("caza_id").size().reset_index(name="Infracciones")
-                    df_rank = df_rank.sort_values("Infracciones", ascending=False).head(10)
-                    rank_chart = alt.Chart(df_rank).mark_bar(color='red').encode(
-                        x='caza_id:N',
-                        y='Infracciones:Q'
-                    )
-                    st.altair_chart(rank_chart, width="stretch")
-
-                st.subheader("Comparación entre competidores")
-                st.caption("Compara precios promedio entre distintos competidores.")
-                comp_df = pd.DataFrame({
-                    'Competidor': ['Comp A','Comp B','Comp C'],
-                    'Precio Promedio': [100,95,110]
-                })
-                comp_chart = alt.Chart(comp_df).mark_bar(color='green').encode(x='Competidor',y='Precio Promedio')
-                st.altair_chart(comp_chart, width="stretch")
-
-                st.subheader("Tabla de evidencia detallada")
-                st.caption("Lista detallada de precios, fechas y tipo de infracción detectada.")
-                st.table(pd.DataFrame({
-                    'Fecha':['2026-04-01','2026-04-02'],
-                    'Producto':['Prod A','Prod B'],
-                    'Precio':[95,120],
-                    'Infracción':['Debajo de MAP','Encima de MAP']
-                }))
-
+            st.subheader("Tabla de evidencia detallada")
+            st.table(pd.DataFrame({
+                'Fecha':['2026-04-01','2026-04-02'],
+                'Producto':['Prod A','Prod B'],
+                'Precio':[95,120],
+                'Infracción':['Debajo de MAP','Encima de MAP']
+            }))
 
 
 def render_business_dashboard(plan: str, plan_label_text: str, user_id: str, busquedas: list):

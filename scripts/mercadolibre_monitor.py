@@ -38,7 +38,8 @@ def ejecutar_monitor():
                     supabase.table("cazas").insert({
                         "id": caza_id,
                         "producto": regla.get("producto") or "SIN NOMBRE",
-                        "user_id": regla.get("user_id")
+                        "user_id": regla.get("user_id"),
+                        "link": url
                     }).execute()
                     print(f"📝 Insertado nuevo registro en cazas con ID {caza_id}")
 
@@ -49,6 +50,25 @@ def ejecutar_monitor():
                     page.goto(url, timeout=60000, wait_until="domcontentloaded")
                     time.sleep(random.uniform(3, 5))
 
+                    # 📊 Scraping del precio actual
+                    precio_real = 0
+                    try:
+                        precio_text = page.query_selector("span.andes-money-amount__fraction").inner_text()
+                        precio_real = int(precio_text.replace(".", "").replace(",", "").strip())
+                        print(f"💰 Precio detectado: {precio_real}")
+                    except Exception as e_precio:
+                        print(f"⚠️ No se pudo extraer precio: {e_precio}")
+
+                    # Guardar historial de precios
+                    if precio_real > 0:
+                        supabase.table("price_history").insert({
+                            "caza_id": caza_id,
+                            "price": precio_real,
+                            "checked_at": time.strftime("%Y-%m-%d %H:%M:%S")
+                        }).execute()
+                        print(f"📈 price_history actualizado para ID {caza_id}")
+
+                    # Captura de pantalla
                     os.makedirs("evidence", exist_ok=True)
                     ruta = f"evidence/evidencia_{caza_id}.png"
                     page.screenshot(path=ruta, full_page=True)
@@ -65,10 +85,11 @@ def ejecutar_monitor():
                         ruta_final = ruta
                         error_msg = None
 
+                    # Guardar evidencia en infracciones_log
                     supabase.table("infracciones_log").insert({
                         "caza_id": caza_id,
                         "url_captura": ruta_final,
-                        "precio_detectado": 0,
+                        "precio_detectado": precio_real,
                         "status": status,
                         "error": error_msg
                     }).execute()
