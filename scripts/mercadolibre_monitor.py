@@ -10,7 +10,9 @@ from utils.logic import get_random_user_agent, apply_human_jitter
 # CONFIGURACIÓN
 URL = "https://aqzkysgzljxqmckzfpfq.supabase.co"
 # ⚠️ Usar la service_role key aquí, no la anon key
-KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFxemt5c2d6bGp4cW1ja3pmcGZxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjExNTg1MywiZXhwIjoyMDg3NjkxODUzfQ.MYm8yQBoLPGrXomVhrO56gRA26EkCz1Z1ZZ6wPm1RpM"
+import os
+KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
 supabase = create_client(URL, KEY)
 
 def ejecutar_monitor():

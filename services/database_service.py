@@ -175,7 +175,6 @@ def es_plan_business(plan: str) -> bool:
 # ==========================================================
 # LOOP PRINCIPAL
 # ==========================================================
-
 def vigilar_ofertas(refresh_token=None):
     # 🐺 IMPORTACIÓN LOCAL PARA EVITAR REFERENCIA CIRCULAR
     from engine.engine import (
@@ -210,11 +209,13 @@ def vigilar_ofertas(refresh_token=None):
         frecuencia = c.get("frecuencia")
         last_check = c.get("last_check")
 
-        if not link: continue
+        if not link:
+            continue
 
         mins = _effective_minutes(c.get("plan"), frecuencia)
         last_dt = _parse_dt_utc(last_check)
         if (not force_run) and last_dt and (now - last_dt) < timedelta(minutes=mins):
+            print(f"⏭️ Saltando caza {caza_id} ({producto}) por frecuencia {frecuencia}")
             continue
 
         precio_limite_final = precio_max_db
@@ -224,7 +225,8 @@ def vigilar_ofertas(refresh_token=None):
         try:
             resultados = hunt_offers(link, producto, precio_limite_final)
             resultados = [r for r in resultados if _safe_float(r.get("price"), 0) > 0]
-            if not resultados: continue
+            if not resultados:
+                continue
 
             mejor = sorted(resultados, key=lambda x: _safe_float(x.get("price"), 999999999))[0]
             precio_actual = _safe_float(mejor.get("price"), 0)
@@ -262,8 +264,15 @@ def vigilar_ofertas(refresh_token=None):
         except Exception as e:
             print(f"⚠ error en caza {caza_id}: {e}")
         finally:
-            # ✅ actualización con safe_query
-            safe_query("cazas_update", [{"col": "id", "val": caza_id}], refresh_token)
+            # ✅ actualización con safe_query: ahora incluye last_check
+            safe_query(
+                "cazas_update",
+                [
+                    {"col": "id", "val": caza_id},
+                    {"col": "last_check", "val": datetime.now(timezone.utc).isoformat()}
+                ],
+                refresh_token
+            )
 
 
 def guardar_historial(caza_id, resultados, user_id, refresh_token=None):
