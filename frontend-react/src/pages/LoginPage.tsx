@@ -25,36 +25,60 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4 relative overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(220,38,38,0.08),transparent_50%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(220,38,38,0.05),transparent_50%)]" />
+      <div className="w-full max-w-md relative">
         <div className="text-center mb-8">
-          <h1 className="text-5xl">🐺</h1>
-          <h2 className="text-2xl font-bold text-white mt-2">Howlify</h2>
-          <p className="text-gray-400">Price Intelligence</p>
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-red-500 to-red-700 shadow-lg shadow-red-500/25 mb-4">
+            <span className="text-3xl">🐺</span>
+          </div>
+          <h1 className="text-3xl font-extrabold text-white tracking-tight">Howlify</h1>
+          <p className="text-gray-500 mt-1 text-sm">Price Intelligence Platform</p>
         </div>
-        <form onSubmit={handleSubmit} className="bg-gray-900 rounded-2xl p-6 space-y-4 border border-gray-800">
-          <h3 className="text-lg font-semibold text-white">Iniciar Sesión</h3>
-          {error && <div className="bg-red-900/50 text-red-300 px-4 py-2 rounded-lg text-sm">{error}</div>}
-          <input
-            type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-red-500"
-            required
-          />
-          <input
-            type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-red-500"
-            required
-          />
-          <button
-            type="submit" disabled={loading}
-            className="w-full py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-medium hover:from-red-600 hover:to-red-700 transition disabled:opacity-50"
-          >
-            {loading ? "Entrando..." : "Entrar"}
-          </button>
-          <p className="text-center text-sm text-gray-400">
-            ¿No tenés cuenta? <Link to="/register" className="text-red-400 hover:text-red-300">Registrate</Link>
-          </p>
-        </form>
+        <div className="relative group">
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-red-500 to-red-700 rounded-2xl blur opacity-20 group-hover:opacity-30 transition duration-300" />
+          <form onSubmit={handleSubmit} className="relative bg-gray-900/80 backdrop-blur-xl rounded-2xl p-6 space-y-4 border border-gray-800/50">
+            <h3 className="text-lg font-semibold text-white">Iniciar Sesión</h3>
+            {error && (
+              <div className="flex items-center gap-2 bg-red-900/40 text-red-300 px-4 py-2.5 rounded-xl text-sm border border-red-800/50">
+                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <span>{error}</span>
+              </div>
+            )}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">Email</label>
+              <input
+                type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-2.5 bg-gray-800/50 border border-gray-700/50 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20 transition-all"
+                required
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">Contraseña</label>
+              <input
+                type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-2.5 bg-gray-800/50 border border-gray-700/50 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20 transition-all"
+                required
+              />
+            </div>
+            <button
+              type="submit" disabled={loading}
+              className="w-full py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold hover:from-red-600 hover:to-red-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-red-500/20 hover:shadow-red-500/30"
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                  Entrando...
+                </span>
+              ) : "Entrar"}
+            </button>
+            <p className="text-center text-sm text-gray-500">
+              ¿No tenés cuenta?{" "}
+              <Link to="/register" className="text-red-400 hover:text-red-300 font-medium transition-colors">Registrate</Link>
+            </p>
+          </form>
+        </div>
       </div>
     </div>
   );
