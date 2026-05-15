@@ -2617,6 +2617,7 @@ if st.session_state.get("busquedas"):
                         st.session_state[f"last_res_{rid}"] = res_ind
                         
                         if res_ind:
+                            st.session_state["play_sound"] = True
                             p_nuevo = min([r.get('price', 99999999) for r in res_ind])
                             
                             # --- 🛡️ LÓGICA DE COOLDOWN ANTI-SPAM ---

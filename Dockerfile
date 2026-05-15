@@ -31,5 +31,5 @@ COPY . .
 # Puerto para Streamlit
 EXPOSE 8501
 
-# Comando de arranque
-CMD ["streamlit", "run", "app.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
+# Comando de arranque (usa start.sh para soportar modos: web, api, worker)
+CMD ["bash", "start.sh"]

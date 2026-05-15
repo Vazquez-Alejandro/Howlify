@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "howlify"
+version = "1.0.0"
+description = "Price Intelligence & Market Monitoring"
+requires-python = ">=3.12"
+dependencies = [
+    "altair>=6.0.0",
+    "APScheduler>=3.11.0",
+    "beautifulsoup4>=4.14.0",
+    "fastapi>=0.115.0",
+    "httpx>=0.28.0",
+    "pandas>=2.3.0",
+    "playwright>=1.58.0",
+    "pydantic>=2.12.0",
+    "python-dotenv>=1.2.0",
+    "streamlit>=1.54.0",
+    "supabase>=2.28.0",
+    "tenacity>=9.1.0",
+    "uvicorn>=0.34.0",
+    "gspread>=6.2.0",
+    "google-auth>=2.49.0",
+    "pillow>=12.1.0",
+    "openpyxl>=3.1.0",
+    "requests>=2.32.0",
+]
+
+[project.scripts]
+howlify-web = "howlify.__main__:run_streamlit"
+howlify-api = "howlify.__main__:run_api"
+
+[tool.setuptools.packages.find]
+include = [
+    "auth*",
+    "scraper*",
+    "services*",
+    "engine*",
+    "utils*",
+    "db*",
+    "howlify*",
+    "frontend*",
+]
+
+[tool.setuptools.package-data]
+"*" = ["*.mp3", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.svg", "*.html"]

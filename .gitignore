@@ -24,3 +24,21 @@ __pycache__/
 .streamlit/cache/
 
 evidence/
+
+# SQLite legacy
+howlify.db
+
+# Giant binary (PostScript/ImageMagick)
+components
+
+# Legacy backups
+_backups_limpieza/
+*.bak
+
+# Logs
+*.log
+
+# Package build
+*.egg-info/
+dist/
+build/
