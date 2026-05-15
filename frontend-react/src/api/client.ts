@@ -67,6 +67,28 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ email }),
     }),
+
+  getProfile: () => request<{ profile: { role?: string; plan?: string } }>("/api/auth/profile"),
+
+  adminUsers: () => request<{ users: Record<string, unknown>[] }>("/api/admin/users"),
+
+  // Monitor
+  monitorRules: () => request<{ rules: MonitorRule[] }>("/api/monitor/rules"),
+  upsertMonitorRule: (cazaId: number, data: {
+    product_name: string; product_url: string; source?: string;
+    target_price?: number; min_price_allowed: number; max_price_allowed: number;
+  }) => request<{ message: string }>(`/api/monitor/rules/${cazaId}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteMonitorRule: (cazaId: number) => request<{ message: string }>(`/api/monitor/rules/${cazaId}`, { method: "DELETE" }),
+  monitorInfracciones: () => request<{ infracciones: Infraccion[] }>("/api/monitor/infracciones"),
+  monitorGrupos: () => request<{ grupos: Grupo[] }>("/api/monitor/grupos"),
+  createMonitorGrupo: (nombre: string, color: string) =>
+    request<{ message: string }>("/api/monitor/grupos", { method: "POST", body: JSON.stringify({ nombre, color }) }),
+  deleteMonitorGrupo: (id: number) => request<{ message: string }>(`/api/monitor/grupos/${id}`, { method: "DELETE" }),
+  monitorGrupoCazas: () => request<{ relaciones: { caza_id: number; grupo_id: number }[] }>("/api/monitor/grupo-cazas"),
+  assignMonitorGrupo: (cazaId: number, grupoId: number | null) =>
+    request<{ message: string }>("/api/monitor/grupo-cazas", { method: "PUT", body: JSON.stringify({ caza_id: cazaId, grupo_id: grupoId }) }),
+  monitorPriceHistory: (cazaId: number) =>
+    request<{ history: { checked_at: string; price: number }[] }>(`/api/monitor/price-history/${cazaId}`),
 };
 
 export interface Caza {
@@ -86,4 +108,33 @@ export interface HuntResult {
   url: string;
   source: string;
   score?: number;
+}
+
+export interface MonitorRule {
+  id?: number;
+  user_id: string;
+  caza_id: number;
+  product_name: string;
+  product_url: string;
+  source: string;
+  target_price: number;
+  min_price_allowed: number;
+  max_price_allowed: number;
+  is_active?: boolean;
+}
+
+export interface Infraccion {
+  id?: number;
+  caza_id: number;
+  url_captura?: string;
+  precio_detectado?: number;
+  status?: string;
+  error?: string;
+  fecha?: string;
+}
+
+export interface Grupo {
+  id: number;
+  nombre: string;
+  color: string;
 }

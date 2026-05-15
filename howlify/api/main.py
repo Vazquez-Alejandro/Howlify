@@ -1,6 +1,8 @@
 import os
 import re
 import time
+import json
+import base64
 from datetime import datetime
 from typing import Optional
 from urllib.parse import urlparse
@@ -9,6 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, HTTPException, Header
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from supabase import create_client
@@ -29,8 +32,13 @@ def get_user_id(authorization: str = "") -> str:
     if not token:
         raise HTTPException(status_code=401, detail="Token requerido")
     try:
-        user = supabase.auth.get_user(token)
-        return user.id
+        payload_b64 = token.split(".")[1]
+        padded = payload_b64 + "=" * (4 - len(payload_b64) % 4)
+        decoded = json.loads(base64.urlsafe_b64decode(padded))
+        uid = decoded.get("sub")
+        if not uid:
+            raise HTTPException(status_code=401, detail="Token inválido: sin sub")
+        return uid
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Token inválido: {e}")
 
@@ -262,10 +270,103 @@ def get_monitor_rules(authorization: str = Header(default="")):
     res = supabase.table("monitor_rules").select("*").eq("user_id", uid).execute()
     return {"rules": res.data or []}
 
+@app.put("/api/monitor/rules/{caza_id}")
+def upsert_monitor_rule(caza_id: int, body: dict, authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    payload = {
+        "user_id": uid,
+        "caza_id": caza_id,
+        "product_name": body.get("product_name", "").strip(),
+        "product_url": body.get("product_url", "").strip(),
+        "source": body.get("source", "generic").strip().lower(),
+        "target_price": int(body.get("target_price", 0)),
+        "min_price_allowed": int(body.get("min_price_allowed", 0)),
+        "max_price_allowed": int(body.get("max_price_allowed", 0)),
+        "is_active": True,
+    }
+    supabase.table("monitor_rules").upsert(payload, on_conflict="caza_id").execute()
+    return {"message": "Regla actualizada"}
+
+@app.delete("/api/monitor/rules/{caza_id}")
+def delete_monitor_rule(caza_id: int, authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    supabase.table("monitor_rules").update({"is_active": False}).eq("user_id", uid).eq("caza_id", caza_id).execute()
+    return {"message": "Regla desactivada"}
+
+@app.get("/api/monitor/infracciones")
+def get_infracciones(authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    res = supabase.table("monitor_rules").select("caza_id").eq("user_id", uid).execute()
+    caza_ids = [r["caza_id"] for r in res.data if r.get("caza_id")]
+    if not caza_ids:
+        return {"infracciones": []}
+    inf = supabase.table("infracciones_log").select("*").in_("caza_id", caza_ids).order("fecha", desc=True).limit(200).execute()
+    return {"infracciones": inf.data or []}
+
 @app.get("/api/monitor/grupos")
 def get_grupos():
     res = supabase.table("grupos").select("*").execute()
     return {"grupos": res.data or []}
+
+@app.post("/api/monitor/grupos")
+def create_grupo(body: dict, authorization: str = Header(default="")):
+    get_user_id(authorization)
+    nombre = body.get("nombre", "").strip()
+    color = body.get("color", "📁")
+    if nombre:
+        supabase.table("grupos").insert({"nombre": nombre, "color": color}).execute()
+    return {"message": "Grupo creado"}
+
+@app.delete("/api/monitor/grupos/{grupo_id}")
+def delete_grupo(grupo_id: int, authorization: str = Header(default="")):
+    get_user_id(authorization)
+    supabase.table("grupo_cazas").delete().eq("grupo_id", grupo_id).execute()
+    supabase.table("grupos").delete().eq("id", grupo_id).execute()
+    return {"message": "Grupo eliminado"}
+
+@app.get("/api/monitor/grupo-cazas")
+def get_grupo_cazas():
+    res = supabase.table("grupo_cazas").select("*").execute()
+    return {"relaciones": res.data or []}
+
+@app.put("/api/monitor/grupo-cazas")
+def assign_grupo_caza(body: dict, authorization: str = Header(default="")):
+    get_user_id(authorization)
+    caza_id = body.get("caza_id")
+    grupo_id = body.get("grupo_id")
+    supabase.table("grupo_cazas").delete().eq("caza_id", caza_id).execute()
+    if grupo_id:
+        supabase.table("grupo_cazas").insert({"caza_id": caza_id, "grupo_id": grupo_id}).execute()
+    return {"message": "Asignación actualizada"}
+
+@app.get("/api/monitor/price-history/{caza_id}")
+def get_monitor_price_history(caza_id: int, authorization: str = Header(default="")):
+    get_user_id(authorization)
+    res = supabase.table("price_history").select("checked_at, price").eq("caza_id", caza_id).order("checked_at").limit(100).execute()
+    return {"history": res.data or []}
+
+@app.get("/api/monitor/evidencia/{caza_id}")
+def get_evidencia(caza_id: int, authorization: str = Header(default="")):
+    get_user_id(authorization)
+    inf = supabase.table("infracciones_log").select("url_captura").eq("caza_id", caza_id).order("fecha", desc=True).limit(1).execute()
+    if not inf.data or not inf.data[0].get("url_captura"):
+        raise HTTPException(status_code=404, detail="Evidencia no encontrada")
+    path = inf.data[0]["url_captura"]
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    return FileResponse(path, media_type="image/png")
+
+# ─── Admin ───────────────────────────────────────────────
+
+@app.get("/api/admin/users")
+def admin_users(authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    profile = supabase.table("profiles").select("role").eq("user_id", uid).limit(1).execute()
+    role = profile.data[0].get("role", "user") if profile.data else "user"
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    res = supabase.table("profiles").select("user_id, email, username, plan, role, created_at").order("created_at", desc=True).limit(30).execute()
+    return {"users": res.data or []}
 
 if __name__ == "__main__":
     import uvicorn

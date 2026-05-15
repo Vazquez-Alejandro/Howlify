@@ -7,11 +7,16 @@ import PageTransition from "../components/PageTransition";
 import CazaCard from "../components/CazaCard";
 import SkeletonCard from "../components/SkeletonCard";
 import Logo from "../components/Logo";
+import MonitorPage from "./MonitorPage";
 
-type View = "rastreadores" | "perfil";
+type View = "rastreadores" | "perfil" | "admin" | "monitor";
 
-const MAX_CAZAS = 5;
-const PLAN_NAME = "Starter";
+const PLAN_INFO: Record<string, { label: string; max: number }> = {
+  starter: { label: "Starter", max: 5 },
+  pro: { label: "Pro", max: 15 },
+  business_reseller: { label: "Business Reseller", max: 40 },
+  business_monitor: { label: "Business Monitor", max: 100 },
+};
 
 export default function DashboardPage() {
   const [cazas, setCazas] = useState<Caza[]>([]);
@@ -23,6 +28,9 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const [view, setView] = useState<View>("rastreadores");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profile, setProfile] = useState<{ role?: string; plan?: string } | null>(null);
+  const [simulatedPlan, setSimulatedPlan] = useState("starter");
+  const [users, setUsers] = useState<Record<string, unknown>[]>([]);
 
   const loadCazas = async () => {
     setLoading(true);
@@ -41,6 +49,28 @@ export default function DashboardPage() {
 
   useEffect(() => { loadCazas(); }, []);
 
+  useEffect(() => {
+    api.getProfile().then((res) => {
+      console.log("[profile] response:", res);
+      if (res.data?.profile) {
+        setProfile(res.data.profile);
+      } else if (res.error) {
+        console.warn("[profile] error:", res.error);
+      }
+    });
+  }, []);
+
+  const isAdmin = profile?.role === "admin";
+
+  const loadUsers = async () => {
+    const res = await api.adminUsers();
+    if (res.data?.users) setUsers(res.data.users);
+  };
+
+  useEffect(() => {
+    if (isAdmin) loadUsers();
+  }, [isAdmin]);
+
   const handleHuntAll = async () => {
     setHuntAllLoading(true);
     toast("Olfateando todas las cacerías...", "info");
@@ -58,8 +88,15 @@ export default function DashboardPage() {
   const activeCazas = cazas.filter((c) => c.estado === "active" || !c.estado).length;
   const alertsCount = cazas.filter((c) => c.last_price && c.last_price <= c.precio_max).length;
 
+  const effectivePlan = isAdmin ? simulatedPlan : (profile?.plan || "starter");
+  const planInfo = PLAN_INFO[effectivePlan] || PLAN_INFO.starter;
+  const maxCazas = planInfo.max;
+  const planName = planInfo.label;
+
   const menuItems: { key: View; label: string; icon: string }[] = [
     { key: "rastreadores", label: "Mis Rastreadores", icon: "🐺" },
+    ...(effectivePlan === "business_monitor" || isAdmin ? [{ key: "monitor" as View, label: "Monitor", icon: "📊" }] : []),
+    ...(isAdmin ? [{ key: "admin" as View, label: "Panel Admin", icon: "🛠️" }] : []),
     { key: "perfil", label: "Mi Perfil", icon: "👤" },
   ];
 
@@ -78,7 +115,7 @@ export default function DashboardPage() {
               <Logo size="sm" />
               <div>
                 <h2 className="font-bold text-white text-sm">Howlify</h2>
-                <p className="text-[10px] text-gray-500">Plan {PLAN_NAME}</p>
+                <p className="text-[10px] text-gray-500">Plan {planName}</p>
               </div>
             </div>
           </div>
@@ -120,7 +157,7 @@ export default function DashboardPage() {
                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
                 </button>
                 <h1 className="text-lg font-bold text-white">
-                  {view === "rastreadores" ? "Mis Cacerías" : "Mi Perfil"}
+                  {view === "rastreadores" ? "Mis Cacerías" : view === "monitor" ? "Monitor" : view === "admin" ? "Panel Admin" : "Mi Perfil"}
                 </h1>
               </div>
               {view === "rastreadores" && cazas.length > 0 && (
@@ -140,7 +177,7 @@ export default function DashboardPage() {
               <div className="px-4 pb-3 grid grid-cols-3 gap-2">
                 <div className="bg-gray-900/60 rounded-xl border border-gray-800/50 px-3 py-2.5">
                   <p className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">Cacerías</p>
-                  <p className="text-lg font-bold text-white mt-0.5">{cazas.length} / {MAX_CAZAS}</p>
+                  <p className="text-lg font-bold text-white mt-0.5">{cazas.length} / {maxCazas}</p>
                 </div>
                 <div className="bg-gray-900/60 rounded-xl border border-gray-800/50 px-3 py-2.5">
                   <p className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">Activas</p>
@@ -161,7 +198,6 @@ export default function DashboardPage() {
 
               {!loading && cazas.length === 0 && (
                 <div className="text-center py-16">
-                  <Logo className="mb-4 mx-auto" />
                   <p className="text-lg font-medium text-gray-300">No tenés cacerías activas</p>
                   <p className="text-sm text-gray-500 mt-1">Agregá una desde el panel de abajo</p>
                 </div>
@@ -198,11 +234,11 @@ export default function DashboardPage() {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-400">Plan</span>
-                    <span className="text-sm font-medium text-white">{PLAN_NAME}</span>
+                    <span className="text-sm font-medium text-white">{planName}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-400">Cacerías</span>
-                    <span className="text-sm font-medium text-white">{cazas.length} / {MAX_CAZAS}</span>
+                    <span className="text-sm font-medium text-white">{cazas.length} / {maxCazas}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-400">Alertas activas</span>
@@ -215,6 +251,70 @@ export default function DashboardPage() {
                 >
                   Cerrar sesión
                 </button>
+              </div>
+            </main>
+          )}
+
+          {/* Monitor view */}
+          {view === "monitor" && <MonitorPage />}
+
+          {/* Admin view */}
+          {view === "admin" && (
+            <main className="flex-1 px-4 py-5 max-w-4xl mx-auto w-full">
+              <h2 className="text-xl font-bold text-white mb-4">🛠️ Panel de Admin</h2>
+
+              <div className="bg-gray-900/60 rounded-2xl border border-gray-800/50 p-5 mb-5">
+                <h3 className="text-sm font-semibold text-gray-300 mb-3">Simular vista de plan</h3>
+                <div className="flex flex-wrap gap-2">
+                  {["starter", "pro", "business_reseller", "business_monitor"].map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setSimulatedPlan(p)}
+                      className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${
+                        simulatedPlan === p
+                          ? "bg-red-500/15 text-red-400 border-red-500/30"
+                          : "bg-gray-800/30 text-gray-400 border-gray-700/50 hover:border-gray-600"
+                      }`}
+                    >
+                      {PLAN_INFO[p].label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-3">
+                  Viendo como: <span className="text-red-400 font-medium">{planName}</span>
+                  {" · "}
+                  Límite: <span className="text-white font-medium">{maxCazas} cacerías</span>
+                </p>
+              </div>
+
+              <div className="bg-gray-900/60 rounded-2xl border border-gray-800/50 p-5">
+                <h3 className="text-sm font-semibold text-gray-300 mb-3">👥 Usuarios (últimos 30)</h3>
+                {users.length === 0 ? (
+                  <p className="text-sm text-gray-500">No hay usuarios.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead>
+                        <tr className="text-gray-500 text-xs uppercase border-b border-gray-800/50">
+                          <th className="py-2 pr-3">Email</th>
+                          <th className="py-2 pr-3">Plan</th>
+                          <th className="py-2 pr-3">Rol</th>
+                          <th className="py-2">Registro</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {users.slice(0, 30).map((u: any, i) => (
+                          <tr key={i} className="border-b border-gray-800/30 text-gray-300">
+                            <td className="py-2 pr-3 truncate max-w-[200px]">{u.email || "-"}</td>
+                            <td className="py-2 pr-3">{u.plan || "-"}</td>
+                            <td className="py-2 pr-3">{u.role || "user"}</td>
+                            <td className="py-2">{u.created_at ? new Date(u.created_at).toLocaleDateString() : "-"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </main>
           )}
