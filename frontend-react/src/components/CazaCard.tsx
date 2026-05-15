@@ -66,11 +66,16 @@ export default function CazaCard({ caza, onHunt, onDelete, onUpdate, hunting }: 
             </div>
             <div className="flex items-center gap-2 mt-0.5">
               <p className="text-gray-500 text-sm truncate">{url.slice(0, 55)}</p>
+            </div>
+            <div className="flex items-center gap-3 mt-0.5">
               {hasPrice && (
-                <span className={`shrink-0 text-sm font-medium ${isAlert ? "text-red-400" : "text-green-400"}`}>
-                  ${caza.last_price!.toLocaleString()}
+                <span className={`text-sm font-medium ${isAlert ? "text-red-400" : "text-green-400"}`}>
+                  Últ: ${caza.last_price!.toLocaleString()}
                 </span>
               )}
+              <span className="text-sm text-gray-500">
+                Máx: ${caza.precio_max.toLocaleString()}
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-2 ml-4 shrink-0">
