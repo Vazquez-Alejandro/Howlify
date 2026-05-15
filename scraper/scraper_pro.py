@@ -10,11 +10,10 @@ from urllib.parse import urlparse
 from datetime import datetime 
 from pathlib import Path
 from playwright.sync_api import sync_playwright
-import playwright_stealth
 from bs4 import BeautifulSoup
 
 from .despegar import hunt_despegar_vuelos
-from utils.logic import get_random_user_agent, apply_human_jitter, evaluar_oferta
+from utils.logic import get_random_user_agent, apply_human_jitter
 
 # -------------------------------------------------
 # Config
@@ -210,7 +209,6 @@ def _scrape_mercadolibre(url_input: str, keyword: str, max_price: int, *, headle
 
     # 2. ÚLTIMO RECURSO: PLAYWRIGHT (SOLO SI LO ANTERIOR FALLA)
     # Ponemos todo en un bloque try/finally para cerrar el browser sí o sí
-    from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
         browser = None
         try:

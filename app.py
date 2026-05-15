@@ -59,10 +59,8 @@ from db.database import (
 # --- 🧠 UTILIDADES Y LÓGICA ---
 # Borramos guardar_caza_supabase de aquí porque ya no existe en este archivo
 from utils.logic import (
-    normalize_plan_family,
-    clean_ml_url, 
-    upsert_monitor_rule,
-    exportar_a_sheets, 
+    clean_ml_url,
+    exportar_a_sheets,
 )
 
 # ==========================================================
@@ -1170,52 +1168,6 @@ def get_price_history_stats_by_caza(user_id, caza_ids):
         return {row["caza_id"]: row for row in (res.data or [])}
     except:
         return {}
-    
-def get_monitor_rules_map(user_id: str, caza_ids: list):
-    """Obtiene las reglas de precio configuradas para las cazas del usuario"""
-    if not user_id or not caza_ids: return {}
-    try:
-        res = supabase.table("monitor_rules") \
-            .select("*") \
-            .eq("user_id", user_id) \
-            .eq("is_active", True) \
-            .in_("caza_id", caza_ids) \
-            .execute()
-        return {row.get("caza_id"): row for row in (res.data or []) if row.get("caza_id")}
-    except:
-        return {}
-
-def upsert_monitor_rule(user_id, caza_id, product_name, product_url, source, target_price, min_price_allowed, max_price_allowed):
-    """Guarda o actualiza una regla de monitoreo"""
-    try:
-        payload = {
-            "user_id": user_id,
-            "caza_id": caza_id,
-            "product_name": product_name,
-            "product_url": product_url,
-            "source": source,
-            "target_price": target_price,
-            "min_price_allowed": min_price_allowed,
-            "max_price_allowed": max_price_allowed,
-            "is_active": True
-        }
-        supabase.table("monitor_rules").upsert(payload).execute()
-        return True
-    except Exception as e:
-        print(f"Error upsert_monitor_rule: {e}")
-        return False
-
-def delete_monitor_rule(user_id, caza_id):
-    """Desactiva una regla de monitoreo"""
-    try:
-        supabase.table("monitor_rules") \
-            .update({"is_active": False}) \
-            .eq("user_id", user_id) \
-            .eq("caza_id", caza_id) \
-            .execute()
-        return True
-    except:
-        return False
     
 def contar_cazas_activas(user_id: str) -> int:
     if not user_id:
@@ -2733,17 +2685,3 @@ if not st.session_state.get("busquedas"):
 
 render_footer()
 
-# ==========================================================
-# 🕒 AUTOMATIZACIÓN (MODO TEST LOCAL)
-# ==========================================================
-
-
-if True: # MODO TEST LOCAL
-    if "monitor_iniciado" not in st.session_state:
-        # Conseguimos la ruta absoluta de la carpeta del proyecto
-        cwd = os.getcwd() 
-        script_path = os.path.join(cwd, "scripts", "mercadolibre_monitor.py")
-        
-        subprocess.Popen([sys.executable, script_path], cwd=cwd)
-        st.session_state["monitor_iniciado"] = True
-        print(f"🐺 Lobo lanzado desde: {script_path}")

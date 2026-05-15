@@ -1,7 +1,9 @@
 import re
 import time
 from playwright.sync_api import sync_playwright
-from utils.currency import get_dolar_tarjeta
+from utils.logic import obtener_dolar_tarjeta
+
+get_dolar_tarjeta = obtener_dolar_tarjeta
 
 def hunt_airbnb(url, max_price=0):
     print(f"🏠 [Airbnb] Iniciando rastreo Pro en: {url}")

@@ -7,7 +7,9 @@ from dotenv import load_dotenv
 load_dotenv()
 from playwright.sync_api import sync_playwright
 from duffel_api import Duffel
-from utils.currency import get_dolar_tarjeta
+from utils.logic import obtener_dolar_tarjeta
+
+get_dolar_tarjeta = obtener_dolar_tarjeta
 
 # --- CONFIGURACIÓN ---
 DUFFEL_TOKEN = os.getenv("DUFFEL_ACCESS_TOKEN")
