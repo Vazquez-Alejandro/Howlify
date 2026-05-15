@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api, type Caza } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import CazaCard from "../components/CazaCard";
+import Logo from "../components/Logo";
 
 export default function DashboardPage() {
   const [cazas, setCazas] = useState<Caza[]>([]);
@@ -49,9 +50,7 @@ export default function DashboardPage() {
       <header className="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-xl border-b border-gray-800/50">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-red-500 to-red-700 shadow-lg shadow-red-500/20">
-              <span className="text-lg">🐺</span>
-            </div>
+            <Logo size="sm" />
             <div>
               <h1 className="text-lg font-bold text-white leading-tight">Howlify</h1>
               <p className="text-xs text-gray-500">Panel de Control</p>
@@ -111,9 +110,7 @@ export default function DashboardPage() {
 
         {!loading && cazas.length === 0 && (
           <div className="text-center py-16">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gray-900/60 border border-gray-800/50 mb-4">
-              <span className="text-3xl">🐺</span>
-            </div>
+            <Logo className="mb-4" />
             <p className="text-lg font-medium text-gray-300">No tenés cacerías activas</p>
             <p className="text-sm text-gray-500 mt-1">Agregá una desde el botón de abajo</p>
           </div>

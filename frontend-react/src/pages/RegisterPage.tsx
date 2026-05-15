@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../api/client";
+import Logo from "../components/Logo";
 
 type Category = "personal" | "business";
 
@@ -47,17 +48,15 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4 py-8 relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(220,38,38,0.08),transparent_50%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(220,38,38,0.05),transparent_50%)]" />
-      <div className="w-full max-w-xl relative">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-red-500 to-red-700 shadow-lg shadow-red-500/25 mb-4">
-            <span className="text-3xl">🐺</span>
-          </div>
-          <h1 className="text-3xl font-extrabold text-white tracking-tight">Unirse a la Jauría</h1>
-          <p className="text-gray-500 mt-1 text-sm">Elegí tu plan y empezá a cazar</p>
+      <div className="w-full max-w-2xl relative">
+        <div className="text-center mb-10">
+          <Logo className="mb-5" size="xl" />
+          <h1 className="text-4xl font-extrabold text-white tracking-tight">Unirse a la Jauría</h1>
+          <p className="text-gray-500 mt-2 text-sm">Elegí tu plan y empezá a cazar</p>
         </div>
         <div className="relative group">
           <div className="absolute -inset-0.5 bg-gradient-to-r from-red-500 to-red-700 rounded-2xl blur opacity-20 group-hover:opacity-30 transition duration-300" />
-          <form onSubmit={handleSubmit} className="relative bg-gray-900/80 backdrop-blur-xl rounded-2xl p-6 space-y-5 border border-gray-800/50">
+          <form onSubmit={handleSubmit} className="relative bg-gray-900/80 backdrop-blur-xl rounded-2xl p-8 space-y-6 border border-gray-800/50">
             {error && (
               <div className="flex items-center gap-2 bg-red-900/40 text-red-300 px-4 py-2.5 rounded-xl text-sm border border-red-800/50">
                 <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -75,7 +74,7 @@ export default function RegisterPage() {
               <input
                 type="text" placeholder="lobo_alfa" value={form.username}
                 onChange={(e) => setForm({ ...form, username: e.target.value })}
-                className="w-full px-4 py-2.5 bg-gray-800/50 border border-gray-700/50 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20 transition-all"
+                className="w-full px-5 py-3 bg-gray-800/50 border border-gray-700/50 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20 transition-all text-base"
                 required
               />
             </div>
@@ -84,7 +83,7 @@ export default function RegisterPage() {
               <input
                 type="email" placeholder="tu@email.com" value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full px-4 py-2.5 bg-gray-800/50 border border-gray-700/50 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20 transition-all"
+                className="w-full px-5 py-3 bg-gray-800/50 border border-gray-700/50 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20 transition-all text-base"
                 required
               />
             </div>
@@ -93,7 +92,7 @@ export default function RegisterPage() {
               <input
                 type="password" placeholder="••••••••" value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                className="w-full px-4 py-2.5 bg-gray-800/50 border border-gray-700/50 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20 transition-all"
+                className="w-full px-5 py-3 bg-gray-800/50 border border-gray-700/50 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20 transition-all text-base"
                 required
               />
             </div>
@@ -116,34 +115,34 @@ export default function RegisterPage() {
                   </button>
                 ))}
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 {plans[category].map((p) => (
                   <button
                     key={p.value}
                     type="button"
                     onClick={() => setForm({ ...form, plan: p.value })}
-                    className={`relative p-4 rounded-xl border text-left transition-all ${
+                    className={`relative p-5 rounded-xl border text-left transition-all ${
                       form.plan === p.value
                         ? "border-red-500/50 bg-red-500/10 shadow-lg shadow-red-500/10"
                         : "border-gray-700/50 bg-gray-800/30 hover:border-gray-600/50"
                     }`}
                   >
                     {p.popular && form.plan !== p.value && (
-                      <span className="absolute -top-2 -right-2 px-2 py-0.5 bg-gradient-to-r from-red-500 to-red-600 text-white text-[10px] font-bold rounded-md shadow-lg shadow-red-500/30">
+                      <span className="absolute -top-2.5 -right-2.5 px-2.5 py-0.5 bg-gradient-to-r from-red-500 to-red-600 text-white text-[10px] font-bold rounded-md shadow-lg shadow-red-500/30">
                         POPULAR
                       </span>
                     )}
                     {form.plan === p.value && (
-                      <span className="absolute -top-2 -right-2 px-2 py-0.5 bg-gradient-to-r from-red-500 to-red-600 text-white text-[10px] font-bold rounded-md shadow-lg shadow-red-500/30">
+                      <span className="absolute -top-2.5 -right-2.5 px-2.5 py-0.5 bg-gradient-to-r from-red-500 to-red-600 text-white text-[10px] font-bold rounded-md shadow-lg shadow-red-500/30">
                         SELECCIONADO
                       </span>
                     )}
                     <p className={`text-base font-bold ${form.plan === p.value ? "text-white" : "text-gray-200"}`}>{p.label}</p>
-                    <p className={`text-lg font-extrabold mt-1 ${form.plan === p.value ? "text-red-400" : "text-gray-400"}`}>{p.price}</p>
-                    <ul className="mt-2 space-y-1">
+                    <p className={`text-xl font-extrabold mt-1.5 ${form.plan === p.value ? "text-red-400" : "text-gray-400"}`}>{p.price}</p>
+                    <ul className="mt-3 space-y-1.5">
                       {p.features.map((f, i) => (
-                        <li key={i} className={`flex items-center gap-1.5 text-xs ${form.plan === p.value ? "text-gray-300" : "text-gray-500"}`}>
-                          <svg className={`w-3 h-3 shrink-0 ${form.plan === p.value ? "text-red-400" : "text-gray-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        <li key={i} className={`flex items-center gap-1.5 text-sm ${form.plan === p.value ? "text-gray-300" : "text-gray-500"}`}>
+                          <svg className={`w-3.5 h-3.5 shrink-0 ${form.plan === p.value ? "text-red-400" : "text-gray-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                           {f}
                         </li>
                       ))}
@@ -155,7 +154,7 @@ export default function RegisterPage() {
 
             <button
               type="submit" disabled={loading}
-              className="w-full py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold hover:from-red-600 hover:to-red-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-red-500/20 hover:shadow-red-500/30"
+              className="w-full py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold text-base hover:from-red-600 hover:to-red-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-red-500/20 hover:shadow-red-500/30"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
