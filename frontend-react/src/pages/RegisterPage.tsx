@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../api/client";
+import { useToast } from "../components/Toast";
+import PageTransition from "../components/PageTransition";
 import Logo from "../components/Logo";
 
 type Category = "personal" | "business";
@@ -31,6 +33,7 @@ export default function RegisterPage() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,13 +42,15 @@ export default function RegisterPage() {
     setLoading(true);
     const res = await api.signup(form.email, form.password, form.username, form.plan);
     setLoading(false);
-    if (res.error) return setError(res.error);
+    if (res.error) return toast(res.error, "error");
     setSuccess(res.data?.message || "Cuenta creada. Revisá tu email.");
+    toast(res.data?.message || "Cuenta creada. Revisá tu email.", "success");
     setTimeout(() => navigate("/"), 2000);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4 py-8 relative overflow-hidden">
+    <PageTransition>
+      <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4 py-8 relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(220,38,38,0.08),transparent_50%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(220,38,38,0.05),transparent_50%)]" />
       <div className="w-full max-w-2xl relative">
@@ -171,5 +176,6 @@ export default function RegisterPage() {
         </div>
       </div>
     </div>
+    </PageTransition>
   );
 }

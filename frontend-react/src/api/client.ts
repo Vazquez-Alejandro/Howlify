@@ -61,6 +61,12 @@ export const api = {
     request<{ results: HuntResult[] }>(`/api/hunt/${id}`, { method: "POST" }),
 
   huntAll: () => request<{ results: Record<string, HuntResult[]> }>("/api/hunt/all", { method: "POST" }),
+
+  forgotPassword: (email: string) =>
+    request<{ message: string }>("/api/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
 };
 
 export interface Caza {

@@ -46,6 +46,9 @@ class SignupRequest(BaseModel):
     username: str
     plan: str = "starter"
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
 class CazaCreate(BaseModel):
     keyword: str
     url: str
@@ -142,6 +145,17 @@ def signup(req: SignupRequest):
     if err:
         raise HTTPException(status_code=400, detail=err)
     return {"user": {"id": user.id, "email": user.email} if user else None, "message": "Cuenta creada. Revisá tu email."}
+
+@app.post("/api/auth/forgot-password")
+def forgot_password(req: ForgotPasswordRequest):
+    try:
+        supabase.auth.reset_password_for_email(
+            req.email.strip().lower(),
+            {"redirect_to": "http://localhost:5173/reset-password"}
+        )
+        return {"message": "Correo enviado"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/auth/profile")
 def get_profile(authorization: str = Header(default="")):
