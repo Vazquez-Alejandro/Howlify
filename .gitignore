@@ -42,3 +42,4 @@ _backups_limpieza/
 *.egg-info/
 dist/
 build/
+.scraper_cache/
