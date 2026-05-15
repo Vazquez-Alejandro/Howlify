@@ -1,47 +1,24 @@
-# Howlify Roadmap
+🛠 Roadmap actualizado
+⚠️ Pendiente / En curso
 
-📝 Roadmap de mejoras urgentes
+    Integración con Google Sheets
 
+        Exportar tablas del dashboard (ej. radar, cazas) a CSV/Excel → ya implementado.
 
-5. Documentación
+        Implementar exportación directa a Google Sheets vía API.
 
-    [ ] Actualizar README con instrucciones de instalación (dependencias de Playwright en Linux, setup de Supabase, cómo correr el dashboard).
+        Crear credenciales de Service Account (credenciales.json).
 
-    [ ] Agregar ejemplos de uso: cómo crear un rastreador, cómo se ve la alerta en Telegram.
+        Compartir el Sheet con el mail del Service Account.
 
-6. Escalabilidad
+        Integrar botón en dashboard para exportar DataFrame a Sheets.
 
-    [ ] Definir esquemas más claros en Supabase (monitor_rules, raw_data).
+        Documentar en Git el bloque de exportación y el uso de .env para credenciales.
 
-    [ ] Agregar índices si pensás manejar muchos rastreadores.
+➕ Para agregar
 
-    [ ] Separar el monitor en un servicio independiente (cron job o worker).
+    Revisar seguridad: limpiar historial de Git donde quedó expuesta la Supabase key.
 
-    [ ] Contenerizar con Docker para que las dependencias de Playwright estén siempre listas.
+    Testear engine después del reset para confirmar que last_check se setea bien.
 
-## Ideas futuras🚀 Próximos Pasos (Lo que viene)
-🏨 Vertical de Turismo (Hospedaje)
-Expandir el éxito de los vuelos a:
-
-Airbnb: Captura de precios finales con tasas e impuestos.
-
-Booking / Hoteles.com: Implementación de links de afiliados para estadías.
-
-💎 Segmentación de Planes (User vs. Business)
-User Mode: Interfaz simplificada y búsqueda rápida para el ahorrador casual.
-
-Business Mode (Distribuidores): - Monitoreo de alta frecuencia.
-
-Tiendas potentes (Amazon, eBay, Mayoristas).
-
-Dashboard: Mínimos históricos y seguimiento de revendedores.
-
-🛠️ UX & Onboarding
-Sección de Ayuda: Botón de "Paso a Paso" con guía visual para cargar URLs y presupuestos.
-
-Visual Pricing: Formateo de precios en ARS para que las ofertas resalten (Badge de "OFERTA").
-
-💳 Monetización & Salida al Mercado
-Suscripciones: Implementación de pagos (Mercado Pago / Stripe).
-
-Publicación Automática: Bot para postear ofertas "calientes" en Twitter/Instagram de forma automática.
+ 
