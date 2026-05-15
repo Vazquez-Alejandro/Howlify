@@ -29,7 +29,7 @@ evidence/
 howlify.db
 
 # Giant binary (PostScript/ImageMagick)
-components
+/components
 
 # Legacy backups
 _backups_limpieza/
