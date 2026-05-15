@@ -55,6 +55,14 @@ export const api = {
     frecuencia?: string;
   }) => request<{ message: string }>("/api/cazas", { method: "POST", body: JSON.stringify(data) }),
 
+  updateCaza: (id: number, data: {
+    keyword: string;
+    url: string;
+    precio_max: number;
+    frecuencia?: string;
+    tipo?: string;
+  }) => request<{ message: string }>(`/api/cazas/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+
   deleteCaza: (id: number) => request<{ message: string }>(`/api/cazas/${id}`, { method: "DELETE" }),
 
   huntSingle: (id: number) =>
@@ -89,6 +97,8 @@ export const api = {
     request<{ message: string }>("/api/monitor/grupo-cazas", { method: "PUT", body: JSON.stringify({ caza_id: cazaId, grupo_id: grupoId }) }),
   monitorPriceHistory: (cazaId: number) =>
     request<{ history: { checked_at: string; price: number }[] }>(`/api/monitor/price-history/${cazaId}`),
+  monitorLatestPrices: () => request<{ prices: Record<string, { price: number; checked_at: string }> }>("/api/monitor/latest-prices"),
+  monitorAllHistory: () => request<{ history: { caza_id: number; price: number; checked_at: string }[] }>("/api/monitor/all-history"),
 };
 
 export interface Caza {

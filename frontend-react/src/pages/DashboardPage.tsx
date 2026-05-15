@@ -210,6 +210,7 @@ export default function DashboardPage() {
                     caza={c}
                     onHunt={() => handleHunt(c.id)}
                     onDelete={() => handleDelete(c.id)}
+                    onUpdate={() => loadCazas()}
                     hunting={!!hunting[String(c.id)]}
                   />
                 ))}

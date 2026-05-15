@@ -193,6 +193,23 @@ def create_caza(caza: CazaCreate, authorization: str = Header(default="")):
         raise HTTPException(status_code=400, detail=str(ok))
     return {"message": "Cacería creada"}
 
+@app.put("/api/cazas/{caza_id}")
+def update_caza(caza_id: int, data: CazaCreate, authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    url_limpia = clean_ml_url(data.url)
+    src = infer_source_from_url(url_limpia) or "generic"
+    precio_int = parse_price_to_int(data.precio_max)
+    supabase.table("cazas").update({
+        "keyword": data.keyword,
+        "url": url_limpia,
+        "link": url_limpia,
+        "precio_max": precio_int,
+        "frecuencia": data.frecuencia,
+        "tipo": data.tipo,
+        "source": src,
+    }).eq("id", caza_id).eq("user_id", uid).execute()
+    return {"message": "Cacería actualizada"}
+
 @app.delete("/api/cazas/{caza_id}")
 def delete_caza(caza_id: int, authorization: str = Header(default="")):
     uid = get_user_id(authorization)
@@ -343,6 +360,28 @@ def assign_grupo_caza(body: dict, authorization: str = Header(default="")):
 def get_monitor_price_history(caza_id: int, authorization: str = Header(default="")):
     get_user_id(authorization)
     res = supabase.table("price_history").select("checked_at, price").eq("caza_id", caza_id).order("checked_at").limit(100).execute()
+    return {"history": res.data or []}
+
+@app.get("/api/monitor/latest-prices")
+def get_latest_prices(authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    rules = supabase.table("monitor_rules").select("caza_id").eq("user_id", uid).execute()
+    ids = [r["caza_id"] for r in rules.data if r.get("caza_id")]
+    result = {}
+    for cid in ids:
+        row = supabase.table("price_history").select("price, checked_at").eq("caza_id", cid).order("checked_at", desc=True).limit(1).execute()
+        if row.data:
+            result[str(cid)] = {"price": row.data[0]["price"], "checked_at": row.data[0]["checked_at"]}
+    return {"prices": result}
+
+@app.get("/api/monitor/all-history")
+def get_all_history(authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    rules = supabase.table("monitor_rules").select("caza_id").eq("user_id", uid).execute()
+    ids = [r["caza_id"] for r in rules.data if r.get("caza_id")]
+    if not ids:
+        return {"history": []}
+    res = supabase.table("price_history").select("caza_id, price, checked_at").in_("caza_id", ids).order("checked_at").limit(2000).execute()
     return {"history": res.data or []}
 
 @app.get("/api/monitor/evidencia/{caza_id}")
