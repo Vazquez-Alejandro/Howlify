@@ -574,7 +574,7 @@ export default function MonitorPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={() => setEvidenciaModal(null)}>
             <div className="relative max-w-3xl max-h-[90vh] mx-4" onClick={(e) => e.stopPropagation()}>
               <button onClick={() => setEvidenciaModal(null)} className="absolute -top-3 -right-3 w-8 h-8 bg-gray-900 rounded-full border border-gray-700 text-gray-400 hover:text-white flex items-center justify-center z-10">✕</button>
-              <img src={`${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/monitor/evidencia/${evidenciaModal}`} alt="Evidencia"
+              <img src={`${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/monitor/evidencia/${evidenciaModal}?token=${localStorage.getItem("token") || ""}`} alt="Evidencia"
                 className="max-w-full max-h-[90vh] rounded-2xl border border-gray-700/50 shadow-2xl" />
             </div>
           </div>

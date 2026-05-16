@@ -51,8 +51,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     api.getProfile().then((res) => {
-      console.log("[profile] response:", res);
+      console.log("[profile] response:", JSON.parse(JSON.stringify(res)));
       if (res.data?.profile) {
+        console.log("[profile] role:", res.data.profile.role);
+        console.log("[profile] isAdmin check:", res.data.profile.role === "admin");
         setProfile(res.data.profile);
       } else if (res.error) {
         console.warn("[profile] error:", res.error);
@@ -61,6 +63,7 @@ export default function DashboardPage() {
   }, []);
 
   const isAdmin = profile?.role === "admin";
+  console.log("[render] isAdmin:", isAdmin, "profile:", profile);
 
   const loadUsers = async () => {
     const res = await api.adminUsers();

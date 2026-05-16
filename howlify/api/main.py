@@ -10,15 +10,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from supabase import create_client
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+from auth.supabase_client import supabase
 
 app = FastAPI(title="Howlify API", version="1.0.0")
 
@@ -200,12 +196,11 @@ def update_caza(caza_id: int, data: CazaCreate, authorization: str = Header(defa
     src = infer_source_from_url(url_limpia) or "generic"
     precio_int = parse_price_to_int(data.precio_max)
     supabase.table("cazas").update({
-        "keyword": data.keyword,
-        "url": url_limpia,
+        "producto": data.keyword,
         "link": url_limpia,
         "precio_max": precio_int,
         "frecuencia": data.frecuencia,
-        "tipo": data.tipo,
+        "tipo_alerta": data.tipo,
         "source": src,
     }).eq("id", caza_id).eq("user_id", uid).execute()
     return {"message": "Cacería actualizada"}
@@ -385,8 +380,9 @@ def get_all_history(authorization: str = Header(default="")):
     return {"history": res.data or []}
 
 @app.get("/api/monitor/evidencia/{caza_id}")
-def get_evidencia(caza_id: int, authorization: str = Header(default="")):
-    get_user_id(authorization)
+def get_evidencia(caza_id: int, authorization: str = Header(default=""), token: str = Query(default="")):
+    auth = authorization or token
+    get_user_id(auth)
     inf = supabase.table("infracciones_log").select("url_captura").eq("caza_id", caza_id).order("fecha", desc=True).limit(1).execute()
     if not inf.data or not inf.data[0].get("url_captura"):
         raise HTTPException(status_code=404, detail="Evidencia no encontrada")

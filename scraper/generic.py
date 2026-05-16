@@ -163,14 +163,11 @@ def _playwright_get(url: str) -> str:
         with sync_playwright() as p:
             browser = p.chromium.launch(
                 headless=True,
-                channel="chrome",
                 args=[
                     "--no-sandbox",
                     "--disable-dev-shm-usage",
                     "--disable-blink-features=AutomationControlled",
-                    "--headless=new",
                     "--disable-gpu",
-                    "--window-size=1280,800",
                 ],
             )
             context = browser.new_context(
@@ -178,7 +175,7 @@ def _playwright_get(url: str) -> str:
                 user_agent=(
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/146.0.0.0 Safari/537.36"
+                    "Chrome/120.0.0.0 Safari/537.36"
                 ),
                 locale="es-AR",
                 timezone_id="America/Argentina/Buenos_Aires",
@@ -186,7 +183,7 @@ def _playwright_get(url: str) -> str:
             context.set_default_timeout(25000)
             page = context.new_page()
             Stealth().apply_stealth_sync(page)
-            page.route("**/*.{png,jpg,jpeg,gif,webp,svg,css,woff,ttf,woff2}", lambda route: route.abort())
+            page.route("**/*.{png,jpg,jpeg,gif,webp,svg}", lambda route: route.abort())
             try:
                 page.goto(url, wait_until="domcontentloaded", timeout=25000)
                 page.wait_for_timeout(4000)

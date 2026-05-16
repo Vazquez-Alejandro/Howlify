@@ -41,11 +41,15 @@ export default function CazaCard({ caza, onHunt, onDelete, onUpdate, hunting }: 
   };
 
   const handleSave = async () => {
-    await api.updateCaza(caza.id, {
+    const res = await api.updateCaza(caza.id, {
       keyword: editForm.keyword,
       url: editForm.url,
       precio_max: editForm.precio_max,
     });
+    if (res.error) {
+      toast(res.error, "error");
+      return;
+    }
     setShowEdit(false);
     onUpdate();
     toast("Cacería actualizada", "success");
@@ -74,7 +78,7 @@ export default function CazaCard({ caza, onHunt, onDelete, onUpdate, hunting }: 
                 </span>
               )}
               <span className="text-sm text-gray-500">
-                Máx: ${caza.precio_max.toLocaleString()}
+                Máx: ${(caza.precio_max || 0).toLocaleString()}
               </span>
             </div>
           </div>
@@ -94,7 +98,7 @@ export default function CazaCard({ caza, onHunt, onDelete, onUpdate, hunting }: 
                 setEditForm({
                   keyword: caza.producto || caza.keyword || "",
                   url: caza.link || caza.url || "",
-                  precio_max: caza.precio_max,
+                  precio_max: caza.precio_max || 0,
                 });
                 setShowEdit(true);
               }}

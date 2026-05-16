@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+import httpx
 from supabase import create_client
 
 # ==========================================================
@@ -32,9 +33,12 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
 
 # Cliente para usuarios (login, cazas, perfiles) → requiere refresh
 supabase_user = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-
 # Cliente para panel admin (usuarios, métricas, reportes globales) → no expira
 supabase_admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+# Forzar HTTP/1.1 para evitar desconexiones HTTP/2 con Supabase
+for client in [supabase_user, supabase_admin]:
+    client.postgrest.session = httpx.Client(http2=False)
 
 # Alias por compatibilidad (usa service role por defecto)
 supabase = supabase_admin
