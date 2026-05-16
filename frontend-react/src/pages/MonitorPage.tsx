@@ -218,8 +218,18 @@ export default function MonitorPage() {
   };
 
   const handleAssignGroup = async (cazaId: number, grupoId: number) => {
-    await api.assignMonitorGrupo(cazaId, grupoId || null);
-    await loadData();
+    setRelaciones(prev => {
+      const next = { ...prev };
+      if (grupoId) next[cazaId] = grupoId;
+      else delete next[cazaId];
+      return next;
+    });
+    const res = await api.assignMonitorGrupo(cazaId, grupoId || null);
+    if (res.error) {
+      toast(res.error, "error");
+      await loadData();
+      return;
+    }
   };
 
   if (loading) {
