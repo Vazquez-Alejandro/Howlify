@@ -217,6 +217,11 @@ export default function MonitorPage() {
     toast("Grupo eliminado", "success");
   };
 
+  const handleAssignGroup = async (cazaId: number, grupoId: number) => {
+    await api.assignMonitorGrupo(cazaId, grupoId || null);
+    await loadData();
+  };
+
   if (loading) {
     return <PageTransition><div className="p-6 max-w-6xl mx-auto space-y-4"><SkeletonCard count={6} /></div></PageTransition>;
   }
@@ -269,8 +274,8 @@ export default function MonitorPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-gray-500 text-xs uppercase border-b border-gray-800/50">
-                      {mode === "grupo" && <th className="py-2 pr-2"></th>}
-                      {mode === "grupo" && <th className="py-2 pr-3">Grupo</th>}
+                      <th className="py-2 pr-2"></th>
+                      <th className="py-2 pr-3">Grupo</th>
                       <th className="py-2 pr-3">Riesgo</th>
                       <th className="py-2 pr-3">ID</th>
                       <th className="py-2 pr-3 text-left">Producto</th>
@@ -286,8 +291,16 @@ export default function MonitorPage() {
                     {sorted.map((row) => (
                       <tr key={row.id} onClick={() => setSelectedProducto(row.producto)}
                         className={`border-b border-gray-800/30 text-gray-300 hover:bg-gray-800/20 cursor-pointer transition-colors ${selectedProducto === row.producto ? "bg-red-500/5" : ""}`}>
-                        {mode === "grupo" && <td className="py-2 pr-2">{row.grupoColor.startsWith("#") ? "📁" : row.grupoColor}</td>}
-                        {mode === "grupo" && <td className="py-2 pr-3 text-xs text-gray-500">{row.grupoNombre}</td>}
+                        <td className="py-2 pr-2">{row.grupoColor.startsWith("#") ? "📁" : row.grupoColor}</td>
+                        <td className="py-2 pr-3 text-xs">
+                          <select value={row.grupoId ?? 0}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => handleAssignGroup(row.id, Number(e.target.value))}
+                            className="bg-gray-800/50 border border-gray-700/50 rounded text-gray-300 px-1 py-0.5 focus:outline-none focus:border-red-500/50 w-full max-w-[100px] cursor-pointer hover:border-gray-500 transition-colors">
+                            <option value={0}>—</option>
+                            {grupos.map(g => <option key={g.id} value={g.id}>{g.color} {g.nombre}</option>)}
+                          </select>
+                        </td>
                         <td className="py-2 pr-3 text-lg">{row.riesgo}</td>
                         <td className="py-2 pr-3 text-gray-500 text-xs">{row.id}</td>
                         <td className="py-2 pr-3 font-medium text-white max-w-[180px] truncate">{row.producto}</td>
@@ -324,10 +337,16 @@ export default function MonitorPage() {
                       </div>
                     </div>
                     <p className="text-sm font-medium text-white truncate">{row.producto}</p>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
+                    <div className="flex items-center gap-2 mt-1 text-xs text-gray-400 flex-wrap">
                       <span className="tabular-nums">${row.precio.toLocaleString()}</span>
                       <span className="text-red-400 tabular-nums">MAP ${row.minP.toLocaleString()}-${row.maxP.toLocaleString()}</span>
-                      {mode === "grupo" && <span>{row.grupoNombre}</span>}
+                      <select value={row.grupoId ?? 0}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => handleAssignGroup(row.id, Number(e.target.value))}
+                        className="bg-gray-800/50 border border-gray-700/50 rounded text-gray-300 px-1 py-0.5 text-[10px] focus:outline-none focus:border-red-500/50 cursor-pointer hover:border-gray-500 transition-colors">
+                        <option value={0}>Sin grupo</option>
+                        {grupos.map(g => <option key={g.id} value={g.id}>{g.color} {g.nombre}</option>)}
+                      </select>
                     </div>
                     <div className="w-full h-1 mt-2 bg-gray-700 rounded-full overflow-hidden">
                       <div className={`h-full rounded-full ${row.riesgo === "🔴" ? "bg-red-500" : row.riesgo === "🟠" ? "bg-orange-500" : row.riesgo === "🟡" ? "bg-yellow-500" : row.riesgo === "🟢" ? "bg-green-500" : "bg-gray-600"}`}
