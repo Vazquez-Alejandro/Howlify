@@ -311,18 +311,23 @@ export default function MonitorPage() {
                       <tr key={row.id} onClick={() => setSelectedProducto(row.producto)}
                         className={`border-b border-gray-800/30 text-gray-300 hover:bg-gray-800/20 cursor-pointer transition-colors ${selectedProducto === row.producto ? "bg-red-500/5" : ""}`}>
                         <td className="py-2 pr-2 relative">
-                          <button onClick={(e) => { e.stopPropagation(); setAssigningGroup(assigningGroup === row.id ? null : row.id); }}
+                          <button onClick={(e) => { 
+                              e.stopPropagation(); 
+                              console.log("📁 clicked, row.id:", row.id, "current grupoId:", row.grupoId);
+                              setAssigningGroup(assigningGroup === row.id ? null : row.id); 
+                            }}
                             className="text-xs cursor-pointer hover:scale-110 transition-transform" title="Asignar grupo">
                             {row.grupoColor.startsWith("#") ? "📁" : row.grupoColor}
                           </button>
                           {assigningGroup === row.id && (
-                            <div className="absolute top-0 left-8 z-50 bg-gray-900 border border-gray-700/50 rounded-xl p-1.5 shadow-2xl min-w-[130px]" onClick={(e) => e.stopPropagation()}>
-                              <button onClick={() => { handleAssignGroup(row.id, 0); setAssigningGroup(null); }}
+                            <div className="absolute top-0 left-8 z-[9999] bg-gray-950 border border-red-500/50 rounded-xl p-1.5 shadow-2xl min-w-[150px]" onClick={(e) => e.stopPropagation()}>
+                              <button onClick={() => { console.log("click sin grupo"); handleAssignGroup(row.id, 0); setAssigningGroup(null); }}
                                 className="block w-full text-left px-2.5 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors">
                                 — Sin grupo
                               </button>
+                              {grupos.length === 0 && <p className="text-xs text-gray-500 px-2.5 py-1">(sin grupos)</p>}
                               {grupos.map(g => (
-                                <button key={g.id} onClick={() => { handleAssignGroup(row.id, g.id); setAssigningGroup(null); }}
+                                <button key={g.id} onClick={() => { console.log("click grupo", g.id, g.nombre); handleAssignGroup(row.id, g.id); setAssigningGroup(null); }}
                                   className="block w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors">
                                   {g.color} {g.nombre}
                                 </button>
