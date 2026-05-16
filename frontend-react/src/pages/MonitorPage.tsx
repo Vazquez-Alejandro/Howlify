@@ -11,6 +11,28 @@ import {
 type RiskColor = "⚪" | "🔴" | "🟠" | "🟡" | "🟢";
 type ChartTab = "general" | "historico" | "alertas" | "ranking";
 
+function InfoButton({ description }: { description: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative inline-block">
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        className="w-4 h-4 rounded-full bg-gray-800/50 text-gray-500 hover:text-red-400 hover:bg-gray-700/50 border border-gray-700/50 flex items-center justify-center transition-all text-[10px] font-bold leading-none"
+        title="¿Qué es esto?"
+      >
+        i
+      </button>
+      {open && (
+        <div className="absolute top-5 left-1/2 -translate-x-1/2 z-40 w-64 bg-gray-900 border border-gray-700/50 rounded-xl p-3 shadow-2xl text-xs text-gray-300 leading-relaxed backdrop-blur-xl"
+          onClick={(e) => e.stopPropagation()}>
+          <p>{description}</p>
+          <button onClick={() => setOpen(false)} className="mt-2 text-red-400 hover:text-red-300 text-[10px] font-medium">Cerrar</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const RIESGO_LABEL: Record<RiskColor, string> = {
   "⚪": "Sin precio", "🟢": "En rango", "🟡": "Cerca del límite",
   "🟠": "En el límite", "🔴": "Fuera de rango",
@@ -421,7 +443,10 @@ export default function MonitorPage() {
               {chartTab === "general" && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <h4 className="text-sm font-semibold text-gray-300 mb-3">Estado general de precios</h4>
+                    <h4 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-1.5">
+                      Estado general de precios
+                      <InfoButton description="Muestra la proporción de productos en cada estado de cumplimiento. Los segmentos representan productos en rango (verde), cerca del límite (amarillo), en el límite (naranja), fuera de rango (rojo) y sin datos de precio (gris)." />
+                    </h4>
                     <ResponsiveContainer width="100%" height={220}>
                       <PieChart>
                         <Pie data={complianceData.filter(d => d.value > 0)} cx="50%" cy="50%" innerRadius={50} outerRadius={90}
@@ -435,7 +460,10 @@ export default function MonitorPage() {
                     </ResponsiveContainer>
                   </div>
                   <div>
-                    <h4 className="text-sm font-semibold text-gray-300 mb-3">Cumplimiento</h4>
+                    <h4 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-1.5">
+                      Cumplimiento
+                      <InfoButton description="Cantidad de productos en cada categoría de cumplimiento. Permite ver rápidamente cuántos productos están dentro del rango MAP permitido, cuántos están en alerta y cuántos en violación." />
+                    </h4>
                     <ResponsiveContainer width="100%" height={220}>
                       <BarChart data={complianceData.filter(d => d.value > 0)}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
@@ -456,7 +484,10 @@ export default function MonitorPage() {
               {chartTab === "historico" && (
                 <div>
                   <div className="flex items-center gap-2 mb-3">
-                    <h4 className="text-sm font-semibold text-gray-300">Evolución de precios</h4>
+                    <h4 className="text-sm font-semibold text-gray-300 flex items-center gap-1.5">
+                      Evolución de precios
+                      <InfoButton description="Evolución del precio de un producto a lo largo del tiempo. Las líneas punteadas verdes marcan los límites MAP mínimo y máximo. Seleccioná un producto en el menú desplegable para ver su histórico." />
+                    </h4>
                     <select value={selectedProducto || ""} onChange={e => setSelectedProducto(e.target.value || null)}
                       className="ml-auto px-3 py-1.5 bg-gray-800/50 border border-gray-700/50 rounded-lg text-xs text-white focus:outline-none focus:border-red-500/50">
                       <option value="">Seleccionar producto...</option>
@@ -493,7 +524,10 @@ export default function MonitorPage() {
               {chartTab === "alertas" && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <h4 className="text-sm font-semibold text-gray-300 mb-3">Precio vs rango MAP</h4>
+                    <h4 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-1.5">
+                      Precio vs rango MAP
+                      <InfoButton description="Cada punto representa una medición de precio del producto seleccionado. Los puntos verdes están dentro del rango MAP, los rojos están fuera. Permite identificar cuándo y con qué frecuencia un producto sale de los límites permitidos." />
+                    </h4>
                     {selectedRow && selectedHistory.length > 1 ? (
                       <ResponsiveContainer width="100%" height={260}>
                         <ScatterChart>
@@ -513,7 +547,10 @@ export default function MonitorPage() {
                     )}
                   </div>
                   <div>
-                    <h4 className="text-sm font-semibold text-gray-300 mb-3">Frecuencia de infracciones</h4>
+                    <h4 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-1.5">
+                      Frecuencia de infracciones
+                      <InfoButton description="Cantidad de infracciones registradas por día. Una infracción ocurre cuando el precio de un producto está fuera del rango MAP permitido. Picos altos pueden indicar problemas generalizados de cumplimiento." />
+                    </h4>
                     {infracciones.length > 0 ? (
                       <ResponsiveContainer width="100%" height={260}>
                         <BarChart data={Object.entries(
@@ -539,7 +576,10 @@ export default function MonitorPage() {
 
               {chartTab === "ranking" && (
                 <div>
-                  <h4 className="text-sm font-semibold text-gray-300 mb-3">Productos más problemáticos</h4>
+                  <h4 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-1.5">
+                    Productos más problemáticos
+                    <InfoButton description="Ranking de los 10 productos con más infracciones acumuladas. Ayuda a identificar rápidamente qué productos necesitan atención urgente. El color indica el nivel de riesgo actual de cada producto." />
+                  </h4>
                   {rankingData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={Math.max(200, rankingData.length * 35)}>
                       <BarChart data={rankingData} layout="vertical">
