@@ -12,7 +12,7 @@ import MonitorPage from "./MonitorPage";
 type View = "rastreadores" | "perfil" | "admin" | "monitor";
 
 const PLAN_INFO: Record<string, { label: string; max: number }> = {
-  starter: { label: "Starter", max: 5 },
+  starter: { label: "Starter", max: 3 },
   pro: { label: "Pro", max: 15 },
   business_reseller: { label: "Business Reseller", max: 40 },
   business_monitor: { label: "Business Monitor", max: 100 },

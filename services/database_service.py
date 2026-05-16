@@ -72,7 +72,7 @@ def obtener_cazas_usuario(user_id, refresh_token):
 def contar_cazas_activas(user_id, refresh_token):
     data = safe_query("cazas", [
         {"col": "user_id", "val": user_id},
-        {"col": "status", "val": "active"}
+        {"col": "estado", "val": "activa"}
     ], refresh_token)
     if isinstance(data, dict) and "error" in data:
         return 0, data["error"]

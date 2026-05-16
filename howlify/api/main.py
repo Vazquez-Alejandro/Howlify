@@ -181,10 +181,12 @@ def list_cazas(authorization: str = Header(default="")):
 def create_caza(caza: CazaCreate, authorization: str = Header(default="")):
     uid = get_user_id(authorization)
     from services.database_service import guardar_caza_supabase
+    profile = supabase.table("profiles").select("plan").eq("user_id", uid).limit(1).execute()
+    plan = profile.data[0]["plan"] if profile.data else "starter"
     url_limpia = clean_ml_url(caza.url)
     src = infer_source_from_url(url_limpia) or "generic"
     precio_int = parse_price_to_int(caza.precio_max)
-    ok = guardar_caza_supabase(uid, caza.keyword, url_limpia, precio_int, caza.frecuencia, caza.tipo, "starter", src)
+    ok = guardar_caza_supabase(uid, caza.keyword, url_limpia, precio_int, caza.frecuencia, caza.tipo, plan, src)
     if ok is not True:
         raise HTTPException(status_code=400, detail=str(ok))
     return {"message": "Cacería creada"}
