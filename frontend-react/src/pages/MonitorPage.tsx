@@ -56,6 +56,7 @@ export default function MonitorPage() {
   const [mode, setMode] = useState<"id" | "grupo">("id");
   const [chartTab, setChartTab] = useState<ChartTab>("general");
   const [evidenciaModal, setEvidenciaModal] = useState<string | null>(null);
+  const [assigningGroup, setAssigningGroup] = useState<number | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -79,6 +80,14 @@ export default function MonitorPage() {
   };
 
   useEffect(() => { loadData(); }, []);
+
+  useEffect(() => {
+    if (assigningGroup !== null) {
+      const close = () => setAssigningGroup(null);
+      document.addEventListener("click", close);
+      return () => document.removeEventListener("click", close);
+    }
+  }, [assigningGroup]);
 
   // Derived data
   const rulesMap = useMemo(() => new Map(rules.map(r => [r.caza_id, r])), [rules]);
@@ -301,16 +310,27 @@ export default function MonitorPage() {
                     {sorted.map((row) => (
                       <tr key={row.id} onClick={() => setSelectedProducto(row.producto)}
                         className={`border-b border-gray-800/30 text-gray-300 hover:bg-gray-800/20 cursor-pointer transition-colors ${selectedProducto === row.producto ? "bg-red-500/5" : ""}`}>
-                        <td className="py-2 pr-2">{row.grupoColor.startsWith("#") ? "📁" : row.grupoColor}</td>
-                        <td className="py-2 pr-3 text-xs">
-                          <select value={row.grupoId ?? 0}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => handleAssignGroup(row.id, Number(e.target.value))}
-                            className="bg-gray-800/50 border border-gray-700/50 rounded text-gray-300 px-1 py-0.5 focus:outline-none focus:border-red-500/50 w-full max-w-[100px] cursor-pointer hover:border-gray-500 transition-colors">
-                            <option value={0}>—</option>
-                            {grupos.map(g => <option key={g.id} value={g.id}>{g.color} {g.nombre}</option>)}
-                          </select>
+                        <td className="py-2 pr-2 relative">
+                          <button onClick={(e) => { e.stopPropagation(); setAssigningGroup(assigningGroup === row.id ? null : row.id); }}
+                            className="text-xs cursor-pointer hover:scale-110 transition-transform" title="Asignar grupo">
+                            {row.grupoColor.startsWith("#") ? "📁" : row.grupoColor}
+                          </button>
+                          {assigningGroup === row.id && (
+                            <div className="absolute top-0 left-8 z-50 bg-gray-900 border border-gray-700/50 rounded-xl p-1.5 shadow-2xl min-w-[130px]" onClick={(e) => e.stopPropagation()}>
+                              <button onClick={() => { handleAssignGroup(row.id, 0); setAssigningGroup(null); }}
+                                className="block w-full text-left px-2.5 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors">
+                                — Sin grupo
+                              </button>
+                              {grupos.map(g => (
+                                <button key={g.id} onClick={() => { handleAssignGroup(row.id, g.id); setAssigningGroup(null); }}
+                                  className="block w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors">
+                                  {g.color} {g.nombre}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </td>
+                        <td className="py-2 pr-3 text-xs text-gray-500">{row.grupoNombre}</td>
                         <td className="py-2 pr-3 text-lg">{row.riesgo}</td>
                         <td className="py-2 pr-3 text-gray-500 text-xs">{row.id}</td>
                         <td className="py-2 pr-3 font-medium text-white max-w-[180px] truncate">{row.producto}</td>
@@ -350,13 +370,26 @@ export default function MonitorPage() {
                     <div className="flex items-center gap-2 mt-1 text-xs text-gray-400 flex-wrap">
                       <span className="tabular-nums">${row.precio.toLocaleString()}</span>
                       <span className="text-red-400 tabular-nums">MAP ${row.minP.toLocaleString()}-${row.maxP.toLocaleString()}</span>
-                      <select value={row.grupoId ?? 0}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => handleAssignGroup(row.id, Number(e.target.value))}
-                        className="bg-gray-800/50 border border-gray-700/50 rounded text-gray-300 px-1 py-0.5 text-[10px] focus:outline-none focus:border-red-500/50 cursor-pointer hover:border-gray-500 transition-colors">
-                        <option value={0}>Sin grupo</option>
-                        {grupos.map(g => <option key={g.id} value={g.id}>{g.color} {g.nombre}</option>)}
-                      </select>
+                      <div className="relative">
+                        <button onClick={(e) => { e.stopPropagation(); setAssigningGroup(assigningGroup === row.id ? null : row.id); }}
+                          className="text-[10px] text-gray-500 hover:text-gray-300 hover:bg-gray-800/50 px-1.5 py-0.5 rounded transition-colors cursor-pointer">
+                          {row.grupoId ? `${row.grupoColor} ${row.grupoNombre}` : "+ grupo"}
+                        </button>
+                        {assigningGroup === row.id && (
+                          <div className="absolute bottom-6 left-0 z-50 bg-gray-900 border border-gray-700/50 rounded-xl p-1.5 shadow-2xl min-w-[130px]" onClick={(e) => e.stopPropagation()}>
+                            <button onClick={() => { handleAssignGroup(row.id, 0); setAssigningGroup(null); }}
+                              className="block w-full text-left px-2.5 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors">
+                              — Sin grupo
+                            </button>
+                            {grupos.map(g => (
+                              <button key={g.id} onClick={() => { handleAssignGroup(row.id, g.id); setAssigningGroup(null); }}
+                                className="block w-full text-left px-2.5 py-1.5 text-xs text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors">
+                                {g.color} {g.nombre}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="w-full h-1 mt-2 bg-gray-700 rounded-full overflow-hidden">
                       <div className={`h-full rounded-full ${row.riesgo === "🔴" ? "bg-red-500" : row.riesgo === "🟠" ? "bg-orange-500" : row.riesgo === "🟡" ? "bg-yellow-500" : row.riesgo === "🟢" ? "bg-green-500" : "bg-gray-600"}`}
