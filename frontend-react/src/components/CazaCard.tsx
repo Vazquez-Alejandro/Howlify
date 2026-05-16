@@ -16,6 +16,7 @@ export default function CazaCard({ caza, onHunt, onDelete, onUpdate, hunting }: 
   const [showResults, setShowResults] = useState(false);
   const [loadingResults, setLoadingResults] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const [editForm, setEditForm] = useState({
     keyword: caza.producto || caza.keyword || "",
@@ -107,13 +108,30 @@ export default function CazaCard({ caza, onHunt, onDelete, onUpdate, hunting }: 
             >
               ✏️
             </button>
-            <button
-              onClick={onDelete}
-              className="px-3 py-1.5 bg-gray-800/50 text-gray-600 rounded-xl hover:bg-red-900/30 hover:text-red-400 text-sm transition-all border border-gray-700/50"
-              title="Eliminar"
-            >
-              🗑️
-            </button>
+            {confirmDelete ? (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => { setConfirmDelete(false); onDelete(); }}
+                  className="px-2 py-1.5 bg-red-500/20 text-red-400 rounded-xl hover:bg-red-500/30 text-xs font-medium transition-all border border-red-500/30"
+                >
+                  Sí, eliminar
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="px-2 py-1.5 bg-gray-800/50 text-gray-500 rounded-xl hover:bg-gray-700/50 hover:text-gray-300 text-xs transition-all border border-gray-700/50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="px-3 py-1.5 bg-gray-800/50 text-gray-600 rounded-xl hover:bg-red-900/30 hover:text-red-400 text-sm transition-all border border-gray-700/50"
+                title="Eliminar"
+              >
+                🗑️
+              </button>
+            )}
           </div>
         </div>
 
