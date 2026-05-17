@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
-import { supabase } from "../lib/supabase";
+import { api } from "../api/client";
 import PageTransition from "../components/PageTransition";
 import Logo from "../components/Logo";
 
@@ -29,13 +29,8 @@ export default function ResetPasswordPage() {
     if (password.length < 6) return setError("La contraseña debe tener al menos 6 caracteres.");
     setLoading(true);
     try {
-      const { error: verifyErr } = await supabase.auth.verifyOtp({
-        token_hash: token_hash!,
-        type: "recovery",
-      });
-      if (verifyErr) throw verifyErr;
-      const { error: updateErr } = await supabase.auth.updateUser({ password });
-      if (updateErr) throw updateErr;
+      const { error } = await api.resetPassword(token_hash!, password);
+      if (error) throw new Error(error);
       setSuccess("Contraseña actualizada correctamente.");
       setTimeout(() => navigate("/"), 2500);
     } catch (err: unknown) {

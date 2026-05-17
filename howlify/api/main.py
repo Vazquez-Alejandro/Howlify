@@ -4,14 +4,16 @@ import time
 import json
 import base64
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException, Header, Query
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Header, Query, Request
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from auth.supabase_client import supabase
@@ -20,6 +22,22 @@ app = FastAPI(title="Howlify API", version="1.0.0")
 
 from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+REACT_DIST = Path(__file__).resolve().parents[2] / "frontend-react" / "dist"
+_HAS_REACT = REACT_DIST.exists() and (REACT_DIST / "index.html").exists()
+if _HAS_REACT:
+    app.mount("/assets", StaticFiles(directory=str(REACT_DIST / "assets")), name="react-assets")
+
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    class SPAFallbackMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            response = await call_next(request)
+            if response.status_code == 404 and not request.url.path.startswith("/api/"):
+                return FileResponse(str(REACT_DIST / "index.html"))
+            return response
+
+    app.add_middleware(SPAFallbackMiddleware)
 
 # ─── Auth ───────────────────────────────────────────────
 
@@ -52,6 +70,10 @@ class SignupRequest(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     email: str
+
+class ResetPasswordRequest(BaseModel):
+    token_hash: str
+    password: str
 
 class CazaCreate(BaseModel):
     keyword: str
@@ -161,12 +183,94 @@ def forgot_password(req: ForgotPasswordRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@app.post("/api/auth/reset-password")
+def reset_password(req: ResetPasswordRequest):
+    try:
+        verify = supabase.auth.verify_otp({"token_hash": req.token_hash, "type": "recovery"})
+        if verify.user:
+            update = supabase.auth.update_user({"password": req.password})
+            if update.user:
+                return {"message": "Contraseña actualizada correctamente"}
+        raise HTTPException(status_code=400, detail="No se pudo actualizar la contraseña")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @app.get("/api/auth/profile")
 def get_profile(authorization: str = Header(default="")):
     uid = get_user_id(authorization)
     from db.database import get_user_profile
     profile = get_user_profile(uid)
     return {"user_id": uid, "profile": profile}
+
+
+class ProfileUpdate(BaseModel):
+    username: str | None = None
+    telegram_id: str | None = None
+    whatsapp_number: str | None = None
+    report_enabled: bool | None = None
+    report_time: str | None = None
+    report_days: list[int] | None = None
+
+
+@app.put("/api/auth/profile")
+def update_profile(data: ProfileUpdate, authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    payload = {k: v for k, v in data.model_dump().items() if v is not None}
+    if not payload:
+        raise HTTPException(status_code=400, detail="Sin datos para actualizar")
+    try:
+        supabase.table("profiles").update(payload).eq("user_id", uid).execute()
+        return {"message": "Perfil actualizado"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class TestNotificationRequest(BaseModel):
+    channel: str  # "telegram", "whatsapp", "email"
+
+
+@app.post("/api/auth/test-notification")
+def test_notification(data: TestNotificationRequest, authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    from db.database import get_user_profile
+    profile = get_user_profile(uid)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado")
+
+    from services.notification_service import enviar_telegram, enviar_whatsapp, enviar_email
+    mensaje = "🐺 ¡Howlify funciona correctamente! Esta es una notificación de prueba."
+
+    if data.channel == "telegram":
+        tg_id = profile.get("telegram_id")
+        if not tg_id:
+            raise HTTPException(status_code=400, detail="No hay Telegram ID configurado")
+        ok = enviar_telegram(str(tg_id), mensaje)
+        return {"ok": ok, "channel": "telegram"}
+
+    if data.channel == "whatsapp":
+        num = profile.get("whatsapp_number")
+        if not num:
+            raise HTTPException(status_code=400, detail="No hay WhatsApp configurado")
+        ok = enviar_whatsapp(str(num), mensaje)
+        return {"ok": ok, "channel": "whatsapp"}
+
+    if data.channel == "email":
+        email = profile.get("email") or profile.get("user_email")
+        if not email:
+            try:
+                user_res = supabase.auth.admin.get_user_by_id(uid)
+                email = user_res.user.email if user_res and user_res.user else None
+            except Exception:
+                email = None
+        if not email:
+            raise HTTPException(status_code=400, detail="No se pudo obtener el email")
+        ok = enviar_email(str(email), "🐺 Prueba Howlify", mensaje)
+        return {"ok": ok, "channel": "email"}
+
+    raise HTTPException(status_code=400, detail="Canal inválido. Usar: telegram, whatsapp, email")
+
 
 # ─── Cazas ──────────────────────────────────────────────
 
@@ -263,6 +367,47 @@ def hunt_all(authorization: str = Header(default="")):
             results[rid] = {"error": str(e)}
     return {"results": results}
 
+# ─── Async Hunt (via Celery) ────────────────────────────
+
+
+@app.post("/api/hunt/async/{caza_id}")
+def hunt_single_async(caza_id: int, authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    try:
+        from howlify.tasks import hunt_single_task
+        task = hunt_single_task.delay(caza_id, uid)
+        return {"task_id": task.id, "status": "queued"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error encolando tarea: {e}")
+
+
+@app.post("/api/hunt/async/all")
+def hunt_all_async(authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    try:
+        from howlify.tasks import hunt_all_user_task
+        task = hunt_all_user_task.delay(uid)
+        return {"task_id": task.id, "status": "queued"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error encolando tarea: {e}")
+
+
+@app.get("/api/task/{task_id}")
+def get_task_status(task_id: str):
+    try:
+        from howlify.celery_app import celery_app
+        result = celery_app.AsyncResult(task_id)
+        return {
+            "task_id": task_id,
+            "status": result.status,
+            "ready": result.ready(),
+            "successful": result.successful() if result.ready() else None,
+            "result": result.result if result.ready() else None,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ─── Price History ──────────────────────────────────────
 
 @app.get("/api/history/{caza_id}")
@@ -286,20 +431,23 @@ def get_monitor_rules(authorization: str = Header(default="")):
 
 @app.put("/api/monitor/rules/{caza_id}")
 def upsert_monitor_rule(caza_id: int, body: dict, authorization: str = Header(default="")):
-    uid = get_user_id(authorization)
-    payload = {
-        "user_id": uid,
-        "caza_id": caza_id,
-        "product_name": body.get("product_name", "").strip(),
-        "product_url": body.get("product_url", "").strip(),
-        "source": body.get("source", "generic").strip().lower(),
-        "target_price": int(body.get("target_price", 0)),
-        "min_price_allowed": int(body.get("min_price_allowed", 0)),
-        "max_price_allowed": int(body.get("max_price_allowed", 0)),
-        "is_active": True,
-    }
-    supabase.table("monitor_rules").upsert(payload, on_conflict="caza_id").execute()
-    return {"message": "Regla actualizada"}
+    try:
+        uid = get_user_id(authorization)
+        payload = {
+            "user_id": uid,
+            "caza_id": caza_id,
+            "product_name": body.get("product_name", "").strip(),
+            "product_url": body.get("product_url", "").strip(),
+            "source": body.get("source", "generic").strip().lower(),
+            "target_price": int(body.get("target_price", 0)),
+            "min_price_allowed": int(body.get("min_price_allowed", 0)),
+            "max_price_allowed": int(body.get("max_price_allowed", 0)),
+            "is_active": True,
+        }
+        supabase.table("monitor_rules").upsert(payload, on_conflict="caza_id").execute()
+        return {"message": "Regla actualizada"}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error upsert monitor rule: {e}"})
 
 @app.delete("/api/monitor/rules/{caza_id}")
 def delete_monitor_rule(caza_id: int, authorization: str = Header(default="")):
@@ -345,13 +493,16 @@ def get_grupo_cazas():
 
 @app.put("/api/monitor/grupo-cazas")
 def assign_grupo_caza(body: dict, authorization: str = Header(default="")):
-    get_user_id(authorization)
-    caza_id = body.get("caza_id")
-    grupo_id = body.get("grupo_id")
-    supabase.table("grupo_cazas").delete().eq("caza_id", caza_id).execute()
-    if grupo_id:
-        supabase.table("grupo_cazas").insert({"caza_id": caza_id, "grupo_id": grupo_id}).execute()
-    return {"message": "Asignación actualizada"}
+    try:
+        get_user_id(authorization)
+        caza_id = body.get("caza_id")
+        grupo_id = body.get("grupo_id")
+        supabase.table("grupo_cazas").delete().eq("caza_id", caza_id).execute()
+        if grupo_id:
+            supabase.table("grupo_cazas").insert({"caza_id": caza_id, "grupo_id": grupo_id}).execute()
+        return {"message": "Asignación actualizada"}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error assign grupo: {e}"})
 
 @app.get("/api/monitor/price-history/{caza_id}")
 def get_monitor_price_history(caza_id: int, authorization: str = Header(default="")):

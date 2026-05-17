@@ -100,7 +100,7 @@ export default function DashboardPage() {
     { key: "rastreadores", label: "Mis Rastreadores", icon: "🐺" },
     ...(effectivePlan === "business_monitor" || isAdmin ? [{ key: "monitor" as View, label: "Monitor", icon: "📊" }] : []),
     ...(isAdmin ? [{ key: "admin" as View, label: "Panel Admin", icon: "🛠️" }] : []),
-    { key: "perfil", label: "Mi Perfil", icon: "👤" },
+    { key: "perfil", label: "Configuración", icon: "⚙️" },
   ];
 
   return (
@@ -126,7 +126,14 @@ export default function DashboardPage() {
             {menuItems.map((item) => (
               <button
                 key={item.key}
-                onClick={() => { setView(item.key); setSidebarOpen(false); }}
+                onClick={() => {
+                  if (item.key === "perfil") {
+                    navigate("/profile");
+                  } else {
+                    setView(item.key);
+                  }
+                  setSidebarOpen(false);
+                }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   view === item.key
                     ? "bg-red-500/10 text-red-400 border border-red-500/20"

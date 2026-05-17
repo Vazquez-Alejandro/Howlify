@@ -194,22 +194,43 @@ export default function MonitorPage() {
 
   // Config form
   const [mapForm, setMapForm] = useState({ min: 0, max: 0, grupoId: 0 });
+  const [saveVersion, setSaveVersion] = useState(0);
   useEffect(() => {
     if (selectedRow) setMapForm({ min: selectedRow.minP, max: selectedRow.maxP, grupoId: selectedRow.grupoId ?? 0 });
-  }, [selectedProducto]);
+  }, [selectedProducto, saveVersion]);
 
   const [newGrupoName, setNewGrupoName] = useState("");
   const [newGrupoEmoji, setNewGrupoEmoji] = useState("📁");
 
+  const [saving, setSaving] = useState(false);
+
   const handleSaveConfig = async () => {
-    if (!selectedRow) return;
-    await api.upsertMonitorRule(selectedRow.id, {
-      product_name: selectedRow.producto, product_url: selectedRow.url,
-      source: "generic", min_price_allowed: mapForm.min, max_price_allowed: mapForm.max,
-    });
-    await api.assignMonitorGrupo(selectedRow.id, mapForm.grupoId || null);
-    await loadData();
-    toast("Configuración guardada", "success");
+    if (!selectedRow) {
+      toast("Seleccioná un producto primero", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      console.log("[handleSaveConfig] saving for cazaId:", selectedRow.id, "grupoId:", mapForm.grupoId);
+      const ruleRes = await api.upsertMonitorRule(selectedRow.id, {
+        product_name: selectedRow.producto, product_url: selectedRow.url,
+        source: "generic", min_price_allowed: mapForm.min, max_price_allowed: mapForm.max,
+      });
+      console.log("[handleSaveConfig] upsertMonitorRule result:", ruleRes);
+      const groupRes = await api.assignMonitorGrupo(selectedRow.id, mapForm.grupoId || null);
+      console.log("[handleSaveConfig] assignMonitorGrupo result:", groupRes);
+      await loadData();
+      if (ruleRes.error || groupRes.error) {
+        toast(ruleRes.error || groupRes.error || "Error al guardar", "error");
+      } else {
+        toast("Configuración guardada", "success");
+      }
+    } catch (e) {
+      toast("Error inesperado al guardar", "error");
+    } finally {
+      setSaveVersion(v => v + 1);
+      setSaving(false);
+    }
   };
 
   const handleCreateGrupo = async () => {
@@ -227,18 +248,13 @@ export default function MonitorPage() {
   };
 
   const handleAssignGroup = async (cazaId: number, grupoId: number) => {
-    setRelaciones(prev => {
-      const next = { ...prev };
-      if (grupoId) next[cazaId] = grupoId;
-      else delete next[cazaId];
-      return next;
-    });
+    console.log("[handleAssignGroup] START cazaId:", cazaId, "grupoId:", grupoId);
     const res = await api.assignMonitorGrupo(cazaId, grupoId || null);
+    console.log("[handleAssignGroup] API result:", res);
     if (res.error) {
       toast(res.error, "error");
-      await loadData();
-      return;
     }
+    await loadData();
   };
 
   if (loading) {
@@ -441,16 +457,23 @@ export default function MonitorPage() {
                       </div>
                       <div>
                         <label className="text-[10px] text-gray-400 ml-1 uppercase">Grupo</label>
-                        <select value={mapForm.grupoId} onChange={e => setMapForm(f => ({ ...f, grupoId: Number(e.target.value) }))}
-                          className="w-full mt-0.5 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm focus:outline-none focus:border-red-500/50">
-                          <option value={0}>Sin Grupo</option>
-                          {grupos.map(g => <option key={g.id} value={g.id}>{g.color} {g.nombre}</option>)}
-                        </select>
+                        <div className="flex gap-1 mt-0.5">
+                          <select value={mapForm.grupoId} onChange={e => setMapForm(f => ({ ...f, grupoId: Number(e.target.value) }))}
+                            className="flex-1 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm focus:outline-none focus:border-red-500/50">
+                            <option value={0}>Sin Grupo</option>
+                            {grupos.map(g => <option key={g.id} value={g.id}>{g.color} {g.nombre}</option>)}
+                          </select>
+                          <button onClick={() => { if (selectedRow) handleAssignGroup(selectedRow.id, mapForm.grupoId); }}
+                            className="px-3 py-2 bg-red-500/20 text-red-400 rounded-lg text-xs font-medium hover:bg-red-500/30 transition-all border border-red-500/20 shrink-0"
+                            title="Asignar grupo">
+                            Asignar
+                          </button>
+                        </div>
                       </div>
                     </div>
-                    <button onClick={handleSaveConfig}
-                      className="w-full py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold text-sm hover:from-red-600 hover:to-red-700 transition-all shadow-lg shadow-red-500/20">
-                      💾 Guardar Cambios
+                    <button onClick={handleSaveConfig} disabled={saving}
+                      className="w-full py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold text-sm hover:from-red-600 hover:to-red-700 transition-all shadow-lg shadow-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                      {saving ? "⏳ Guardando..." : "💾 Guardar Cambios"}
                     </button>
                   </div>
                 )}

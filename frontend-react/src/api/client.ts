@@ -70,13 +70,40 @@ export const api = {
 
   huntAll: () => request<{ results: Record<string, HuntResult[]> }>("/api/hunt/all", { method: "POST" }),
 
+  huntSingleAsync: (id: number) =>
+    request<{ task_id: string; status: string }>(`/api/hunt/async/${id}`, { method: "POST" }),
+
+  huntAllAsync: () =>
+    request<{ task_id: string; status: string }>("/api/hunt/async/all", { method: "POST" }),
+
+  getTaskStatus: <T>(taskId: string) =>
+    request<{ task_id: string; status: string; ready: boolean; successful?: boolean | null; result?: T | null }>(`/api/task/${taskId}`),
+
   forgotPassword: (email: string) =>
     request<{ message: string }>("/api/auth/forgot-password", {
       method: "POST",
       body: JSON.stringify({ email }),
     }),
 
-  getProfile: () => request<{ profile: { role?: string; plan?: string } }>("/api/auth/profile"),
+  resetPassword: (token_hash: string, password: string) =>
+    request<{ message: string }>("/api/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token_hash, password }),
+    }),
+
+  getProfile: () => request<{ profile: Record<string, unknown> }>("/api/auth/profile"),
+
+  updateProfile: (data: Record<string, unknown>) =>
+    request<{ message: string }>("/api/auth/profile", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  testNotification: (channel: string) =>
+    request<{ ok: boolean; channel: string }>("/api/auth/test-notification", {
+      method: "POST",
+      body: JSON.stringify({ channel }),
+    }),
 
   adminUsers: () => request<{ users: Record<string, unknown>[] }>("/api/admin/users"),
 
