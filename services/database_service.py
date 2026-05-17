@@ -176,14 +176,13 @@ def es_plan_business(plan: str) -> bool:
 # LOOP PRINCIPAL
 # ==========================================================
 def vigilar_ofertas(refresh_token=None):
-    # 🐺 IMPORTACIÓN LOCAL PARA EVITAR REFERENCIA CIRCULAR
-    from engine.engine import (
-        disparar_alerta_minima, 
-        obtener_ultima_alerta, 
-        too_soon, 
-        obtener_contacto_usuario, 
-        enviar_alerta_por_canal, 
-        guardar_alerta
+    from services.alerts_service import (
+        disparar_alerta_minima,
+        obtener_ultima_alerta,
+        too_soon,
+        obtener_contacto_usuario,
+        enviar_alerta_por_canal,
+        guardar_alerta,
     )
 
     print("🐺 Vigilando ofertas...")
