@@ -1,0 +1,67 @@
+# Env / secrets
+.env
+*.env
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+venv_bots/
+*.egg-info/
+
+# Node
+node_modules/
+
+# Browser profiles
+bot_profile/
+chrome_profile/
+ff_profile/
+
+# Sessions
+sessions/
+
+# Cache
+.scraper_cache/
+.streamlit/
+__pycache__/
+
+# Data / evidence
+evidence/
+howlify.db
+
+# Backups
+_backups_limpieza/
+*.bak
+
+# Logs
+*.log
+
+# Docs
+README.md
+ROADMAP.md
+
+# Dev / test
+test_reporte.py
+listar_logs.py
+
+# Build artifacts (carpeta dist se genera en el build)
+frontend-react/dist/
+
+# Giant binary
+/components
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+docker-compose*.yaml
+
+# Deploy
+deploy/

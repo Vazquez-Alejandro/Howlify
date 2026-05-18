@@ -177,7 +177,7 @@ def forgot_password(req: ForgotPasswordRequest):
     try:
         supabase.auth.reset_password_for_email(
             req.email.strip().lower(),
-            {"redirect_to": "http://localhost:5173/reset-password"}
+            {"redirect_to": f"{os.getenv('APP_BASE_URL', 'http://localhost:5173')}/reset-password"}
         )
         return {"message": "Correo enviado"}
     except Exception as e:

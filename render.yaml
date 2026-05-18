@@ -1,0 +1,151 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Requiere un Redis (plan Starter ~$7/mes) o usar Redis externo (Upstash, Redis Cloud free tier)
+services:
+  - type: web
+    name: howlify-api
+    env: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: HOWLIFY_MODE
+        value: api
+      - key: PORT
+        value: 8000
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: TELEGRAM_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+      - key: APP_BASE_URL
+        value: https://howlify-api.onrender.com
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: SMTP_USE_TLS
+        value: "1"
+      - key: SMTP_USE_SSL
+        value: "0"
+      - key: ALERT_COOLDOWN_MINUTES
+        value: "30"
+      - key: SCRAPERAPI_KEY
+        sync: false
+      - key: DUFFEL_ACCESS_TOKEN
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: howlify-redis
+          property: connectionString
+
+  - type: worker
+    name: howlify-worker
+    env: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: HOWLIFY_MODE
+        value: worker
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: TELEGRAM_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: SMTP_USE_TLS
+        value: "1"
+      - key: SMTP_USE_SSL
+        value: "0"
+      - key: ALERT_COOLDOWN_MINUTES
+        value: "30"
+      - key: SCRAPERAPI_KEY
+        sync: false
+      - key: DUFFEL_ACCESS_TOKEN
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: howlify-redis
+          property: connectionString
+      - key: CELERY_CONCURRENCY
+        value: "2"
+
+  - type: worker
+    name: howlify-beat
+    env: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: HOWLIFY_MODE
+        value: beat
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: TELEGRAM_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: ALERT_COOLDOWN_MINUTES
+        value: "30"
+      - key: SCRAPERAPI_KEY
+        sync: false
+      - key: DUFFEL_ACCESS_TOKEN
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: howlify-redis
+          property: connectionString
+
+databases:
+  - name: howlify-redis
+    plan: starter
+    type: redis
+    ipAllowList: []

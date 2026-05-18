@@ -25,11 +25,13 @@ RUN pip install playwright && \
     playwright install-deps chromium && \
     playwright install chromium
 
-# 4. Copiamos el resto del proyecto
+# 4. Copiamos el resto del proyecto y construimos el frontend React
 COPY . .
 
-# Puerto para Streamlit
-EXPOSE 8501
+RUN cd frontend-react && VITE_API_URL="" npm ci && npm run build
+
+# Puerto para la API
+EXPOSE 8000
 
 # Comando de arranque (usa start.sh para soportar modos: web, api, worker)
 CMD ["bash", "start.sh"]
