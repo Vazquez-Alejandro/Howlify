@@ -1,5 +1,5 @@
 # Render Blueprint — https://render.com/docs/blueprint-spec
-# Requiere un Redis (plan Starter ~$7/mes) o usar Redis externo (Upstash, Redis Cloud free tier)
+# Redis externo: Upstash (free tier) o Redis Cloud
 services:
   - type: web
     name: howlify-api
@@ -49,10 +49,7 @@ services:
       - key: DUFFEL_ACCESS_TOKEN
         sync: false
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: howlify-redis
-          property: connectionString
+        sync: false
 
   - type: worker
     name: howlify-worker
@@ -100,10 +97,7 @@ services:
       - key: DUFFEL_ACCESS_TOKEN
         sync: false
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: howlify-redis
-          property: connectionString
+        sync: false
       - key: CELERY_CONCURRENCY
         value: "2"
 
@@ -139,13 +133,5 @@ services:
       - key: DUFFEL_ACCESS_TOKEN
         sync: false
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: howlify-redis
-          property: connectionString
+        sync: false
 
-databases:
-  - name: howlify-redis
-    plan: starter
-    type: redis
-    ipAllowList: []
