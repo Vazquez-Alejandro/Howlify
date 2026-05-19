@@ -28,7 +28,7 @@ RUN pip install playwright && \
 # 4. Copiamos el resto del proyecto y construimos el frontend React
 COPY . .
 
-RUN cd frontend-react && VITE_API_URL="" npm ci && npm run build
+RUN cd frontend-react && VITE_API_URL="" npm install && npm run build
 
 # Puerto para la API
 EXPOSE 8000
