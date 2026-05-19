@@ -203,7 +203,7 @@ export default function DashboardPage() {
 
           {/* Rastreadores view */}
           {view === "rastreadores" && (
-            <main className="flex-1 px-4 py-5 max-w-3xl mx-auto w-full">
+            <main className="flex-1 px-8 py-5 max-w-full w-full">
               {loading && <SkeletonCard count={3} />}
 
               {!loading && cazas.length === 0 && (
@@ -232,7 +232,7 @@ export default function DashboardPage() {
 
           {/* Perfil view */}
           {view === "perfil" && (
-            <main className="flex-1 px-4 py-5 max-w-xl mx-auto w-full">
+            <main className="flex-1 px-8 py-5 max-w-full w-full">
               <div className="bg-gray-900/60 rounded-2xl p-6 space-y-5" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                 <div className="flex items-center gap-4">
                   <Logo size="md" />
@@ -271,7 +271,7 @@ export default function DashboardPage() {
 
           {/* Admin view */}
           {view === "admin" && (
-            <main className="flex-1 px-4 py-5 max-w-4xl mx-auto w-full">
+            <main className="flex-1 px-8 py-5 max-w-full w-full">
               <h2 className="text-xl font-bold text-white mb-4">🛠️ Panel de Admin</h2>
 
               <div className="bg-gray-900/60 rounded-2xl p-5 mb-5" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
