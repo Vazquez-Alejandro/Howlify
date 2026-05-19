@@ -1087,9 +1087,9 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
                 df_rank = df_rank.groupby("caza_id").size().reset_index(name="Infracciones")
                 df_rank = df_rank.sort_values("Infracciones", ascending=False).head(10)
                 rank_chart = alt.Chart(df_rank).mark_bar(color='red').encode(
-                    x='caza_id:N',
-                    y='Infracciones:Q'
-                )
+                    y=alt.Y('caza_id:N', sort='-x', axis=alt.Axis(title=None)),
+                    x='Infracciones:Q'
+                ).properties(height=400)
                 st.altair_chart(rank_chart, width="stretch")
 
 

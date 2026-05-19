@@ -183,7 +183,7 @@ export default function MonitorPage() {
   const rankingData = useMemo(() => {
     return radarRows
       .map(r => ({
-        name: r.producto,
+        name: r.producto.length > 35 ? r.producto.slice(0, 32) + "..." : r.producto,
         infracciones: infraCount[r.id] || 0,
         riesgo: r.riesgo,
       }))
@@ -675,7 +675,7 @@ export default function MonitorPage() {
                       <BarChart data={rankingData} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
                         <XAxis type="number" tick={{ fill: "#9ca3af", fontSize: 11 }} />
-                        <YAxis dataKey="name" type="category" tick={{ fill: "#9ca3af", fontSize: 10 }} width={140} />
+                        <YAxis dataKey="name" type="category" tick={{ fill: "#9ca3af", fontSize: 11 }} width={200} />
                         <Tooltip />
                         <Bar dataKey="infracciones" stroke="none" radius={[0, 4, 4, 0]}>
                           {rankingData.map((entry, i) => (
