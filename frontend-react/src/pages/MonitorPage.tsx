@@ -258,12 +258,12 @@ export default function MonitorPage() {
   };
 
   if (loading) {
-    return <PageTransition><div className="p-6 max-w-6xl mx-auto space-y-4"><SkeletonCard count={6} /></div></PageTransition>;
+    return <PageTransition><div className="p-6 space-y-4"><SkeletonCard count={6} /></div></PageTransition>;
   }
 
   return (
     <PageTransition>
-      <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-8">
+      <div className="p-4 md:p-8 space-y-14">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-white">📊 Monitor de Precios</h2>
@@ -272,7 +272,7 @@ export default function MonitorPage() {
         </div>
 
         {cazas.length === 0 ? (
-          <div className="text-center py-16 bg-gray-900/40 rounded-2xl border border-gray-800/50">
+          <div className="text-center py-16 bg-gray-900/40 rounded-2xl" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
             <p className="text-4xl mb-3">📡</p>
             <p className="text-lg font-medium text-gray-300">No hay productos monitoreados</p>
             <p className="text-sm text-gray-500 mt-1">Creá una cacería desde Mis Rastreadores para empezar</p>
@@ -286,7 +286,7 @@ export default function MonitorPage() {
                 { label: "Violaciones", value: stats.violacion, color: stats.violacion > 0 ? "text-red-400" : "text-gray-500", icon: "🔴" },
                 { label: "Alertas", value: stats.alerta, color: stats.alerta > 0 ? "text-yellow-400" : "text-gray-500", icon: "⚠️" },
               ].map(s => (
-                <div key={s.label} className="bg-gray-900/60 rounded-xl border border-gray-800/50 p-4">
+                <div key={s.label} className="bg-gray-900/60 rounded-xl p-4" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-[10px] text-gray-500 uppercase tracking-wider">{s.label}</span>
                     <span className="text-sm">{s.icon}</span>
@@ -296,7 +296,7 @@ export default function MonitorPage() {
               ))}
             </div>
 
-            <div className="bg-gray-900/60 rounded-2xl border border-gray-800/50 p-4 md:p-6">
+            <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-sm font-semibold text-gray-300">📡 Radar de Precios</h3>
                 <div className="flex gap-1 bg-gray-800/40 rounded-lg p-0.5">
@@ -421,10 +421,8 @@ export default function MonitorPage() {
               </div>
             </div>
 
-            <div className="h-px bg-gradient-to-r from-transparent via-gray-800/50 to-transparent"></div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-gray-900/60 rounded-2xl border border-gray-800/50 p-4 md:p-6">
+              <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                 <h3 className="text-sm font-semibold text-gray-300 mb-4">🔧 Configurar producto</h3>
                 <select value={selectedProducto || ""} onChange={e => setSelectedProducto(e.target.value || null)}
                   className="w-full mb-4 px-4 py-2.5 bg-gray-800/50 border border-gray-700/50 rounded-xl text-white focus:outline-none focus:border-red-500/50">
@@ -481,7 +479,7 @@ export default function MonitorPage() {
                 )}
               </div>
 
-              <div className="bg-gray-900/60 rounded-2xl border border-gray-800/50 p-4 md:p-6">
+              <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                 <h3 className="text-sm font-semibold text-gray-300 mb-4">⚙️ Grupos</h3>
                 <div className="space-y-4">
                   <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-800/50">
@@ -517,9 +515,7 @@ export default function MonitorPage() {
               </div>
             </div>
 
-            <div className="h-px bg-gradient-to-r from-transparent via-gray-800/50 to-transparent"></div>
-
-            <div className="bg-gray-900/60 rounded-2xl border border-gray-800/50 p-4 md:p-6">
+            <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
               <div className="flex items-center gap-1.5 mb-5 bg-gray-800/40 rounded-lg p-1 w-fit">
                 {([
                   { key: "general" as ChartTab, label: "Visión General", icon: "📊" },
@@ -695,7 +691,7 @@ export default function MonitorPage() {
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 bg-gray-900/40 rounded-xl px-5 py-3 border border-gray-800/50">
+            <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 bg-gray-900/40 rounded-xl px-5 py-3" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
               <span className="text-gray-400 font-medium">Leyenda:</span>
               {(["🟢", "🟡", "🟠", "🔴", "⚪"] as RiskColor[]).map(r => (
                 <span key={r} className="flex items-center gap-1">{r} {RIESGO_LABEL[r]}</span>

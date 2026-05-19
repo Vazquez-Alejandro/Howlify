@@ -67,7 +67,7 @@ export default function ProfilePage() {
         <h1 className="text-2xl font-bold text-white">Configuración</h1>
 
         {/* Plan */}
-        <section className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 space-y-4">
+        <section className="bg-gray-900/60 rounded-2xl p-6 space-y-4" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
           <h2 className="text-lg font-semibold text-white">Mi Plan</h2>
           <div className="flex items-center justify-between">
             <div>
@@ -83,7 +83,7 @@ export default function ProfilePage() {
         </section>
 
         {/* Notificaciones */}
-        <section className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 space-y-6">
+        <section className="bg-gray-900/60 rounded-2xl p-6 space-y-6" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
           <h2 className="text-lg font-semibold text-white">Notificaciones</h2>
 
           {/* Telegram */}

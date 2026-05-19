@@ -39,7 +39,7 @@ export default function LoginPage() {
           </div>
           <div className="relative group">
             <div className="absolute -inset-0.5 bg-gradient-to-r from-red-500 to-red-700 rounded-2xl blur opacity-20 group-hover:opacity-30 transition duration-300" />
-            <form onSubmit={handleSubmit} className="relative bg-gray-900/80 backdrop-blur-xl rounded-2xl p-8 space-y-5 border border-gray-800/50">
+            <form onSubmit={handleSubmit} className="relative bg-gray-900/80 backdrop-blur-xl rounded-2xl p-8 space-y-5" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
               <h3 className="text-xl font-bold text-white">Iniciar Sesión</h3>
               <div className="space-y-1">
                 <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">Email</label>

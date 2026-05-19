@@ -112,8 +112,8 @@ export default function DashboardPage() {
         )}
 
         {/* Sidebar */}
-        <aside className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-64 bg-gray-900/95 backdrop-blur-xl border-r border-gray-800/50 flex flex-col transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-          <div className="p-5 border-b border-gray-800/50">
+        <aside className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-64 bg-gray-900/95 backdrop-blur-xl border-r border border-gray-800/50 flex flex-col transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+          <div className="p-5 border-b border border-gray-800/50">
             <div className="flex items-center gap-3">
               <Logo size="sm" />
               <div>
@@ -145,7 +145,7 @@ export default function DashboardPage() {
               </button>
             ))}
           </nav>
-          <div className="p-3 border-t border-gray-800/50">
+          <div className="p-3 border-t border border-gray-800/50">
             <div className="px-3 py-2 text-xs text-gray-500 truncate">{user?.email}</div>
             <button
               onClick={() => { logout(); navigate("/"); }}
@@ -160,7 +160,7 @@ export default function DashboardPage() {
         {/* Main content */}
         <div className="flex-1 flex flex-col min-h-screen">
           {/* Top bar */}
-          <header className="sticky top-0 z-30 bg-gray-950/80 backdrop-blur-xl border-b border-gray-800/50">
+          <header className="sticky top-0 z-30 bg-gray-950/80 backdrop-blur-xl border-b border border-gray-800/50">
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-3">
                 <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-gray-400 hover:text-white">
@@ -185,15 +185,15 @@ export default function DashboardPage() {
             {/* Stats bar */}
             {view === "rastreadores" && (
               <div className="px-4 pb-3 grid grid-cols-3 gap-2">
-                <div className="bg-gray-900/60 rounded-xl border border-gray-800/50 px-3 py-2.5">
+                <div className="bg-gray-900/60 rounded-xl px-3 py-2.5" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                   <p className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">Cacerías</p>
                   <p className="text-lg font-bold text-white mt-0.5">{cazas.length} / {maxCazas}</p>
                 </div>
-                <div className="bg-gray-900/60 rounded-xl border border-gray-800/50 px-3 py-2.5">
+                <div className="bg-gray-900/60 rounded-xl px-3 py-2.5" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                   <p className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">Activas</p>
                   <p className="text-lg font-bold text-green-400 mt-0.5">{activeCazas}</p>
                 </div>
-                <div className="bg-gray-900/60 rounded-xl border border-gray-800/50 px-3 py-2.5">
+                <div className="bg-gray-900/60 rounded-xl px-3 py-2.5" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                   <p className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">Alertas</p>
                   <p className={`text-lg font-bold mt-0.5 ${alertsCount > 0 ? "text-red-400" : "text-gray-500"}`}>{alertsCount}</p>
                 </div>
@@ -233,7 +233,7 @@ export default function DashboardPage() {
           {/* Perfil view */}
           {view === "perfil" && (
             <main className="flex-1 px-4 py-5 max-w-xl mx-auto w-full">
-              <div className="bg-gray-900/60 rounded-2xl border border-gray-800/50 p-6 space-y-5">
+              <div className="bg-gray-900/60 rounded-2xl p-6 space-y-5" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                 <div className="flex items-center gap-4">
                   <Logo size="md" />
                   <div>
@@ -274,7 +274,7 @@ export default function DashboardPage() {
             <main className="flex-1 px-4 py-5 max-w-4xl mx-auto w-full">
               <h2 className="text-xl font-bold text-white mb-4">🛠️ Panel de Admin</h2>
 
-              <div className="bg-gray-900/60 rounded-2xl border border-gray-800/50 p-5 mb-5">
+              <div className="bg-gray-900/60 rounded-2xl p-5 mb-5" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                 <h3 className="text-sm font-semibold text-gray-300 mb-3">Simular vista de plan</h3>
                 <div className="flex flex-wrap gap-2">
                   {["starter", "pro", "business_reseller", "business_monitor"].map((p) => (
@@ -298,7 +298,7 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <div className="bg-gray-900/60 rounded-2xl border border-gray-800/50 p-5">
+              <div className="bg-gray-900/60 rounded-2xl p-5" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                 <h3 className="text-sm font-semibold text-gray-300 mb-3">👥 Usuarios (últimos 30)</h3>
                 {users.length === 0 ? (
                   <p className="text-sm text-gray-500">No hay usuarios.</p>
@@ -306,7 +306,7 @@ export default function DashboardPage() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
                       <thead>
-                        <tr className="text-gray-500 text-xs uppercase border-b border-gray-800/50">
+                        <tr className="text-gray-500 text-xs uppercase border-b border border-gray-800/50">
                           <th className="py-2 pr-3">Email</th>
                           <th className="py-2 pr-3">Plan</th>
                           <th className="py-2 pr-3">Rol</th>
@@ -331,7 +331,7 @@ export default function DashboardPage() {
           )}
 
           {/* Footer */}
-          <footer className="border-t border-gray-800/50 px-4 py-4 text-center text-xs text-gray-600">
+          <footer className="border-t border border-gray-800/50 px-4 py-4 text-center text-xs text-gray-600">
             Howlify 🐺 | La manada cazando... &middot; © 2026
           </footer>
         </div>
@@ -372,7 +372,7 @@ function NewCazaForm({ onCreated }: { onCreated: () => void }) {
   return (
     <div className="mt-8 relative group">
       <div className="absolute -inset-0.5 bg-gradient-to-r from-red-500 to-red-700 rounded-2xl blur opacity-15" />
-      <form onSubmit={handleSubmit} className="relative bg-gray-900/80 backdrop-blur-xl rounded-2xl p-6 border border-gray-800/50 space-y-4">
+      <form onSubmit={handleSubmit} className="relative bg-gray-900/80 backdrop-blur-xl rounded-2xl p-6 space-y-4" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-white">Configurar nueva cacería</h3>
           <button type="button" onClick={() => setOpen(false)} className="text-gray-500 hover:text-gray-300 transition-colors">
