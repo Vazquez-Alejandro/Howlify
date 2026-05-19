@@ -174,26 +174,41 @@ def insertar_caza(payload: dict):
 # 7. EXPORTACIÓN
 # ==========================================================
 
+def _get_sheets_client():
+    """Obtiene cliente de Google Sheets autenticado vía service account."""
+    from google.oauth2.service_account import Credentials
+    creds_path = os.getenv("GOOGLE_SHEETS_CREDENTIALS", "credenciales.json")
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    creds = Credentials.from_service_account_file(creds_path, scopes=scope)
+    return gspread.authorize(creds)
+
+
 def exportar_a_sheets(df, nombre_hoja="Reporte Monitor Howlify"):
     """
-    Exporta un DataFrame de pandas a una hoja de Google Sheets.
-    Requiere credenciales de servicio en credenciales.json.
+    Exporta un DataFrame a Google Sheets.
+    Si GOOGLE_SHEETS_ID está configurado, escribe en ese sheet existente.
+    Si no, crea uno nuevo.
     """
     try:
-        scope = [
-            "https://spreadsheets.google.com/feeds",
-            "https://www.googleapis.com/auth/drive"
-        ]
-        creds = ServiceAccountCredentials.from_json_keyfile_name("credenciales.json", scope)
-        client = gspread.authorize(creds)
+        client = _get_sheets_client()
+        sheet_id = os.getenv("GOOGLE_SHEETS_ID")
 
-        # Crear nueva hoja
-        sheet = client.create(nombre_hoja)
-        worksheet = sheet.get_worksheet(0)
+        if sheet_id:
+            sheet = client.open_by_key(sheet_id)
+            try:
+                worksheet = sheet.worksheet(nombre_hoja)
+            except gspread.WorksheetNotFound:
+                worksheet = sheet.add_worksheet(title=nombre_hoja, rows=len(df) + 1, cols=len(df.columns))
+        else:
+            sheet = client.create(nombre_hoja)
+            worksheet = sheet.get_worksheet(0)
 
-        # Subir DataFrame
+        worksheet.clear()
         worksheet.update([df.columns.values.tolist()] + df.values.tolist())
-        return True
+        return True, sheet.url if not sheet_id else sheet_id
     except Exception as e:
         print(f"❌ Error exportando a Google Sheets: {e}")
-        return False
+        return False, str(e)

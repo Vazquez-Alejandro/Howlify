@@ -8,10 +8,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from utils.logic import get_random_user_agent, apply_human_jitter
 
 # CONFIGURACIÓN
-URL = "https://aqzkysgzljxqmckzfpfq.supabase.co"
-# ⚠️ Usar la service_role key aquí, no la anon key
-import os
-KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+URL = os.getenv("SUPABASE_URL", "")
+KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 
 supabase = create_client(URL, KEY)
 

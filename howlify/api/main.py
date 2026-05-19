@@ -544,6 +544,26 @@ def get_evidencia(caza_id: int, authorization: str = Header(default=""), token: 
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     return FileResponse(path, media_type="image/png")
 
+# ─── Google Sheets Export ─────────────────────────────────
+
+@app.post("/api/export/sheets")
+def export_to_sheets(data: dict, authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    try:
+        import pandas as pd
+        from utils.logic import exportar_a_sheets
+        df = pd.DataFrame(data.get("rows", []))
+        if df.empty:
+            raise HTTPException(status_code=400, detail="Sin datos para exportar")
+        ok, info = exportar_a_sheets(df, nombre_hoja=data.get("sheet_name", f"Howlify Export {uid[:8]}"))
+        if not ok:
+            raise HTTPException(status_code=500, detail=info)
+        return {"ok": True, "url": f"https://docs.google.com/spreadsheets/d/{info}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ─── Admin ───────────────────────────────────────────────
 
 @app.get("/api/admin/users")
