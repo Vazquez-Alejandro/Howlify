@@ -1,4 +1,5 @@
 import re
+import os
 import random
 import time
 import requests
@@ -175,15 +176,43 @@ def insertar_caza(payload: dict):
 # ==========================================================
 
 def _get_sheets_client():
-    """Obtiene cliente de Google Sheets autenticado vía service account."""
-    from google.oauth2.service_account import Credentials
+    """Obtiene cliente de Google Sheets autenticado.
+    Prioriza Service Account. Si no, usa OAuth con token guardado.
+    """
+    import json
+    from google.oauth2.credentials import Credentials
     creds_path = os.getenv("GOOGLE_SHEETS_CREDENTIALS", "credenciales.json")
+    token_path = os.getenv("GOOGLE_SHEETS_TOKEN", "token.json")
     scope = [
-        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
     ]
-    creds = Credentials.from_service_account_file(creds_path, scopes=scope)
-    return gspread.authorize(creds)
+
+    # Intentar Service Account primero
+    try:
+        from google.oauth2.service_account import Credentials as SACredentials
+        if os.path.exists(creds_path):
+            try:
+                with open(creds_path) as f:
+                    data = json.load(f)
+                if "type" in data and data["type"] == "service_account":
+                    creds = SACredentials.from_service_account_file(creds_path, scopes=scope)
+                    return gspread.authorize(creds)
+            except Exception:
+                pass
+    except ImportError:
+        pass
+
+    # Fallback: OAuth con token guardado
+    if os.path.exists(token_path):
+        creds = Credentials.from_authorized_user_file(token_path, scope)
+        if creds and creds.valid:
+            return gspread.authorize(creds)
+
+    raise RuntimeError(
+        "No hay credenciales válidas. "
+        "Corré 'python scripts/auth_sheets.py' para autenticarte con Google."
+    )
 
 
 def exportar_a_sheets(df, nombre_hoja="Reporte Monitor Howlify"):

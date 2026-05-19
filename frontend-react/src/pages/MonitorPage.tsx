@@ -297,26 +297,24 @@ export default function MonitorPage() {
             </div>
 
             <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
-              <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-gray-300">📡 Radar de Precios</h3>
-                <div className="flex items-center gap-2">
-                  <button onClick={async () => {
-                    const rows = sorted.map(r => ({
-                      Producto: r.producto, Precio: r.precio,
-                      "Mín. MAP": r.minP, "Máx. MAP": r.maxP,
-                      Riesgo: r.riesgo, Grupo: r.grupoNombre, ID: r.id,
-                    }));
-                    const res = await api.post("/api/export/sheets", { rows, sheet_name: "Radar Howlify" });
-                    if (res.error) toast(res.error, "error");
-                    else toast("Exportado a Google Sheets", "success");
-                  }} className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-gray-800/40 text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 transition-all border border-gray-700/30">
-                    📤 Exportar
-                  </button>
-                  <div className="flex gap-1 bg-gray-800/40 rounded-lg p-0.5">
-                    <button onClick={() => setMode("id")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${mode === "id" ? "bg-red-500/20 text-red-400" : "text-gray-500 hover:text-gray-300"}`}>Individual</button>
-                    <button onClick={() => setMode("grupo")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${mode === "grupo" ? "bg-red-500/20 text-red-400" : "text-gray-500 hover:text-gray-300"}`}>Por grupo</button>
-                  </div>
-                </div>
+                <button onClick={async () => {
+                  const rows = sorted.map(r => ({
+                    Producto: r.producto, Precio: r.precio,
+                    "Mín. MAP": r.minP, "Máx. MAP": r.maxP,
+                    Riesgo: r.riesgo, Grupo: r.grupoNombre, ID: r.id,
+                  }));
+                  const res = await api.post("/api/export/sheets", { rows, sheet_name: "Radar Howlify" });
+                  if (res.error) toast(res.error, "error");
+                  else toast("Exportado a Google Sheets", "success");
+                }} className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-gray-800/40 text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 transition-all border border-gray-700/30">
+                  📤 Exportar
+                </button>
+              </div>
+              <div className="flex gap-1 bg-gray-800/40 rounded-lg p-0.5 mb-5 w-fit">
+                <button onClick={() => setMode("id")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${mode === "id" ? "bg-red-500/20 text-red-400" : "text-gray-500 hover:text-gray-300"}`}>Individual</button>
+                <button onClick={() => setMode("grupo")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${mode === "grupo" ? "bg-red-500/20 text-red-400" : "text-gray-500 hover:text-gray-300"}`}>Por grupo</button>
               </div>
 
                <div className="hidden md:block overflow-x-auto">

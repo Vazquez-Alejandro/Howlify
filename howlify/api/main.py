@@ -142,6 +142,8 @@ def save_price_history(user_id: str, caza_id, results: list[dict]):
 
 @app.get("/")
 def root():
+    if _HAS_REACT:
+        return FileResponse(str(REACT_DIST / "index.html"))
     return {"name": "Howlify API", "version": "1.0.0", "status": "running"}
 
 @app.get("/api/health")
