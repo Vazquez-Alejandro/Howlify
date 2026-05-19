@@ -1,6 +1,8 @@
 # Env / secrets
 .env
 *.env
+credenciales.json
+token.json
 
 # Browser profiles / caches
 bot_profile/

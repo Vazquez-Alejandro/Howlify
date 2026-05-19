@@ -50,6 +50,12 @@ services:
         sync: false
       - key: REDIS_URL
         sync: false
+      - key: GOOGLE_SHEETS_CREDENTIALS
+        sync: false
+      - key: GOOGLE_SHEETS_TOKEN
+        sync: false
+      - key: GOOGLE_SHEETS_ID
+        sync: false
 
   - type: worker
     name: howlify-worker
@@ -100,6 +106,12 @@ services:
         sync: false
       - key: CELERY_CONCURRENCY
         value: "2"
+      - key: GOOGLE_SHEETS_CREDENTIALS
+        sync: false
+      - key: GOOGLE_SHEETS_TOKEN
+        sync: false
+      - key: GOOGLE_SHEETS_ID
+        sync: false
 
   - type: worker
     name: howlify-beat
