@@ -672,13 +672,15 @@ def render_profile_section(user_email, plan_actual):
         st.write("Gestioná tu capacidad de cacería y métodos de pago.")
         col1, col2 = st.columns(2)
         with col1:
-            
-            if st.button("🚀 Cambiar o Mejorar Plan", width='stretch'):
-                st.toast("En breve: Redirigiendo a MercadoPago/Stripe...")
+            checkout_url = os.getenv("STRIPE_CHECKOUT_URL", "")
+            if checkout_url and st.button("🚀 Cambiar o Mejorar Plan", width='stretch'):
+                st.markdown(f'<meta http-equiv="refresh" content="0; url={checkout_url}">', unsafe_allow_html=True)
+                st.success(f"Redirigiendo al portal de pagos...")
         with col2:
-          
-            if st.button("📄 Historial de Facturas", width='stretch'):
-                st.toast("En breve: Abriendo portal de facturación...")
+            portal_url = os.getenv("STRIPE_CUSTOMER_PORTAL", "")
+            if portal_url and st.button("📄 Historial de Facturas", width='stretch'):
+                st.markdown(f'<meta http-equiv="refresh" content="0; url={portal_url}">', unsafe_allow_html=True)
+                st.success(f"Redirigiendo al portal de facturación...")
 
     with tab_ayuda:
         st.subheader("Reportar problemas")
@@ -839,9 +841,14 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
         # --- BOTONES DE EXPORTACIÓN ---
 
         with st.expander("📤 Opciones de exportación"):
-            # Google Sheets (placeholder)
-            if st.button("📤 Exportar a Google Sheets (Próximamente)"):
-                st.info("Funcionalidad de exportación a Google Sheets disponible próximamente.")
+            if st.button("📤 Exportar a Google Sheets"):
+                with st.spinner("Exportando a Google Sheets..."):
+                    ok, info = exportar_a_sheets(df_display, nombre_hoja=f"Radar Monitor {user_id[:8]}")
+                    if ok:
+                        url = f"https://docs.google.com/spreadsheets/d/{info}" if not info.startswith("http") else info
+                        st.success(f"✅ Exportado correctamente: [Abrir Google Sheets]({url})")
+                    else:
+                        st.error(f"Error exportando: {info}")
 
             # CSV
             st.download_button(
@@ -1094,11 +1101,6 @@ def render_business_monitor_dashboard(plan_label_text, user_id, busquedas):
 
 
 def render_business_dashboard(plan: str, plan_label_text: str, user_id: str, busquedas: list):
-    # Debug en pantalla (activar si querés ver qué valor llega)
-    # st.write("DEBUG plan:", plan)
-    # st.write("DEBUG busquedas:", busquedas)
-
-    # 🔧 Creamos datos de ejemplo si busquedas está vacío
     if not busquedas:
         busquedas = [
             {"producto": "Notebook Lenovo", "precio": 1200, "currency": "USD"},
@@ -1106,23 +1108,14 @@ def render_business_dashboard(plan: str, plan_label_text: str, user_id: str, bus
             {"producto": "Mouse Logitech", "precio": 25, "currency": "USD"},
         ]
 
-    # Normalizamos el plan para evitar problemas de mayúsculas/espacios
     plan_normalizado = plan.lower().replace(" ", "_")
 
     if plan_normalizado == "business_monitor":
         st.subheader("📊 Business Dashboard · Monitor")
         render_business_monitor_dashboard(plan_label_text, user_id, busquedas)
 
-    elif plan_normalizado == "reseller":
-        st.subheader("📊 Business Dashboard · Reseller")
-        if st.button("Buscar Oportunidades 🚀", width='stretch'):
-            with st.spinner("Olfateando mercado..."):
-                ops = obtener_top_oportunidades(user_id)
-                if ops:
-                    for o in ops:
-                        st.success(f"🔥 {o['title']} - {o['price_fmt']}")
-                else:
-                    st.info("No hay brechas críticas hoy.")
+    elif plan_normalizado in ("reseller", "business_reseller"):
+        render_business_reseller_dashboard(plan_label_text)
 
     else:
         st.info("Tu plan no incluye este dashboard.")
@@ -1580,8 +1573,13 @@ def _make_histogram_df(series: pd.Series, bins: int = 8):
 
 
 def render_business_reseller_dashboard(plan_label_text: str):
+    from utils.logic import get_effective_plan_rules
+
     st.subheader("📊 Business Dashboard · Reseller")
     st.caption("Detectá oportunidades inmediatas y priorizá las mejores presas para comprar o revender.")
+
+    rules = get_effective_plan_rules("business_reseller")
+    markup = float(rules.get("reseller_markup", 0.40))
 
     oportunidades_db = obtener_top_oportunidades(limit=20) or []
     live_ops = collect_live_business_ops()
@@ -1601,21 +1599,18 @@ def render_business_reseller_dashboard(plan_label_text: str):
     if not live_ops:
         st.info("Todavía no hay oportunidades en vivo. Probá olfatear tus cazas para alimentar este panel.")
     else:
-            for i, op in enumerate(live_ops[:15]):
-                precio_act = int(op.get("current_price") or 0)
-                
-                # MVP: Simulamos que el revendedor le aplica un 40% de remarco al precio mínimo histórico.
-                # Más adelante, esto lo sacamos de la tabla de reglas del usuario.
-                precio_min = precio_act # Por ahora usamos el actual si no hay data cruzada
-                precio_reventa_estimado = int(precio_act * 1.40) 
-                
-                mostrar_tarjeta_oportunidad(
-                    id_rastreo=f"live_{i}",
-                    titulo=op.get("title") or "Sin título",
-                    precio_actual=_fmt_money(precio_act),
-                    precio_min_historico=_fmt_money(precio_min),
-                    precio_reventa_usuario=_fmt_money(precio_reventa_estimado)
-                )
+        for i, op in enumerate(live_ops[:15]):
+            precio_act = int(op.get("current_price") or 0)
+            precio_min = int(op.get("historic_min_price") or precio_act)
+            precio_reventa_estimado = int(precio_act * (1 + markup))
+
+            mostrar_tarjeta_oportunidad(
+                id_rastreo=f"live_{i}",
+                titulo=op.get("title") or "Sin título",
+                precio_actual=_fmt_money(precio_act),
+                precio_min_historico=_fmt_money(precio_min),
+                precio_reventa_usuario=_fmt_money(precio_reventa_estimado)
+            )
 
     st.markdown("### 🏆 Ranking histórico de oportunidades")
     if not oportunidades_db:

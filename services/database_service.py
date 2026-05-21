@@ -290,15 +290,108 @@ def guardar_historial(caza_id, resultados, user_id, refresh_token=None):
 
 
 def armar_texto_reporte(user_id, cazas, familia_plan, nombre_usuario=""):
-    # ⚠️ esta función arma texto, no consulta supabase_user → se deja igual
-    ...
-    # (contenido igual que antes, sin cambios)
+    total = len(cazas)
+    infracciones, ok, errores = 0, 0, 0
+
+    rules_map = {}
+    if familia_plan == "business_monitor":
+        res_rules = supabase.table("monitor_rules").select("*").eq("user_id", user_id).execute()
+        rules_map = {str(r["caza_id"]): r for r in (res_rules.data or [])}
+
+        caza_ids = [c["id"] for c in cazas]
+        res_precios = supabase.table("price_history")\
+            .select("caza_id, price")\
+            .in_("caza_id", caza_ids)\
+            .order("checked_at", desc=True).execute()
+
+        precios_map = {str(p["caza_id"]): p["price"] for p in (res_precios.data or [])}
+
+    for c in cazas:
+        cid = str(c["id"])
+        if not c.get("last_check"):
+            errores += 1
+            continue
+
+        if familia_plan == "business_monitor":
+            rule = rules_map.get(cid)
+            precio_actual = precios_map.get(cid, 0)
+
+            if rule:
+                min_p = float(rule.get("min_price_allowed") or 0)
+                if precio_actual > 0 and min_p > 0 and precio_actual < min_p:
+                    infracciones += 1
+                else:
+                    ok += 1
+            else:
+                ok += 1
+        else:
+            ok += 1
+
+    saludo = f"🐺 *¡Buen día, {nombre_usuario or 'Cazador'}!* Reporte de Howlify listo.\n\n"
+
+    if familia_plan == "business_monitor":
+        cuerpo = (f"📊 *Resumen de Radar:*\n"
+                  f"✅ Productos OK: {ok}\n"
+                  f"🔴 Infracciones MAP: {infracciones}\n"
+                  f"⚠️ Errores técnicos: {errores}\n\n"
+                  f"{'🚨 ¡Atención! Hay desviaciones de precio.' if infracciones > 0 else '🟢 Todo en orden con el MAP.'}")
+    else:
+        cuerpo = (f"🔍 *Estado de tu Jauría:*\n"
+                  f"🐺 {total} cacerías activas.\n"
+                  f"✅ El Lobo vigiló tus objetivos.\n"
+                  f"✨ Todo bajo control por ahora.")
+
+    return saludo + cuerpo + "\n\n🔗 [Ver mi Panel](https://howlify.onrender.com)"
 
 
 def ejecutar_reporte_diario_total(force=False):
-    # ⚠️ esta función usa perfiles globales → se deja con supabase_admin
-    ...
-    # (contenido igual que antes, sin cambios)
+    import pytz
+    from datetime import datetime
+    from services.notification_service import enviar_whatsapp, enviar_telegram
+    from services.alerts_service import obtener_contacto_usuario
+
+    tz = pytz.timezone('America/Argentina/Buenos_Aires')
+    now = datetime.now(tz)
+    dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    dia_actual = dias_semana[now.weekday()]
+    hora_minuto = now.strftime("%H:%M")
+
+    try:
+        print(f"🕒 [{now.strftime('%H:%M:%S')}] Chequeando reportes para {dia_actual} {hora_minuto} (Force={force})...")
+
+        query = (supabase.table("profiles")
+            .select("user_id, username, plan, telegram_id, whatsapp_number, report_days, report_time")
+            .eq("report_enabled", True))
+
+        if not force:
+            query = query.ilike("report_time", f"{hora_minuto}%").contains("report_days", [dia_actual])
+
+        res_usuarios = query.execute()
+        usuarios = res_usuarios.data or []
+
+        for u in usuarios:
+            uid = u["user_id"]
+            username = u.get('username', 'Cazador')
+
+            res_cazas = supabase.table("cazas").select("*").eq("user_id", uid).eq("estado", "activa").execute()
+            cazas = res_cazas.data or []
+
+            if not cazas:
+                print(f"ℹ️ {username} no tiene cacerías activas para reportar.")
+                continue
+
+            mensaje = armar_texto_reporte(uid, cazas, u.get("plan", "starter"), username)
+
+            if u.get("telegram_id"):
+                enviar_telegram(u["telegram_id"], mensaje)
+                print(f"✅ Reporte Telegram enviado a {username}")
+
+            if u.get("whatsapp_number"):
+                enviar_whatsapp(u["whatsapp_number"], mensaje)
+                print(f"✅ Reporte WhatsApp enviado a {username}")
+
+    except Exception as e:
+        print(f"❌ Error crítico en reporte diario: {e}")
 
 
 def guardar_config_reporte(user_id, enabled, hora, dias):

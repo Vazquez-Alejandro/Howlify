@@ -38,9 +38,9 @@ def _parse_dt_utc(dt_str):
 # ==========================================================
 
 PLAN_RULES = {
-    "starter": {"max_cazas_activas": 3, "freq_options": ["12h", "24h"], "plan_key": "starter"},
-    "pro": {"max_cazas_activas": 15, "freq_options": ["1h", "6h", "12h", "24h"], "plan_key": "pro"},
-    "business": {"max_cazas_activas": 100, "freq_options": ["15min", "1h", "6h"], "plan_key": "business"}
+    "starter": {"max_cazas_activas": 3, "freq_options": ["12h", "24h"], "plan_key": "starter", "reseller_markup": 0},
+    "pro": {"max_cazas_activas": 15, "freq_options": ["1h", "6h", "12h", "24h"], "plan_key": "pro", "reseller_markup": 0},
+    "business": {"max_cazas_activas": 100, "freq_options": ["15min", "1h", "6h"], "plan_key": "business", "reseller_markup": 0.40}
 }
 
 def normalize_plan_family(plan: str) -> str:

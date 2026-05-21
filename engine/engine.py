@@ -386,6 +386,23 @@ def es_descuento_fuerte(precio, precio_referencia, umbral=30):
     except Exception:
         return False
     
+def _obtener_precio_referencia(caza_id):
+    """Obtiene el precio promedio histórico como referencia para detectar descuentos fuertes."""
+    try:
+        res = supabase.table("price_history") \
+            .select("price") \
+            .eq("caza_id", caza_id) \
+            .order("checked_at", desc=True) \
+            .limit(5) \
+            .execute()
+        prices = [float(p["price"]) for p in (res.data or []) if float(p["price"]) > 0]
+        if prices:
+            return sum(prices) / len(prices)
+    except Exception as e:
+        print(f"⚠ error obteniendo precio referencia para caza {caza_id}: {e}")
+    return None
+
+
 def disparar_alerta_minima(caza_id, oferta, precio_max):
     try:
         precio = float(oferta.get("price"))
@@ -394,12 +411,10 @@ def disparar_alerta_minima(caza_id, oferta, precio_max):
 
     precio_max = float(precio_max)
 
-    # precio dentro del máximo definido por el usuario
     if precio <= precio_max:
         pass
     else:
-        # chequeo de descuento fuerte (placeholder por ahora)
-        precio_referencia = oferta.get("original_price") or precio
+        precio_referencia = oferta.get("original_price") or _obtener_precio_referencia(caza_id) or precio
 
         if not es_descuento_fuerte(precio, float(precio_referencia)):
             return False
