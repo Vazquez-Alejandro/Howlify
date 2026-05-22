@@ -330,15 +330,17 @@ def hunt_single(caza_id: int, authorization: str = Header(default="")):
 
     caza = res.data[0]
     url = caza.get("url") or caza.get("link") or ""
-    precio = caza.get("precio_max") or 0
+    tipo_alerta = (caza.get("tipo_alerta") or "piso").strip().lower()
+    precio_max_raw = caza.get("precio_max") or 0
+    precio_scraper = 0 if tipo_alerta == "descuento" else precio_max_raw
     src = infer_source_from_url(url).strip().lower()
 
     if src == "airbnb":
         from scraper.airbnb import hunt_airbnb
-        resultados = hunt_airbnb(url, precio) or []
+        resultados = hunt_airbnb(url, precio_scraper) or []
     else:
         from scraper.scraper_pro import hunt_offers
-        resultados = hunt_offers(url, caza.get("keyword", ""), precio, headless=True) or []
+        resultados = hunt_offers(url, caza.get("keyword", ""), precio_scraper, headless=True) or []
 
     if resultados:
         save_price_history(uid, caza_id, resultados)
@@ -350,6 +352,12 @@ def hunt_single(caza_id: int, authorization: str = Header(default="")):
                 if es_error:
                     r["price_error"] = True
                     r["price_avg"] = prom
+                if tipo_alerta == "descuento":
+                    from engine.engine import _obtener_precio_referencia
+                    ref = _obtener_precio_referencia(caza_id) or precio_r
+                    descuento = int((1 - precio_r / ref) * 100) if ref > 0 else 0
+                    r["descuento"] = descuento
+                    r["match_descuento"] = descuento >= max(precio_max_raw, 0)
     return {"results": resultados}
 
 @app.post("/api/hunt/all")
@@ -362,16 +370,32 @@ def hunt_all(authorization: str = Header(default="")):
         rid = str(c.get("id", ""))
         try:
             url = c.get("url") or c.get("link") or ""
-            precio = c.get("precio_max") or 0
+            tipo_alerta = (c.get("tipo_alerta") or "piso").strip().lower()
+            precio_max_raw = c.get("precio_max") or 0
+            precio_scraper = 0 if tipo_alerta == "descuento" else precio_max_raw
             src = infer_source_from_url(url).strip().lower()
             if src == "airbnb":
                 from scraper.airbnb import hunt_airbnb
-                res = hunt_airbnb(url, precio) or []
+                res = hunt_airbnb(url, precio_scraper) or []
             else:
                 from scraper.scraper_pro import hunt_offers
-                res = hunt_offers(url, c.get("keyword", ""), precio, headless=True) or []
+                res = hunt_offers(url, c.get("keyword", ""), precio_scraper, headless=True) or []
             if res:
                 save_price_history(uid, c.get("id"), res)
+                from utils.logic import detectar_price_error
+                for r in res:
+                    precio_r = r.get("price") or 0
+                    if precio_r > 0:
+                        es_error, prom = detectar_price_error(c.get("id"), float(precio_r))
+                        if es_error:
+                            r["price_error"] = True
+                            r["price_avg"] = prom
+                        if tipo_alerta == "descuento":
+                            from engine.engine import _obtener_precio_referencia
+                            ref = _obtener_precio_referencia(c.get("id")) or precio_r
+                            descuento = int((1 - precio_r / ref) * 100) if ref > 0 else 0
+                            r["descuento"] = descuento
+                            r["match_descuento"] = descuento >= max(precio_max_raw, 0)
             results[rid] = res
         except Exception as e:
             results[rid] = {"error": str(e)}

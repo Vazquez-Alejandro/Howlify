@@ -139,6 +139,7 @@ export interface Caza {
   precio_max: number;
   last_price?: number;
   estado?: string;
+  tipo_alerta?: string;
 }
 
 export interface HuntResult {
@@ -147,6 +148,10 @@ export interface HuntResult {
   url: string;
   source: string;
   score?: number;
+  price_error?: boolean;
+  price_avg?: number;
+  descuento?: number;
+  match_descuento?: boolean;
 }
 
 export interface MonitorRule {

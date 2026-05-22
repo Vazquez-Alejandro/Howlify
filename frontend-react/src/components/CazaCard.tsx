@@ -10,22 +10,24 @@ interface Props {
 
 export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
   const { toast } = useToast();
-  const [results, setResults] = useState<{ title: string; price: number; url: string; price_error?: boolean; price_avg?: number }[] | null>(null);
+  const [results, setResults] = useState<{ title: string; price: number; url: string; price_error?: boolean; price_avg?: number; descuento?: number; match_descuento?: boolean }[] | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [loadingResults, setLoadingResults] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const esDescuento = (caza.tipo_alerta || "piso") === "descuento";
   const [editForm, setEditForm] = useState({
     keyword: caza.producto || caza.keyword || "",
     url: caza.link || caza.url || "",
     precio_max: caza.precio_max,
+    tipo_alerta: caza.tipo_alerta || "piso",
   });
 
   const kw = (caza.producto || caza.keyword || "Sin nombre").toUpperCase();
   const url = caza.link || caza.url || "";
   const hasPrice = caza.last_price != null;
-  const isAlert = hasPrice && caza.last_price! <= caza.precio_max;
+  const isAlert = esDescuento ? false : hasPrice && caza.last_price! <= caza.precio_max;
 
   const handleHunt = async () => {
     setResults(null);
@@ -44,6 +46,7 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
       keyword: editForm.keyword,
       url: editForm.url,
       precio_max: editForm.precio_max,
+      tipo: editForm.tipo_alerta || "piso",
     });
     if (res.error) {
       toast(res.error, "error");
@@ -76,9 +79,15 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                   Últ: ${caza.last_price!.toLocaleString()}
                 </span>
               )}
-              <span className="text-sm text-gray-500">
-                Máx: ${(caza.precio_max || 0).toLocaleString()}
-              </span>
+              {esDescuento ? (
+                <span className="text-sm text-blue-400">
+                  Desc: {caza.precio_max || 0}%
+                </span>
+              ) : (
+                <span className="text-sm text-gray-500">
+                  Máx: ${(caza.precio_max || 0).toLocaleString()}
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 ml-4 shrink-0">
@@ -98,6 +107,7 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                   keyword: caza.producto || caza.keyword || "",
                   url: caza.link || caza.url || "",
                   precio_max: caza.precio_max || 0,
+                  tipo_alerta: caza.tipo_alerta || "piso",
                 });
                 setShowEdit(true);
               }}
@@ -164,8 +174,13 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                         ERROR PRECIO
                       </span>
                     )}
+                    {esDescuento && r.descuento != null && (
+                      <span className={`shrink-0 px-1.5 py-0.5 text-[10px] font-bold rounded border ${r.match_descuento ? "bg-green-500/20 text-green-400 border-green-500/30" : "bg-gray-700/30 text-gray-500 border-gray-600/30"}`}>
+                        -{r.descuento}%
+                      </span>
+                    )}
                   </div>
-                  <span className={`font-medium text-sm ml-3 shrink-0 ${r.price_error ? "text-yellow-400" : "text-green-400"}`}>${(r.price || 0).toLocaleString()}</span>
+                  <span className={`font-medium text-sm ml-3 shrink-0 ${r.price_error ? "text-yellow-400" : esDescuento && r.match_descuento ? "text-green-400" : "text-gray-400"}`}>${(r.price || 0).toLocaleString()}</span>
                   <a
                     href={r.url}
                     target="_blank"
@@ -203,7 +218,15 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                   className="w-full mt-0.5 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm focus:outline-none focus:border-red-500/50" />
               </div>
               <div>
-                <label className="text-xs text-gray-400 ml-1 uppercase">Precio máximo</label>
+                <label className="text-xs text-gray-400 ml-1 uppercase">Tipo de alerta</label>
+                <select value={editForm.tipo_alerta} onChange={e => setEditForm(f => ({ ...f, tipo_alerta: e.target.value }))}
+                  className="w-full mt-0.5 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm focus:outline-none focus:border-red-500/50">
+                  <option value="piso">Por precio</option>
+                  <option value="descuento">Por descuento</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 ml-1 uppercase">{editForm.tipo_alerta === "descuento" ? "Descuento mínimo (%)" : "Precio máximo"}</label>
                 <input type="number" value={editForm.precio_max} onChange={e => setEditForm(f => ({ ...f, precio_max: Number(e.target.value) }))}
                   className="w-full mt-0.5 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm focus:outline-none focus:border-red-500/50" />
               </div>
