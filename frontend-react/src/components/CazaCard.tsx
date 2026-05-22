@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api, type Caza } from "../api/client";
 import { useToast } from "./Toast";
+import { traducirError } from "../utils/errors";
 
 interface Props {
   caza: Caza;
@@ -49,7 +50,7 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
       tipo: editForm.tipo_alerta || "piso",
     });
     if (res.error) {
-      toast(res.error, "error");
+      toast(traducirError(res.error), "error");
       return;
     }
     setShowEdit(false);

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
+import { traducirError } from "../utils/errors";
 import PageTransition from "../components/PageTransition";
 
 const PLAN_LABELS: Record<string, string> = {
@@ -39,7 +40,7 @@ export default function ProfilePage() {
       telegram_id: telegramId || null,
       whatsapp_number: whatsapp || null,
     });
-    if (res.error) toast(res.error, "error");
+    if (res.error) toast(traducirError(res.error), "error");
     else toast("Perfil actualizado", "success");
     setSaving(false);
   };
@@ -47,7 +48,7 @@ export default function ProfilePage() {
   const testChannel = async (channel: string) => {
     setTesting(channel);
     const res = await api.testNotification(channel);
-    if (res.error) toast(res.error, "error");
+    if (res.error) toast(traducirError(res.error), "error");
     else if (res.data?.ok) toast(`✅ Notificación enviada por ${channel}`, "success");
     else toast(`❌ Error enviando por ${channel}`, "error");
     setTesting(null);

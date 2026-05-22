@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
+import { traducirError } from "../utils/errors";
 import PageTransition from "../components/PageTransition";
 import Logo from "../components/Logo";
 
@@ -44,7 +45,7 @@ export default function RegisterPage() {
     setLoading(true);
     const res = await api.signup(form.email, form.password, form.username, form.plan);
     setLoading(false);
-    if (res.error) return toast(res.error, "error");
+    if (res.error) return toast(traducirError(res.error), "error");
     setSuccess(res.data?.message || "Cuenta creada. Revisá tu email.");
     toast(res.data?.message || "Cuenta creada. Revisá tu email.", "success");
     setTimeout(() => navigate("/login"), 2000);
