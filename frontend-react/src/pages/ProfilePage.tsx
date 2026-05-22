@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 import PageTransition from "../components/PageTransition";
@@ -11,6 +12,7 @@ const PLAN_LABELS: Record<string, string> = {
 };
 
 export default function ProfilePage() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [profile, setProfile] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
@@ -64,7 +66,12 @@ export default function ProfilePage() {
   return (
     <PageTransition>
       <div className="max-w-2xl mx-auto space-y-8">
-        <h1 className="text-2xl font-bold text-white">Configuración</h1>
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate("/dashboard")} className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl transition-all" title="Volver">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          </button>
+          <h1 className="text-2xl font-bold text-white">Configuración</h1>
+        </div>
 
         {/* Plan */}
         <section className="bg-gray-900/60 rounded-2xl p-6 space-y-4" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
