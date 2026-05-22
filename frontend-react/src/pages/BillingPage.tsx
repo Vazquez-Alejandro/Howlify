@@ -12,10 +12,10 @@ const PLAN_LABELS: Record<string, string> = {
 };
 
 const PLAN_LIMITS: Record<string, { cazas: number; precio: string }> = {
-  starter: { cazas: 5, precio: "Gratis" },
-  pro: { cazas: 15, precio: "$9/mes" },
-  business_reseller: { cazas: 40, precio: "$19/mes" },
-  business_monitor: { cazas: 100, precio: "$29/mes" },
+  starter: { cazas: 5, precio: "$9/mes" },
+  pro: { cazas: 15, precio: "$15/mes" },
+  business_reseller: { cazas: 40, precio: "$49/mes" },
+  business_monitor: { cazas: 100, precio: "$79/mes" },
 };
 
 export default function BillingPage() {
@@ -94,7 +94,7 @@ export default function BillingPage() {
                     {isCurrent && <span className="text-[10px] font-medium text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">Actual</span>}
                   </div>
                   <p className="text-lg font-bold text-white mb-3">{PLAN_LABELS[key]}</p>
-                  <p className="text-xs text-gray-500 mb-4">{info.cazas} cacerías activas</p>
+                  <p className="text-xs text-gray-500 mb-4">{info.cazas} cacerías activas{key === "starter" ? " · 7 días de prueba" : ""}</p>
                   <button onClick={() => handleUpgrade(key)}
                     disabled={isCurrent || checkoutLoading === key}
                     className={`w-full py-2 rounded-xl text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
