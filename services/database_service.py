@@ -318,7 +318,12 @@ def armar_texto_reporte(user_id, cazas, familia_plan, nombre_usuario=""):
 
             if rule:
                 min_p = float(rule.get("min_price_allowed") or 0)
-                if precio_actual > 0 and min_p > 0 and precio_actual < min_p:
+                max_p = float(rule.get("max_price_allowed") or 0)
+                fuera_rango = (
+                    (precio_actual > 0 and min_p > 0 and precio_actual < min_p) or
+                    (precio_actual > 0 and max_p > 0 and precio_actual > max_p)
+                )
+                if fuera_rango:
                     infracciones += 1
                 else:
                     ok += 1

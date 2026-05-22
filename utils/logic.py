@@ -38,14 +38,16 @@ def _parse_dt_utc(dt_str):
 # ==========================================================
 
 PLAN_RULES = {
-    "starter": {"max_cazas_activas": 3, "freq_options": ["12h", "24h"], "plan_key": "starter", "reseller_markup": 0},
+    "starter": {"max_cazas_activas": 5, "freq_options": ["12h", "24h"], "plan_key": "starter", "reseller_markup": 0},
     "pro": {"max_cazas_activas": 15, "freq_options": ["1h", "6h", "12h", "24h"], "plan_key": "pro", "reseller_markup": 0},
-    "business": {"max_cazas_activas": 100, "freq_options": ["15min", "1h", "6h"], "plan_key": "business", "reseller_markup": 0.40}
+    "business": {"max_cazas_activas": 100, "freq_options": ["15min", "1h", "6h"], "plan_key": "business", "reseller_markup": 0.40},
+    "business_monitor": {"max_cazas_activas": 100, "freq_options": ["15min", "1h", "6h"], "plan_key": "business_monitor", "reseller_markup": 0},
+    "business_reseller": {"max_cazas_activas": 100, "freq_options": ["15min", "1h", "6h"], "plan_key": "business_reseller", "reseller_markup": 0.40},
 }
 
 def normalize_plan_family(plan: str) -> str:
     raw = (plan or "starter").strip().lower()
-    if raw in ["business_reseller", "business_monitor", "business"]: return "business"
+    if raw in ["business_reseller", "business_monitor", "business"]: return raw
     if raw in ["pro", "beta", "alfa"]: return "pro"
     return "starter"
 

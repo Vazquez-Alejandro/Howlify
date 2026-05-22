@@ -203,6 +203,11 @@ export default function MonitorPage() {
   const [newGrupoEmoji, setNewGrupoEmoji] = useState("📁");
 
   const [saving, setSaving] = useState(false);
+  const [deletingRule, setDeletingRule] = useState<number | null>(null);
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [deletingGroup, setDeletingGroup] = useState<number | null>(null);
+  const [confirmDeleteGroup, setConfirmDeleteGroup] = useState<number | null>(null);
+  const [assigningLoading, setAssigningLoading] = useState<number | null>(null);
 
   const handleSaveConfig = async () => {
     if (!selectedRow) {
@@ -233,24 +238,41 @@ export default function MonitorPage() {
     }
   };
 
+  const handleDeleteRule = async (cazaId: number) => {
+    setDeletingRule(cazaId);
+    const res = await api.deleteMonitorRule(cazaId);
+    setDeletingRule(null);
+    if (res.error) {
+      toast(res.error, "error");
+      return;
+    }
+    await loadData();
+    toast("Producto sacado del monitoreo", "success");
+  };
+
   const handleCreateGrupo = async () => {
     if (!newGrupoName.trim()) return;
+    setCreatingGroup(true);
     await api.createMonitorGrupo(newGrupoName.trim(), newGrupoEmoji);
     await loadData();
     setNewGrupoName("");
+    setCreatingGroup(false);
     toast("Grupo creado", "success");
   };
 
   const handleDeleteGrupo = async (id: number) => {
+    setDeletingGroup(id);
+    setConfirmDeleteGroup(null);
     await api.deleteMonitorGrupo(id);
     await loadData();
+    setDeletingGroup(null);
     toast("Grupo eliminado", "success");
   };
 
   const handleAssignGroup = async (cazaId: number, grupoId: number) => {
-    console.log("[handleAssignGroup] START cazaId:", cazaId, "grupoId:", grupoId);
+    setAssigningLoading(cazaId);
     const res = await api.assignMonitorGrupo(cazaId, grupoId || null);
-    console.log("[handleAssignGroup] API result:", res);
+    setAssigningLoading(null);
     if (res.error) {
       toast(res.error, "error");
     }
@@ -476,17 +498,25 @@ export default function MonitorPage() {
                             {grupos.map(g => <option key={g.id} value={g.id}>{g.color} {g.nombre}</option>)}
                           </select>
                           <button onClick={() => { if (selectedRow) handleAssignGroup(selectedRow.id, mapForm.grupoId); }}
-                            className="px-4 py-2.5 bg-red-500/20 text-red-400 rounded-lg text-xs font-medium hover:bg-red-500/30 transition-all border border-red-500/20 shrink-0"
+                            disabled={assigningLoading === selectedRow?.id}
+                            className="px-4 py-2.5 bg-red-500/20 text-red-400 rounded-lg text-xs font-medium hover:bg-red-500/30 transition-all border border-red-500/20 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Asignar grupo">
-                            Asignar
+                            {assigningLoading === selectedRow?.id ? "⏳" : "Asignar"}
                           </button>
                         </div>
                       </div>
                     </div>
-                    <button onClick={handleSaveConfig} disabled={saving}
-                      className="w-full py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold text-sm hover:from-red-600 hover:to-red-700 transition-all shadow-lg shadow-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed">
-                      {saving ? "⏳ Guardando..." : "💾 Guardar Cambios"}
-                    </button>
+                    <div className="flex gap-2">
+                      <button onClick={handleSaveConfig} disabled={saving}
+                        className="flex-1 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold text-sm hover:from-red-600 hover:to-red-700 transition-all shadow-lg shadow-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                        {saving ? "⏳ Guardando..." : "💾 Guardar Cambios"}
+                      </button>
+                      <button onClick={() => handleDeleteRule(selectedRow.id)} disabled={deletingRule === selectedRow.id}
+                        className="px-4 py-2.5 bg-red-900/20 text-red-400 rounded-lg text-xs font-medium hover:bg-red-900/40 transition-all border border-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                        title="Sacar del monitoreo">
+                        {deletingRule === selectedRow.id ? "⏳" : "🗑️"}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -504,16 +534,36 @@ export default function MonitorPage() {
                           className={`w-8 h-8 rounded text-sm flex items-center justify-center transition-all ${newGrupoEmoji === e ? "bg-red-500/20 border border-red-500/30" : "bg-gray-700/30 border border-transparent hover:bg-gray-700/50"}`}>{e}</button>
                       ))}
                     </div>
-                    <button onClick={handleCreateGrupo} className="w-full py-2 bg-red-500/10 text-red-400 rounded-lg text-xs font-medium hover:bg-red-500/20 transition-all border border-red-500/20">+ Crear</button>
+                    <button onClick={handleCreateGrupo} disabled={creatingGroup}
+                      className="w-full py-2 bg-red-500/10 text-red-400 rounded-lg text-xs font-medium hover:bg-red-500/20 transition-all border border-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                      {creatingGroup ? "⏳ Creando..." : "+ Crear"}
+                    </button>
                   </div>
                   {grupos.length > 0 && (
                     <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-800/50">
                       <p className="text-xs font-medium text-gray-400 mb-3">Eliminar grupo</p>
-                      <select value="" onChange={e => { if (e.target.value) handleDeleteGrupo(Number(e.target.value)); }}
-                        className="w-full px-3 py-2.5 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm focus:outline-none focus:border-red-500/50">
-                        <option value="">Seleccionar...</option>
-                        {grupos.map(g => <option key={g.id} value={g.id}>{g.color} {g.nombre}</option>)}
-                      </select>
+                      {confirmDeleteGroup ? (
+                        <div className="space-y-2">
+                          <p className="text-xs text-yellow-400">¿Eliminar "{gruposMap.get(confirmDeleteGroup)?.nombre}"?</p>
+                          <div className="flex gap-2">
+                            <button onClick={() => { handleDeleteGrupo(confirmDeleteGroup); }}
+                              disabled={deletingGroup === confirmDeleteGroup}
+                              className="flex-1 py-2 bg-red-500/20 text-red-400 rounded-lg text-xs font-medium hover:bg-red-500/30 transition-all border border-red-500/30 disabled:opacity-50">
+                              {deletingGroup === confirmDeleteGroup ? "⏳" : "Eliminar"}
+                            </button>
+                            <button onClick={() => setConfirmDeleteGroup(null)}
+                              className="flex-1 py-2 bg-gray-800/50 text-gray-400 rounded-lg text-xs hover:bg-gray-700/50 transition-all border border-gray-700/50">
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <select value="" onChange={e => { if (e.target.value) setConfirmDeleteGroup(Number(e.target.value)); }}
+                          className="w-full px-3 py-2.5 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm focus:outline-none focus:border-red-500/50">
+                          <option value="">Seleccionar...</option>
+                          {grupos.map(g => <option key={g.id} value={g.id}>{g.color} {g.nombre}</option>)}
+                        </select>
+                      )}
                     </div>
                   )}
                   <div className="flex flex-wrap gap-2">
