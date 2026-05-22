@@ -145,8 +145,8 @@ export default function LandingPage() {
           <div className="max-w-6xl mx-auto px-6 py-8 flex items-center justify-between text-sm text-gray-500">
             <span>© 2026 Howlify. Todos los derechos reservados.</span>
             <div className="flex items-center gap-4">
-              <span>Términos</span>
-              <span>Privacidad</span>
+              <Link to="/terms" className="hover:text-gray-300 transition-colors">Términos</Link>
+              <Link to="/privacy" className="hover:text-gray-300 transition-colors">Privacidad</Link>
               <a href="mailto:howlify.app@gmail.com" className="hover:text-gray-300 transition-colors">Contacto</a>
             </div>
           </div>

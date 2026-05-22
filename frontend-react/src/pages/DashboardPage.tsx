@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { api, type Caza } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/Toast";
@@ -150,6 +150,10 @@ export default function DashboardPage() {
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
               Cerrar sesión
             </button>
+            <div className="flex items-center gap-3 px-3 pt-2 mt-2 border-t border-gray-800/50">
+              <Link to="/terms" className="text-[10px] text-gray-600 hover:text-gray-400 transition-colors">Términos</Link>
+              <Link to="/privacy" className="text-[10px] text-gray-600 hover:text-gray-400 transition-colors">Privacidad</Link>
+            </div>
           </div>
         </aside>
 

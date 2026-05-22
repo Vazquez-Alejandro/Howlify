@@ -87,6 +87,12 @@ export default function LoginPage() {
                 <Link to="/forgot-password" className="text-gray-500 hover:text-red-400 transition-colors">¿Olvidaste tu contraseña?</Link>
                 <Link to="/register" className="text-red-400 hover:text-red-300 font-medium transition-colors">Registrate</Link>
               </div>
+              <p className="text-center text-xs text-gray-600">
+                Al iniciar sesión aceptás nuestros{" "}
+                <Link to="/terms" className="text-gray-500 hover:text-red-400 transition-colors underline underline-offset-2">Términos</Link>
+                {" y "}
+                <Link to="/privacy" className="text-gray-500 hover:text-red-400 transition-colors underline underline-offset-2">Privacidad</Link>
+              </p>
             </form>
           </div>
         </div>

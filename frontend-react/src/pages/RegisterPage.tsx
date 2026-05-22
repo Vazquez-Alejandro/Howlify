@@ -187,10 +187,18 @@ export default function RegisterPage() {
                 </span>
               ) : "Crear Cuenta"}
             </button>
-            <p className="text-center text-sm text-gray-500">
-              ¿Ya tenés cuenta?{" "}
-              <Link to="/login" className="text-red-400 hover:text-red-300 font-medium transition-colors">Iniciar Sesión</Link>
-            </p>
+            <div className="text-center text-sm">
+              <p className="text-gray-500">
+                ¿Ya tenés cuenta?{" "}
+                <Link to="/login" className="text-red-400 hover:text-red-300 font-medium transition-colors">Iniciar Sesión</Link>
+              </p>
+              <p className="text-gray-600 mt-4 text-xs">
+                Al registrarte aceptás nuestros{" "}
+                <Link to="/terms" className="text-gray-500 hover:text-red-400 transition-colors underline underline-offset-2">Términos</Link>
+                {" y "}
+                <Link to="/privacy" className="text-gray-500 hover:text-red-400 transition-colors underline underline-offset-2">Política de Privacidad</Link>
+              </p>
+            </div>
           </form>
         </div>
       </div>
