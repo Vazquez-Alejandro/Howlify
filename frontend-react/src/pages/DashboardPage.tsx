@@ -45,10 +45,26 @@ export default function DashboardPage() {
       if (res.data?.profile) {
         setProfile(res.data.profile);
         if (res.data.profile.role === "admin") {
-          console.log("✅ Admin detectado");
+          console.log("✅ Admin detectado via API");
         }
       } else if (res.error) {
         console.warn("[profile] error:", res.error);
+        // Fallback: decodificar el JWT para detectar admin por email
+        try {
+          const token = localStorage.getItem("token");
+          if (token) {
+            const payload = JSON.parse(atob(token.split(".")[1]));
+            const email = payload.email || "";
+            const adminEmails = (import.meta.env.VITE_ADMIN_EMAILS || "howlify.app@gmail.com").split(",").map((e: string) => e.trim().toLowerCase());
+            console.log("[profile fallback] email from JWT:", email, "admin list:", adminEmails);
+            if (adminEmails.includes(email.toLowerCase())) {
+              setProfile({ role: "admin", plan: "business_monitor" });
+              console.log("✅ Admin detectado via JWT fallback");
+            }
+          }
+        } catch (e) {
+          console.warn("[profile] fallback decode failed:", e);
+        }
       }
     });
   }, []);
