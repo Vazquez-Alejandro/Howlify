@@ -87,10 +87,10 @@ export default function LandingPage() {
 
         <section className="relative z-10 w-full max-w-6xl px-6 py-16">
           <h2 className="text-3xl font-bold text-center mb-4">Todo lo que necesitás</h2>
-          <p className="text-gray-400 text-center mb-12 max-w-2xl mx-auto">Monitoreo inteligente, alertas instantáneas, todo en un dashboard diseñado para cazadores de ofertas.</p>
+          <p className="text-gray-400 text-center mb-12">Monitoreo inteligente, alertas instantáneas, todo en un dashboard diseñado para cazadores de ofertas.</p>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {FEATURES.map((f) => (
-              <div key={f.title} className="bg-gray-900/60 rounded-2xl p-6 hover:bg-gray-900/80 transition-all" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
+              <div key={f.title} className="bg-gray-900/60 rounded-2xl p-6 text-center hover:bg-gray-900/80 transition-all" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                 <span className="text-3xl">{f.icon}</span>
                 <h3 className="text-lg font-semibold mt-4 mb-2">{f.title}</h3>
                 <p className="text-sm text-gray-400 leading-relaxed">{f.desc}</p>
@@ -104,25 +104,25 @@ export default function LandingPage() {
             <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-green-500/10 border border-green-500/20 rounded-full text-sm text-green-400 mb-4">
               🎁 7 días gratis · Sin tarjeta
             </div>
-            <h2 className="text-3xl font-bold text-center mb-4">Planes simples</h2>
-            <p className="text-gray-400 text-center max-w-xl mx-auto">Empezá gratis, escalá cuando lo necesites. Sin contratos ni sorpresas.</p>
+            <h2 className="text-3xl font-bold mb-4">Planes simples</h2>
+            <p className="text-gray-400">Empezá gratis, escalá cuando lo necesites. Sin contratos ni sorpresas.</p>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
             {PLANS.map((p) => (
               <div
                 key={p.name}
-                className={`relative rounded-2xl p-6 flex flex-col border ${p.popular ? 'bg-gradient-to-b from-red-500/10 to-gray-900/80 border-red-500/30 scale-[1.02]' : 'bg-gray-900/60 border-gray-700/30'}`}
+                className={`relative rounded-2xl p-6 flex flex-col border ${p.popular ? 'bg-gradient-to-b from-red-500/10 to-gray-900/80 border-red-500/30 scale-[1.02] ring-2 ring-red-500/20' : 'bg-gray-900/60 border-gray-700/30'}`}
               >
                 {p.popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-red-500 to-red-600 rounded-full text-xs font-semibold shadow-lg z-10">Más popular</div>
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 bg-gradient-to-r from-red-500 to-red-600 rounded-full text-xs font-semibold shadow-lg z-10 whitespace-nowrap">Más popular</div>
                 )}
-                <h3 className={`text-xl font-bold ${p.popular ? 'pt-2' : ''}`}>{p.name}</h3>
-                <p className="text-3xl font-extrabold mt-3">{p.price}</p>
-                <p className="text-sm text-gray-400 mt-1">{p.desc}</p>
+                <h3 className={`text-xl font-bold text-center ${p.popular ? 'mt-2' : ''}`}>{p.name}</h3>
+                <p className="text-3xl font-extrabold text-center mt-3">{p.price}</p>
+                <p className="text-sm text-gray-400 text-center mt-1">{p.desc}</p>
                 <ul className="mt-6 space-y-3 flex-1">
                   {p.features.map((f) => (
-                    <li key={f} className="flex items-center gap-2 text-sm text-gray-300">
-                      <span className="text-green-400">✓</span> {f}
+                    <li key={f} className="flex items-center justify-center gap-2 text-sm text-gray-300">
+                      <span className="text-green-400 shrink-0">✓</span> {f}
                     </li>
                   ))}
                 </ul>
