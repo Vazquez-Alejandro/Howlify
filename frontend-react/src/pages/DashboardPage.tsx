@@ -42,11 +42,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     api.getProfile().then((res) => {
-      console.log("[profile] response:", JSON.parse(JSON.stringify(res)));
       if (res.data?.profile) {
-        console.log("[profile] role:", res.data.profile.role);
-        console.log("[profile] isAdmin check:", res.data.profile.role === "admin");
         setProfile(res.data.profile);
+        if (res.data.profile.role === "admin") {
+          console.log("✅ Admin detectado");
+        }
       } else if (res.error) {
         console.warn("[profile] error:", res.error);
       }
@@ -109,7 +109,7 @@ export default function DashboardPage() {
               <Logo size="sm" />
               <div>
                 <h2 className="font-bold text-white text-sm">Howlify</h2>
-                <p className="text-[10px] text-gray-500">Plan {planName}</p>
+                <p className="text-[10px] text-gray-500">Plan {planName} {profile?.role === "admin" ? "🛠️ Admin" : ""}</p>
               </div>
             </div>
           </div>
