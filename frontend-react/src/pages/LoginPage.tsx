@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/Toast";
+import { traducirError } from "../utils/errors";
 import PageTransition from "../components/PageTransition";
 import Logo from "../components/Logo";
 
@@ -10,16 +11,24 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState("");
   const { login } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError("");
+    if (!email.trim()) { setFormError("Ingresá tu email"); return; }
+    if (!password) { setFormError("Ingresá tu contraseña"); return; }
     setLoading(true);
     const res = await api.login(email, password);
     setLoading(false);
-    if (res.error) return toast(res.error, "error");
+    if (res.error) {
+      const msg = traducirError(res.error);
+      setFormError(msg);
+      return toast(msg, "error");
+    }
     if (res.data) {
       login(res.data.token, res.data.user);
       navigate("/dashboard");
@@ -41,6 +50,12 @@ export default function LoginPage() {
             <div className="absolute -inset-0.5 bg-gradient-to-r from-red-500 to-red-700 rounded-2xl blur opacity-20 group-hover:opacity-30 transition duration-300" />
             <form onSubmit={handleSubmit} className="relative bg-gray-900/80 backdrop-blur-xl rounded-2xl p-8 space-y-5" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
               <h3 className="text-xl font-bold text-white">Iniciar Sesión</h3>
+              {formError && (
+                <div className="flex items-center gap-2 px-4 py-3 bg-red-900/30 border border-red-500/30 rounded-xl text-sm text-red-300">
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <span>{formError}</span>
+                </div>
+              )}
               <div className="space-y-1">
                 <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">Email</label>
                 <input

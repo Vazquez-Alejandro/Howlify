@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api, type Caza } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/Toast";
+import { traducirError } from "../utils/errors";
 import PageTransition from "../components/PageTransition";
 import CazaCard from "../components/CazaCard";
 import SkeletonCard from "../components/SkeletonCard";
@@ -400,13 +401,18 @@ function NewCazaForm({ onCreated }: { onCreated: () => void }) {
   const [alertaTipo, setAlertaTipo] = useState<"piso" | "descuento">("piso");
   const [form, setForm] = useState({ keyword: "", url: "", precio_max: 50000, frecuencia: "1 h" });
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError("");
+    if (!form.keyword.trim()) { setFormError("Ingresá un nombre o keyword"); return; }
+    if (!form.url.trim()) { setFormError("Ingresá una URL"); return; }
     setLoading(true);
     const sourceMap: Record<CazaTipo, string> = { producto: "generic", vuelo: "despegar", alojamiento: "airbnb" };
-    await api.createCaza({ ...form, tipo: alertaTipo, source: sourceMap[tipo] });
+    const res = await api.createCaza({ ...form, tipo: alertaTipo, source: sourceMap[tipo] });
     setLoading(false);
+    if (res.error) { setFormError(traducirError(res.error)); return; }
     setOpen(false);
     setTipo("producto");
     setAlertaTipo("piso");
@@ -438,6 +444,12 @@ function NewCazaForm({ onCreated }: { onCreated: () => void }) {
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
+        {formError && (
+          <div className="flex items-center gap-2 px-4 py-3 bg-red-900/30 border border-red-500/30 rounded-xl text-sm text-red-300">
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <span>{formError}</span>
+          </div>
+        )}
         <div className="flex gap-2 p-1 bg-gray-800/30 rounded-xl border border-gray-700/50">
           {(["producto", "vuelo", "alojamiento"] as const).map((t) => (
             <button key={t} type="button" onClick={() => setTipo(t)}
