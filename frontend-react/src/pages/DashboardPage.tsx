@@ -21,7 +21,6 @@ const PLAN_INFO: Record<string, { label: string; max: number }> = {
 export default function DashboardPage() {
   const [cazas, setCazas] = useState<Caza[]>([]);
   const [loading, setLoading] = useState(false);
-  const [hunting, setHunting] = useState<Record<string, boolean>>({});
   const [huntAllLoading, setHuntAllLoading] = useState(false);
   const { logout, user } = useAuth();
   const navigate = useNavigate();
@@ -37,14 +36,6 @@ export default function DashboardPage() {
     const res = await api.listCazas();
     if (res.data) setCazas(res.data.cazas);
     setLoading(false);
-  };
-
-  const handleHunt = async (id: number) => {
-    const key = String(id);
-    setHunting((prev) => ({ ...prev, [key]: true }));
-    await api.huntSingle(id);
-    setHunting((prev) => ({ ...prev, [key]: false }));
-    await loadCazas();
   };
 
   useEffect(() => { loadCazas(); }, []);
@@ -218,10 +209,8 @@ export default function DashboardPage() {
                   <CazaCard
                     key={c.id}
                     caza={c}
-                    onHunt={() => handleHunt(c.id)}
                     onDelete={() => handleDelete(c.id)}
                     onUpdate={() => loadCazas()}
-                    hunting={!!hunting[String(c.id)]}
                   />
                 ))}
               </div>
@@ -340,17 +329,22 @@ export default function DashboardPage() {
   );
 }
 
+type CazaTipo = "producto" | "vuelo" | "alojamiento";
+
 function NewCazaForm({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
+  const [tipo, setTipo] = useState<CazaTipo>("producto");
   const [form, setForm] = useState({ keyword: "", url: "", precio_max: 50000, frecuencia: "1 h" });
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    await api.createCaza(form);
+    const sourceMap: Record<CazaTipo, string> = { producto: "generic", vuelo: "despegar", alojamiento: "airbnb" };
+    await api.createCaza({ ...form, tipo, source: sourceMap[tipo] });
     setLoading(false);
     setOpen(false);
+    setTipo("producto");
     setForm({ keyword: "", url: "", precio_max: 50000, frecuencia: "1 h" });
     onCreated();
   };
@@ -380,8 +374,16 @@ function NewCazaForm({ onCreated }: { onCreated: () => void }) {
           </button>
         </div>
         <div className="flex gap-2 p-1 bg-gray-800/30 rounded-xl border border-gray-700/50">
-          {["🛒 Producto", "✈️ Vuelo", "🏠 Alojamiento"].map((t) => (
-            <button key={t} type="button" className="flex-1 py-2 px-3 rounded-lg text-xs font-medium bg-red-500/20 text-red-300 shadow-sm">{t}</button>
+          {(["producto", "vuelo", "alojamiento"] as const).map((t) => (
+            <button key={t} type="button" onClick={() => setTipo(t)}
+              className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all ${
+                tipo === t
+                  ? "bg-red-500/20 text-red-300 shadow-sm"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              {t === "producto" ? "🛒 Producto" : t === "vuelo" ? "✈️ Vuelo" : "🏠 Alojamiento"}
+            </button>
           ))}
         </div>
         <div className="space-y-1">

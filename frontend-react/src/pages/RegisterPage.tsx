@@ -28,7 +28,7 @@ const plans: Record<Category, Plan[]> = {
 
 export default function RegisterPage() {
   const [category, setCategory] = useState<Category>("personal");
-  const [form, setForm] = useState({ email: "", password: "", username: "", plan: "starter" });
+  const [form, setForm] = useState({ email: "", password: "", confirmPassword: "", username: "", plan: "starter" });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
@@ -38,6 +38,8 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    if (form.password.length < 6) return setError("La contraseña debe tener al menos 6 caracteres");
+    if (form.password !== form.confirmPassword) return setError("Las contraseñas no coinciden");
     setSuccess("");
     setLoading(true);
     const res = await api.signup(form.email, form.password, form.username, form.plan);
@@ -45,7 +47,7 @@ export default function RegisterPage() {
     if (res.error) return toast(res.error, "error");
     setSuccess(res.data?.message || "Cuenta creada. Revisá tu email.");
     toast(res.data?.message || "Cuenta creada. Revisá tu email.", "success");
-    setTimeout(() => navigate("/"), 2000);
+    setTimeout(() => navigate("/login"), 2000);
   };
 
   return (
@@ -98,8 +100,24 @@ export default function RegisterPage() {
                 type="password" placeholder="••••••••" value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
                 className="w-full px-5 py-3 bg-gray-800/50 border border-gray-700/50 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20 transition-all text-base"
+                required minLength={6}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">Repetir contraseña</label>
+              <input
+                type="password" placeholder="••••••••" value={form.confirmPassword}
+                onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+                className={`w-full px-5 py-3 bg-gray-800/50 border rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-1 transition-all text-base ${
+                  form.confirmPassword && form.password !== form.confirmPassword
+                    ? "border-red-500/50 focus:border-red-500 focus:ring-red-500/20"
+                    : "border-gray-700/50 focus:border-red-500/50 focus:ring-red-500/20"
+                }`}
                 required
               />
+              {form.confirmPassword && form.password !== form.confirmPassword && (
+                <p className="text-xs text-red-400 ml-1 mt-1">Las contraseñas no coinciden</p>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -170,7 +188,7 @@ export default function RegisterPage() {
             </button>
             <p className="text-center text-sm text-gray-500">
               ¿Ya tenés cuenta?{" "}
-              <Link to="/" className="text-red-400 hover:text-red-300 font-medium transition-colors">Iniciar Sesión</Link>
+              <Link to="/login" className="text-red-400 hover:text-red-300 font-medium transition-colors">Iniciar Sesión</Link>
             </p>
           </form>
         </div>

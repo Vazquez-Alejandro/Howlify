@@ -172,6 +172,34 @@ def insertar_caza(payload: dict):
         print("⚠️ Producto sin nombre, no se inserta")
 
 # ==========================================================
+# 8. PRICE ANOMALY DETECTION
+# ==========================================================
+
+def detectar_price_error(caza_id: int, precio_actual: float, umbral: float = 0.6) -> tuple[bool, float | None]:
+    """
+    Detecta si un precio es anómalamente bajo comparado al histórico.
+    Retorna (es_error, precio_promedio_historico).
+    Se considera error si precio_actual < promedio_historico * (1 - umbral).
+    """
+    try:
+        res = supabase.table("price_history") \
+            .select("price") \
+            .eq("caza_id", caza_id) \
+            .order("checked_at", desc=True) \
+            .limit(10) \
+            .execute()
+        prices = [float(p["price"]) for p in (res.data or []) if float(p["price"]) > 0]
+        if len(prices) < 3:
+            return False, None
+        avg = sum(prices) / len(prices)
+        if precio_actual < avg * (1 - umbral):
+            return True, round(avg, 2)
+        return False, avg
+    except Exception as e:
+        print(f"⚠ error detectando price error: {e}")
+        return False, None
+
+# ==========================================================
 # 7. EXPORTACIÓN
 # ==========================================================
 

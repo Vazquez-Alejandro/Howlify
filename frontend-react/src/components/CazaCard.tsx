@@ -4,15 +4,13 @@ import { useToast } from "./Toast";
 
 interface Props {
   caza: Caza;
-  onHunt: () => void;
   onDelete: () => void;
   onUpdate: () => void;
-  hunting: boolean;
 }
 
-export default function CazaCard({ caza, onHunt, onDelete, onUpdate, hunting }: Props) {
+export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
   const { toast } = useToast();
-  const [results, setResults] = useState<{ title: string; price: number; url: string }[] | null>(null);
+  const [results, setResults] = useState<{ title: string; price: number; url: string; price_error?: boolean; price_avg?: number }[] | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [loadingResults, setLoadingResults] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -32,13 +30,13 @@ export default function CazaCard({ caza, onHunt, onDelete, onUpdate, hunting }: 
   const handleHunt = async () => {
     setResults(null);
     setLoadingResults(true);
-    onHunt();
     const res = await api.huntSingle(caza.id);
     setLoadingResults(false);
     if (res.data?.results) {
       setResults(res.data.results);
       setShowResults(true);
     }
+    onUpdate();
   };
 
   const handleSave = async () => {
@@ -86,11 +84,11 @@ export default function CazaCard({ caza, onHunt, onDelete, onUpdate, hunting }: 
           <div className="flex items-center gap-2 ml-4 shrink-0">
             <button
               onClick={handleHunt}
-              disabled={hunting || loadingResults}
+              disabled={loadingResults}
               className="px-3 py-1.5 bg-gray-800/50 text-gray-400 rounded-xl hover:bg-gray-700/50 hover:text-gray-200 text-sm transition-all border border-gray-700/50 disabled:opacity-50 disabled:cursor-not-allowed"
               title="Olfatear"
             >
-              {hunting || loadingResults ? (
+              {loadingResults ? (
                 <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
               ) : "🐺"}
             </button>
@@ -161,8 +159,13 @@ export default function CazaCard({ caza, onHunt, onDelete, onUpdate, hunting }: 
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-red-500/50 shrink-0" />
                     <span className="text-gray-300 text-sm truncate">{r.title?.slice(0, 65)}</span>
+                    {r.price_error && (
+                      <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-bold bg-yellow-500/20 text-yellow-400 rounded border border-yellow-500/30">
+                        ERROR PRECIO
+                      </span>
+                    )}
                   </div>
-                  <span className="text-green-400 font-medium text-sm ml-3 shrink-0">${(r.price || 0).toLocaleString()}</span>
+                  <span className={`font-medium text-sm ml-3 shrink-0 ${r.price_error ? "text-yellow-400" : "text-green-400"}`}>${(r.price || 0).toLocaleString()}</span>
                   <a
                     href={r.url}
                     target="_blank"

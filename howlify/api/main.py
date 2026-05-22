@@ -342,6 +342,14 @@ def hunt_single(caza_id: int, authorization: str = Header(default="")):
 
     if resultados:
         save_price_history(uid, caza_id, resultados)
+        from utils.logic import detectar_price_error
+        for r in resultados:
+            precio_r = r.get("price") or 0
+            if precio_r > 0:
+                es_error, prom = detectar_price_error(caza_id, float(precio_r))
+                if es_error:
+                    r["price_error"] = True
+                    r["price_avg"] = prom
     return {"results": resultados}
 
 @app.post("/api/hunt/all")

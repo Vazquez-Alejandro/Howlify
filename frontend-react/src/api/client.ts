@@ -53,6 +53,8 @@ export const api = {
     url: string;
     precio_max: number;
     frecuencia?: string;
+    tipo?: string;
+    source?: string;
   }) => request<{ message: string }>("/api/cazas", { method: "POST", body: JSON.stringify(data) }),
 
   updateCaza: (id: number, data: {
