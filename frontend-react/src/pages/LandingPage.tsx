@@ -111,12 +111,12 @@ export default function LandingPage() {
             {PLANS.map((p) => (
               <div
                 key={p.name}
-                className={`relative rounded-2xl p-6 flex flex-col border ${p.popular ? 'bg-gradient-to-b from-red-500/10 to-gray-900/80 border-red-500/30 scale-[1.02] ring-2 ring-red-500/20' : 'bg-gray-900/60 border-gray-700/30'}`}
+                className={`relative rounded-2xl p-6 flex flex-col border ${p.popular ? 'bg-gradient-to-b from-red-500/10 to-gray-900/80 border-red-500/30 ring-2 ring-red-500/20' : 'bg-gray-900/60 border-gray-700/30'}`}
               >
                 {p.popular && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 bg-gradient-to-r from-red-500 to-red-600 rounded-full text-xs font-semibold shadow-lg z-10 whitespace-nowrap">Más popular</div>
+                  <div className="self-center -mt-9 mb-2 px-3 py-1 bg-gradient-to-r from-red-500 to-red-600 rounded-full text-xs font-semibold shadow-lg z-10 whitespace-nowrap">Más popular</div>
                 )}
-                <h3 className={`text-xl font-bold text-center ${p.popular ? 'mt-2' : ''}`}>{p.name}</h3>
+                <h3 className="text-xl font-bold text-center">{p.name}</h3>
                 <p className="text-3xl font-extrabold text-center mt-3">{p.price}</p>
                 <p className="text-sm text-gray-400 text-center mt-1">{p.desc}</p>
                 <ul className="mt-6 space-y-3 flex-1">
