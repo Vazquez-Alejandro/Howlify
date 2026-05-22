@@ -128,6 +128,11 @@ export const api = {
     request<{ history: { checked_at: string; price: number }[] }>(`/api/monitor/price-history/${cazaId}`),
   monitorLatestPrices: () => request<{ prices: Record<string, { price: number; checked_at: string }> }>("/api/monitor/latest-prices"),
   monitorAllHistory: () => request<{ history: { caza_id: number; price: number; checked_at: string }[] }>("/api/monitor/all-history"),
+
+  // Stripe / Billing
+  createCheckout: (plan: string) => request<{ url: string }>("/api/stripe/create-checkout", { method: "POST", body: JSON.stringify({ plan }) }),
+  getSubscription: () => request<StripeSubscription>("/api/stripe/subscription"),
+  customerPortal: () => request<{ url: string }>("/api/stripe/customer-portal", { method: "POST", body: "{}" }),
 };
 
 export interface Caza {
@@ -181,4 +186,10 @@ export interface Grupo {
   id: number;
   nombre: string;
   color: string;
+}
+
+export interface StripeSubscription {
+  plan: string;
+  email: string;
+  stripe_customer_id: string | null;
 }

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 from dotenv import load_dotenv
+import stripe
 
 load_dotenv()
 
@@ -595,6 +596,111 @@ def export_to_sheets(data: dict, authorization: str = Header(default="")):
         return {"ok": True, "url": f"https://docs.google.com/spreadsheets/d/{info}"}
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ─── Stripe / Billing ────────────────────────────────────
+
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
+
+PRICE_MAP = {
+    os.getenv("STRIPE_PRICE_STARTER", ""): "starter",
+    os.getenv("STRIPE_PRICE_PRO", ""): "pro",
+    os.getenv("STRIPE_PRICE_RESELLER", ""): "business_reseller",
+    os.getenv("STRIPE_PRICE_MONITOR", ""): "business_monitor",
+}
+
+@app.post("/api/stripe/webhook")
+async def stripe_webhook(request: Request):
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+    secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    if not secret:
+        return JSONResponse(status_code=400, content={"error": "Webhook secret not configured"})
+    try:
+        event = stripe.Webhook.construct_event(payload, sig, secret)
+    except (ValueError, stripe.error.SignatureVerificationError):
+        return JSONResponse(status_code=400, content={"error": "Invalid signature"})
+
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+        customer_email = session.get("customer_email") or session.get("customer_details", {}).get("email", "")
+        client_ref = session.get("client_reference_id", "")
+        mode = session.get("mode", "payment")
+        if mode == "subscription":
+            sub_id = session.get("subscription")
+            if sub_id:
+                try:
+                    sub = stripe.Subscription.retrieve(sub_id)
+                    items = sub.get("items", {}).get("data", [])
+                    if items:
+                        price_id = items[0].get("price", {}).get("id", "")
+                        plan = PRICE_MAP.get(price_id, "")
+                        if plan:
+                            lookup = supabase.table("profiles").select("user_id").eq("email", customer_email).limit(1).execute()
+                            if lookup.data:
+                                supabase.table("profiles").update({"plan": plan}).eq("email", customer_email).execute()
+                                print(f"✅ Plan actualizado a {plan} para {customer_email}")
+                except Exception as e:
+                    print(f"❌ Error procesando subscription: {e}")
+        elif mode == "payment":
+            if client_ref:
+                supabase.table("profiles").update({"plan": "pro"}).eq("user_id", client_ref).execute()
+                print(f"✅ Plan actualizado a pro para user {client_ref}")
+    return {"received": True}
+
+@app.post("/api/stripe/create-checkout")
+def create_checkout(data: dict, authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    plan = data.get("plan", "pro")
+    price_key = f"STRIPE_PRICE_{plan.upper()}"
+    price_id = os.getenv(price_key, "")
+    if not price_id:
+        raise HTTPException(status_code=400, detail=f"No price configured for plan {plan}")
+    profile = supabase.table("profiles").select("email").eq("user_id", uid).limit(1).execute()
+    email = profile.data[0].get("email", "") if profile.data else ""
+    try:
+        session = stripe.checkout.Session.create(
+            mode="subscription",
+            payment_method_types=["card"],
+            line_items=[{"price": price_id, "quantity": 1}],
+            success_url=os.getenv("STRIPE_SUCCESS_URL", "http://localhost:5173/dashboard?billing=success"),
+            cancel_url=os.getenv("STRIPE_CANCEL_URL", "http://localhost:5173/dashboard?billing=cancel"),
+            customer_email=email or None,
+            client_reference_id=uid,
+        )
+        return {"url": session.url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/stripe/subscription")
+def get_subscription(authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    profile = supabase.table("profiles").select("plan, email, stripe_customer_id").eq("user_id", uid).limit(1).execute()
+    if not profile.data:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    p = profile.data[0]
+    return {"plan": p.get("plan", "starter"), "email": p.get("email", ""), "stripe_customer_id": p.get("stripe_customer_id")}
+
+@app.post("/api/stripe/customer-portal")
+def customer_portal(authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    profile = supabase.table("profiles").select("stripe_customer_id, email").eq("user_id", uid).limit(1).execute()
+    cust_id = profile.data[0].get("stripe_customer_id", "") if profile.data else ""
+    if not cust_id:
+        # Crear customer si no existe
+        email = profile.data[0].get("email", "") if profile.data else ""
+        if not email:
+            raise HTTPException(status_code=400, detail="Email not found")
+        cust = stripe.Customer.create(email=email, metadata={"user_id": uid})
+        cust_id = cust.id
+        supabase.table("profiles").update({"stripe_customer_id": cust_id}).eq("user_id", uid).execute()
+    try:
+        session = stripe.billing_portal.Session.create(
+            customer=cust_id,
+            return_url=os.getenv("STRIPE_RETURN_URL", "http://localhost:5173/dashboard"),
+        )
+        return {"url": session.url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

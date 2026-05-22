@@ -8,8 +8,9 @@ import CazaCard from "../components/CazaCard";
 import SkeletonCard from "../components/SkeletonCard";
 import Logo from "../components/Logo";
 import MonitorPage from "./MonitorPage";
+import BillingPage from "./BillingPage";
 
-type View = "rastreadores" | "perfil" | "admin" | "monitor" | "revender";
+type View = "rastreadores" | "perfil" | "admin" | "monitor" | "revender" | "facturacion";
 
 const PLAN_INFO: Record<string, { label: string; max: number }> = {
   starter: { label: "Starter", max: 5 },
@@ -90,6 +91,7 @@ export default function DashboardPage() {
     ...(effectivePlan === "business_monitor" || isAdmin ? [{ key: "monitor" as View, label: "Monitor", icon: "📊" }] : []),
     ...(effectivePlan === "business_reseller" || isAdmin ? [{ key: "revender" as View, label: "Revender", icon: "💰" }] : []),
     ...(isAdmin ? [{ key: "admin" as View, label: "Panel Admin", icon: "🛠️" }] : []),
+    { key: "facturacion", label: "Facturación", icon: "💳" },
     { key: "perfil", label: "Configuración", icon: "⚙️" },
   ];
 
@@ -157,7 +159,7 @@ export default function DashboardPage() {
                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
                 </button>
                 <h1 className="text-lg font-bold text-white">
-                  {view === "rastreadores" ? "Mis Cacerías" : view === "monitor" ? "Monitor" : view === "revender" ? "Revender" : view === "admin" ? "Panel Admin" : "Mi Perfil"}
+                  {view === "rastreadores" ? "Mis Cacerías" : view === "monitor" ? "Monitor" : view === "revender" ? "Revender" : view === "admin" ? "Panel Admin" : view === "facturacion" ? "Facturación" : "Mi Perfil"}
                 </h1>
               </div>
               {view === "rastreadores" && cazas.length > 0 && (
@@ -312,6 +314,9 @@ export default function DashboardPage() {
               </div>
             </main>
           )}
+
+          {/* Billing view */}
+          {view === "facturacion" && <BillingPage />}
 
           {/* Admin view */}
           {view === "admin" && (
