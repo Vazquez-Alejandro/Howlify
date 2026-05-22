@@ -9,6 +9,7 @@ import SkeletonCard from "../components/SkeletonCard";
 import Logo from "../components/Logo";
 import MonitorPage from "./MonitorPage";
 import BillingPage from "./BillingPage";
+import OnboardingTour from "../components/OnboardingTour";
 
 type View = "rastreadores" | "perfil" | "admin" | "monitor" | "revender" | "facturacion";
 
@@ -86,17 +87,18 @@ export default function DashboardPage() {
   const maxCazas = planInfo.max;
   const planName = planInfo.label;
 
-  const menuItems: { key: View; label: string; icon: string }[] = [
+  const menuItems: { key: View; label: string; icon: string; id?: string }[] = [
     { key: "rastreadores", label: "Mis Rastreadores", icon: "🐺" },
     ...(effectivePlan === "business_monitor" || isAdmin ? [{ key: "monitor" as View, label: "Monitor", icon: "📊" }] : []),
     ...(effectivePlan === "business_reseller" || isAdmin ? [{ key: "revender" as View, label: "Revender", icon: "💰" }] : []),
     ...(isAdmin ? [{ key: "admin" as View, label: "Panel Admin", icon: "🛠️" }] : []),
     { key: "facturacion", label: "Facturación", icon: "💳" },
-    { key: "perfil", label: "Configuración", icon: "⚙️" },
+    { key: "perfil", label: "Configuración", icon: "⚙️", id: "config-link" },
   ];
 
   return (
     <PageTransition>
+      <OnboardingTour />
       <div className="min-h-screen bg-gray-950 flex">
         {/* Mobile overlay */}
         {sidebarOpen && (
@@ -118,6 +120,7 @@ export default function DashboardPage() {
             {menuItems.map((item) => (
               <button
                 key={item.key}
+                id={item.id}
                 onClick={() => {
                   if (item.key === "perfil") {
                     navigate("/profile");
@@ -414,7 +417,7 @@ function NewCazaForm({ onCreated }: { onCreated: () => void }) {
   if (!open) {
     return (
       <div className="mt-8">
-        <button
+        <button id="new-caza-btn"
           onClick={() => setOpen(true)}
           className="w-full py-4 border-2 border-dashed border-gray-700/50 rounded-2xl text-gray-500 hover:border-gray-500 hover:text-gray-300 transition-all flex items-center justify-center gap-2 group"
         >
