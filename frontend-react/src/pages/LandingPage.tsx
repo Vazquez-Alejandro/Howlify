@@ -87,7 +87,7 @@ export default function LandingPage() {
 
         <section className="relative z-10 w-full max-w-6xl px-6 py-16">
           <h2 className="text-3xl font-bold text-center mb-4">Todo lo que necesitás</h2>
-          <p className="text-gray-400 text-center mb-12 max-w-xl mx-auto">Monitoreo inteligente, alertas instantáneas, todo en un dashboard diseñado para cazadores de ofertas.</p>
+          <p className="text-gray-400 text-center mb-12 max-w-2xl mx-auto">Monitoreo inteligente, alertas instantáneas, todo en un dashboard diseñado para cazadores de ofertas.</p>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {FEATURES.map((f) => (
               <div key={f.title} className="bg-gray-900/60 rounded-2xl p-6 hover:bg-gray-900/80 transition-all" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
@@ -114,9 +114,9 @@ export default function LandingPage() {
                 className={`relative rounded-2xl p-6 flex flex-col border ${p.popular ? 'bg-gradient-to-b from-red-500/10 to-gray-900/80 border-red-500/30 scale-[1.02]' : 'bg-gray-900/60 border-gray-700/30'}`}
               >
                 {p.popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-red-500 to-red-600 rounded-full text-xs font-semibold shadow-lg">Más popular</div>
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-red-500 to-red-600 rounded-full text-xs font-semibold shadow-lg z-10">Más popular</div>
                 )}
-                <h3 className="text-xl font-bold">{p.name}</h3>
+                <h3 className={`text-xl font-bold ${p.popular ? 'pt-2' : ''}`}>{p.name}</h3>
                 <p className="text-3xl font-extrabold mt-3">{p.price}</p>
                 <p className="text-sm text-gray-400 mt-1">{p.desc}</p>
                 <ul className="mt-6 space-y-3 flex-1">
