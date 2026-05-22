@@ -71,7 +71,7 @@ export default function LandingPage() {
             Nunca más te pierdas{" "}
             <span className="bg-gradient-to-r from-red-400 to-red-600 bg-clip-text text-transparent">una oportunidad</span>
           </h1>
-          <p className="mt-6 text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
+          <p className="mt-6 text-lg text-gray-400 max-w-2xl mx-auto text-center leading-relaxed">
             Howlify monitorea precios 24/7, detecta violaciones de MAP y te alerta al instante.
             Tomá decisiones informadas sin pasar horas mirando pantallas.
           </p>
