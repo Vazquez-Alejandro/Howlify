@@ -82,6 +82,11 @@ export default function DashboardPage() {
 
   const activeCazas = cazas.filter((c) => c.estado === "active" || !c.estado).length;
   const alertsCount = cazas.filter((c) => c.last_price && c.last_price <= c.precio_max).length;
+  const cazasConPrecio = cazas.filter((c) => c.last_price != null).length;
+  const ahorroTotal = cazas.reduce((acc, c) => {
+    if (c.last_price && c.last_price < c.precio_max) return acc + (c.precio_max - c.last_price);
+    return acc;
+  }, 0);
 
   const effectivePlan = isAdmin ? simulatedPlan : (profile?.plan || "starter");
   const planInfo = PLAN_INFO[effectivePlan] || PLAN_INFO.starter;
@@ -184,7 +189,7 @@ export default function DashboardPage() {
             </div>
             {/* Stats bar */}
             {view === "rastreadores" && (
-              <div className="px-4 pb-3 grid grid-cols-3 gap-2">
+              <div className="px-4 pb-3 grid grid-cols-2 md:grid-cols-4 gap-2">
                 <div className="bg-gray-900/60 rounded-xl px-3 py-2.5" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                   <p className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">Cacerías</p>
                   <p className="text-lg font-bold text-white mt-0.5">{cazas.length} / {maxCazas}</p>
@@ -196,6 +201,12 @@ export default function DashboardPage() {
                 <div className="bg-gray-900/60 rounded-xl px-3 py-2.5" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                   <p className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">Alertas</p>
                   <p className={`text-lg font-bold mt-0.5 ${alertsCount > 0 ? "text-red-400" : "text-gray-500"}`}>{alertsCount}</p>
+                </div>
+                <div className="bg-gray-900/60 rounded-xl px-3 py-2.5" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">Ahorro</p>
+                  <p className={`text-lg font-bold mt-0.5 ${ahorroTotal > 0 ? "text-green-400" : "text-gray-500"}`}>
+                    ${ahorroTotal.toLocaleString()}
+                  </p>
                 </div>
               </div>
             )}
