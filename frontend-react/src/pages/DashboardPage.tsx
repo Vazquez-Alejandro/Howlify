@@ -214,7 +214,7 @@ export default function DashboardPage() {
 
           {/* Rastreadores view */}
           {view === "rastreadores" && (
-            <main className="flex-1 px-8 py-5 max-w-full w-full">
+            <main className="flex-1 px-4 md:px-8 py-5 max-w-full w-full">
               {loading && <SkeletonCard count={3} />}
 
               {!loading && cazas.length === 0 && (
@@ -241,7 +241,7 @@ export default function DashboardPage() {
 
           {/* Perfil view */}
           {view === "perfil" && (
-            <main className="flex-1 px-8 py-5 max-w-full w-full">
+            <main className="flex-1 px-4 md:px-8 py-5 max-w-full w-full">
               <div className="bg-gray-900/60 rounded-2xl p-6 space-y-5" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                 <div className="flex items-center gap-4">
                   <Logo size="md" />
@@ -280,7 +280,7 @@ export default function DashboardPage() {
 
           {/* Revender view */}
           {view === "revender" && (
-            <main className="flex-1 px-8 py-5 max-w-full w-full">
+            <main className="flex-1 px-4 md:px-8 py-5 max-w-full w-full">
               <p className="text-sm text-gray-500 mb-4">Configurá tu markup y calculá rentabilidad para cada producto.</p>
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {cazas.map((c) => {

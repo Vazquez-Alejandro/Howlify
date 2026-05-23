@@ -82,9 +82,9 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
   return (
     <>
       <div className="bg-gray-900/60 backdrop-blur-sm rounded-2xl border border-gray-800/50 p-4 hover:border-gray-700/50 transition-all duration-200">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <p className="text-white font-medium truncate">{kw}</p>
               {isAlert && (
                 <span className="shrink-0 px-2 py-0.5 text-xs font-medium bg-red-500/10 text-red-400 rounded-lg border border-red-500/20">
@@ -93,9 +93,9 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
               )}
             </div>
             <div className="flex items-center gap-2 mt-0.5">
-              <p className="text-gray-500 text-sm truncate">{url.slice(0, 55)}</p>
+              <p className="text-gray-500 text-sm truncate max-w-[180px] sm:max-w-none">{url.slice(0, 55)}</p>
             </div>
-            <div className="flex items-center gap-3 mt-0.5">
+            <div className="flex items-center gap-3 mt-0.5 flex-wrap">
               {hasPrice && (
                 <span className={`text-sm font-medium ${isAlert ? "text-red-400" : "text-green-400"}`}>
                   Últ: ${caza.last_price!.toLocaleString()}
@@ -123,7 +123,7 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2 ml-4 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
             <button
               onClick={handleHunt}
               disabled={loadingResults}
@@ -198,10 +198,10 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
             </div>
             <div className="space-y-1">
               {results.slice(0, 5).map((r, i) => (
-                <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-gray-800/30 transition-colors">
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between py-1.5 px-2 rounded-lg hover:bg-gray-800/30 transition-colors gap-1">
+                  <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
                     <span className="w-1.5 h-1.5 rounded-full bg-red-500/50 shrink-0" />
-                    <span className="text-gray-300 text-sm truncate">{r.title?.slice(0, 65)}</span>
+                    <span className="text-gray-300 text-sm truncate max-w-[140px] sm:max-w-none">{r.title?.slice(0, 65)}</span>
                     {r.price_error && (
                       <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-bold bg-yellow-500/20 text-yellow-400 rounded border border-yellow-500/30">
                         ERROR PRECIO
@@ -213,20 +213,22 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                       </span>
                     )}
                   </div>
-                  <span className={`font-medium text-sm ml-3 shrink-0 ${r.price_error ? "text-yellow-400" : esDescuento && r.match_descuento ? "text-green-400" : "text-gray-400"}`}>${(r.price || 0).toLocaleString()}</span>
-                  {r.precio_personalizado && (
-                    <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-bold bg-purple-500/20 text-purple-400 rounded border border-purple-500/30 ml-2" title={`Precio alternativo: $${(r.precio_alternativo || 0).toLocaleString()}`}>
-                      🎭 ML variable
-                    </span>
-                  )}
-                  <a
-                    href={r.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-3 px-2.5 py-1 bg-gray-800/50 text-gray-400 rounded-lg text-xs hover:bg-gray-700/50 hover:text-gray-200 transition-all border border-gray-700/50 shrink-0"
-                  >
-                    Ver
-                  </a>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`font-medium text-sm ${r.price_error ? "text-yellow-400" : esDescuento && r.match_descuento ? "text-green-400" : "text-gray-400"}`}>${(r.price || 0).toLocaleString()}</span>
+                    {r.precio_personalizado && (
+                      <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-bold bg-purple-500/20 text-purple-400 rounded border border-purple-500/30" title={`Precio alternativo: $${(r.precio_alternativo || 0).toLocaleString()}`}>
+                        🎭 ML variable
+                      </span>
+                    )}
+                    <a
+                      href={r.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1 bg-gray-800/50 text-gray-400 rounded-lg text-xs hover:bg-gray-700/50 hover:text-gray-200 transition-all border border-gray-700/50 shrink-0"
+                    >
+                      Ver
+                    </a>
+                  </div>
                 </div>
               ))}
             </div>
