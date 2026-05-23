@@ -108,4 +108,17 @@
 - [x] Frontend: BillingPage muestra cartel de beta gratuita en vez de checkout
 - [x] Cuando llegue el momento: `PAYMENT_ENABLED=true` + configurar MP → se activan los pagos
 
+### 7. Precio personalizado ML
+- [x] Detección automática consultando con múltiples identidades (UA, viewport, locale)
+- [x] Badge "🎭 ML variable" en resultados de cacerías
+- [x] Feature destacada en Landing Page
+
+### 8. Mejoras post‑beta (commit 23/05)
+- [x] **Gráfico de historial** en CazaCard con tendencia (↑↓→) y mini line chart recharts
+- [x] **Verificación de email** obligatoria con pantalla de confirmación y reenvío
+- [x] **Estadísticas** en dashboard: total, activas, alertas, ahorro estimado
+- [x] **Responsive mobile** en dashboard y CazaCard (flex wrap, padding, truncate)
+- [x] **Filtro/búsqueda** de cacerías por nombre o URL
+- [x] **PWA** instalable con manifest, service worker, iconos
+
 ## 📈 Fases de escalado
