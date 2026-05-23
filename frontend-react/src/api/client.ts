@@ -87,6 +87,12 @@ export const api = {
       body: JSON.stringify({ email }),
     }),
 
+  resendVerification: (email: string) =>
+    request<{ message: string }>("/api/auth/resend-verification", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
   resetPassword: (token_hash: string, password: string) =>
     request<{ message: string }>("/api/auth/reset-password", {
       method: "POST",

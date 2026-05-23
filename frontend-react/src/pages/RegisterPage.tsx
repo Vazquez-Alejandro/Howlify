@@ -33,6 +33,8 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState("");
+  const [sendingVerification, setSendingVerification] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -46,9 +48,18 @@ export default function RegisterPage() {
     const res = await api.signup(form.email, form.password, form.username, form.plan);
     setLoading(false);
     if (res.error) { setError(traducirError(res.error)); return toast(traducirError(res.error), "error"); }
+    setRegisteredEmail(form.email);
     setSuccess(res.data?.message || "Cuenta creada. Revisá tu email.");
     toast(res.data?.message || "Cuenta creada. Revisá tu email.", "success");
-    setTimeout(() => navigate("/login"), 2000);
+  };
+
+  const handleResendVerification = async () => {
+    if (!registeredEmail) return;
+    setSendingVerification(true);
+    const res = await api.resendVerification(registeredEmail);
+    setSendingVerification(false);
+    if (res.error) { toast(traducirError(res.error), "error"); return; }
+    toast("Correo de verificación reenviado", "success");
   };
 
   return (
@@ -72,9 +83,21 @@ export default function RegisterPage() {
               </div>
             )}
             {success && (
-              <div className="flex items-center gap-2 bg-green-900/40 text-green-300 px-4 py-2.5 rounded-xl text-sm border border-green-800/50">
-                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                <span>{success}</span>
+              <div className="bg-green-900/30 rounded-2xl p-6 text-center border border-green-800/40">
+                <div className="text-4xl mb-3">📧</div>
+                <h3 className="text-lg font-bold text-white mb-2">Verificá tu email</h3>
+                <p className="text-sm text-gray-400 mb-1">Te enviamos un correo a:</p>
+                <p className="text-base font-medium text-green-400 mb-4">{registeredEmail}</p>
+                <p className="text-xs text-gray-500 mb-5">Hacé clic en el enlace que te llegó para activar tu cuenta. Si no lo ves, revisá la carpeta de spam.</p>
+                <button onClick={handleResendVerification} disabled={sendingVerification}
+                  className="px-5 py-2 bg-gray-800/50 text-gray-300 rounded-xl text-sm hover:bg-gray-700/50 transition-all border border-gray-700/50 disabled:opacity-50 disabled:cursor-not-allowed">
+                  {sendingVerification ? "⏳" : "Reenviar correo"}
+                </button>
+                <div className="mt-4">
+                  <Link to="/login" className="text-sm text-red-400 hover:text-red-300 transition-colors font-medium">
+                    Ya lo verifiqué — Iniciar sesión →
+                  </Link>
+                </div>
               </div>
             )}
             <div className="space-y-1">

@@ -8,6 +8,7 @@ const ERROR_MAP: Record<string, string> = {
   "Sin datos para exportar": "No hay datos para exportar.",
   "No price configured for plan": "Este plan todavía no está disponible para contratar.",
   "Email not found": "No encontramos tu email. Contactá a soporte.",
+  "Email not confirmed": "Debés confirmar tu email antes de ingresar. Revisá tu bandeja de entrada.",
   "Invalid signature": "Error de seguridad. Si el problema persiste, contactá a soporte.",
   "Webhook secret not configured": "Error de configuración de pagos. Contactá a soporte.",
   "Error de red": "No pudimos conectar con el servidor. Verificá tu conexión.",

@@ -77,6 +77,9 @@ class ResetPasswordRequest(BaseModel):
     token_hash: str
     password: str
 
+class ResendVerificationRequest(BaseModel):
+    email: str
+
 class CazaCreate(BaseModel):
     keyword: str
     url: str
@@ -184,6 +187,14 @@ def forgot_password(req: ForgotPasswordRequest):
             {"redirect_to": f"{os.getenv('APP_BASE_URL', 'http://localhost:5173')}/reset-password"}
         )
         return {"message": "Correo enviado"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/auth/resend-verification")
+def resend_verification(req: ResendVerificationRequest):
+    try:
+        supabase.auth.resend({"type": "signup", "email": req.email.strip().lower()})
+        return {"message": "Correo de verificación reenviado"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

@@ -12,9 +12,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState("");
+  const [sendingVerification, setSendingVerification] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const esErrorConfirmacion = formError.toLowerCase().includes("confirm");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,6 +38,15 @@ export default function LoginPage() {
     }
   };
 
+  const handleResendVerification = async () => {
+    if (!email.trim()) { toast("Ingresá tu email primero", "error"); return; }
+    setSendingVerification(true);
+    const res = await api.resendVerification(email);
+    setSendingVerification(false);
+    if (res.error) { toast(traducirError(res.error), "error"); return; }
+    toast("Correo de verificación reenviado", "success");
+  };
+
   return (
     <PageTransition>
       <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4 relative overflow-hidden">
@@ -51,9 +63,17 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit} className="relative bg-gray-900/80 backdrop-blur-xl rounded-2xl p-8 space-y-5" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
               <h3 className="text-xl font-bold text-white">Iniciar Sesión</h3>
               {formError && (
-                <div className="flex items-center gap-2 px-4 py-3 bg-red-900/30 border border-red-500/30 rounded-xl text-sm text-red-300">
-                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  <span>{formError}</span>
+                <div className="px-4 py-3 bg-red-900/30 border border-red-500/30 rounded-xl text-sm text-red-300">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <span>{formError}</span>
+                  </div>
+                  {esErrorConfirmacion && (
+                    <button onClick={handleResendVerification} disabled={sendingVerification}
+                      className="mt-2 text-xs text-red-400 hover:text-red-300 underline underline-offset-2 transition-colors disabled:opacity-50">
+                      {sendingVerification ? "⏳ Reenviando..." : "📧 Reenviar correo de verificación"}
+                    </button>
+                  )}
                 </div>
               )}
               <div className="space-y-1">
