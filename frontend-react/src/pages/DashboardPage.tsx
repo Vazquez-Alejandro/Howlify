@@ -33,6 +33,15 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<{ role?: string; plan?: string } | null>(null);
   const [simulatedPlan, setSimulatedPlan] = useState("starter");
   const [users, setUsers] = useState<Record<string, unknown>[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredCazas = cazas.filter((c) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    const kw = (c.producto || c.keyword || "").toLowerCase();
+    const url = (c.link || c.url || "").toLowerCase();
+    return kw.includes(q) || url.includes(q);
+  });
 
   const loadCazas = async () => {
     setLoading(true);
@@ -224,8 +233,29 @@ export default function DashboardPage() {
                 </div>
               )}
 
+              {cazas.length > 0 && (
+                <div className="relative mb-4">
+                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  <input
+                    type="text" placeholder="Buscar cacerías..." value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-xl text-white text-sm placeholder-gray-600 focus:outline-none focus:border-red-500/50 transition-all"
+                  />
+                  {searchQuery && (
+                    <button onClick={() => setSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400 text-sm">
+                      ✕
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {searchQuery && filteredCazas.length === 0 && (
+                <p className="text-sm text-gray-500 mb-4">No se encontraron cacerías para "{searchQuery}"</p>
+              )}
+
               <div className="space-y-3">
-                {cazas.map((c) => (
+                {filteredCazas.map((c) => (
                   <CazaCard
                     key={c.id}
                     caza={c}
