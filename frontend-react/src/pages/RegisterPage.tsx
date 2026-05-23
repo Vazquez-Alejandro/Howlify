@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 import { traducirError } from "../utils/errors";
@@ -35,7 +35,6 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState("");
   const [sendingVerification, setSendingVerification] = useState(false);
-  const navigate = useNavigate();
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {

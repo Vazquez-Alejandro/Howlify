@@ -91,7 +91,6 @@ export default function DashboardPage() {
 
   const activeCazas = cazas.filter((c) => c.estado === "active" || !c.estado).length;
   const alertsCount = cazas.filter((c) => c.last_price && c.last_price <= c.precio_max).length;
-  const cazasConPrecio = cazas.filter((c) => c.last_price != null).length;
   const ahorroTotal = cazas.reduce((acc, c) => {
     if (c.last_price && c.last_price < c.precio_max) return acc + (c.precio_max - c.last_price);
     return acc;

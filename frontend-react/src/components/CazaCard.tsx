@@ -303,7 +303,7 @@ function MiniChart({ data }: { data: { checked_at: string; price: number }[] }) 
         <Tooltip
           contentStyle={{ backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: "8px", fontSize: "12px" }}
           labelStyle={{ color: "#9ca3af" }}
-          formatter={(value: number) => [`$${value.toLocaleString()}`, "Precio"]}
+          formatter={(value) => [`$${(Number(value) || 0).toLocaleString()}`, "Precio"]}
         />
         <Line type="monotone" dataKey="price" stroke="#ef4444" strokeWidth={2} dot={false} />
       </LineChart>
