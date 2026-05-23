@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { LineChart, Line, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { api, type Caza } from "../api/client";
 import { useToast } from "./Toast";
 import { traducirError } from "../utils/errors";
@@ -16,6 +17,8 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
   const [loadingResults, setLoadingResults] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [priceHistory, setPriceHistory] = useState<{ checked_at: string; price: number }[] | null>(null);
+  const [showChart, setShowChart] = useState(false);
 
   const esDescuento = (caza.tipo_alerta || "piso") === "descuento";
   const [editForm, setEditForm] = useState({
@@ -29,6 +32,24 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
   const url = caza.link || caza.url || "";
   const hasPrice = caza.last_price != null;
   const isAlert = esDescuento ? false : hasPrice && caza.last_price! <= caza.precio_max;
+
+  const tendencia = useMemo(() => {
+    if (!priceHistory || priceHistory.length < 2) return null;
+    const prev = priceHistory[priceHistory.length - 2].price;
+    const curr = priceHistory[priceHistory.length - 1].price;
+    const diff = curr - prev;
+    const pct = prev > 0 ? ((diff / prev) * 100).toFixed(1) : "0";
+    return { diff, pct, subio: diff > 0, bajo: diff < 0, estable: diff === 0 };
+  }, [priceHistory]);
+
+  useEffect(() => {
+    if (!caza.id) return;
+    api.monitorPriceHistory(caza.id).then((res) => {
+      if (res.data?.history && res.data.history.length >= 2) {
+        setPriceHistory(res.data.history);
+      }
+    });
+  }, [caza.id]);
 
   const handleHunt = async () => {
     setResults(null);
@@ -78,6 +99,11 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
               {hasPrice && (
                 <span className={`text-sm font-medium ${isAlert ? "text-red-400" : "text-green-400"}`}>
                   Últ: ${caza.last_price!.toLocaleString()}
+                  {tendencia && (
+                    <span className={`ml-1 text-xs ${tendencia.bajo ? "text-green-500" : tendencia.subio ? "text-red-500" : "text-gray-500"}`}>
+                      {tendencia.bajo ? "↓" : tendencia.subio ? "↑" : "→"} {tendencia.pct}%
+                    </span>
+                  )}
                 </span>
               )}
               {esDescuento ? (
@@ -88,6 +114,12 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                 <span className="text-sm text-gray-500">
                   Máx: ${(caza.precio_max || 0).toLocaleString()}
                 </span>
+              )}
+              {priceHistory && priceHistory.length >= 2 && (
+                <button onClick={() => setShowChart(!showChart)}
+                  className="px-2 py-0.5 bg-gray-800/30 text-gray-500 rounded-lg text-xs hover:text-gray-300 hover:bg-gray-700/30 transition-all border border-gray-700/30">
+                  📊
+                </button>
               )}
             </div>
           </div>
@@ -206,6 +238,15 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
             <p className="text-sm text-gray-500">Sin resultados en esta ronda</p>
           </div>
         )}
+
+        {showChart && priceHistory && priceHistory.length >= 2 && (
+          <div className="mt-3 pt-3 border-t border-gray-800/50">
+            <p className="text-xs text-gray-500 mb-2">📈 Historial de precios</p>
+            <div className="h-24">
+              <MiniChart data={priceHistory} />
+            </div>
+          </div>
+        )}
       </div>
 
       {showEdit && (
@@ -245,5 +286,25 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
         </div>
       )}
     </>
+  );
+}
+
+function MiniChart({ data }: { data: { checked_at: string; price: number }[] }) {
+  const chartData = data.map((d) => ({
+    date: new Date(d.checked_at).toLocaleDateString("es-AR", { day: "2-digit", month: "short" }),
+    price: d.price,
+  }));
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart data={chartData}>
+        <YAxis domain={["dataMin - 500", "dataMax + 500"]} hide />
+        <Tooltip
+          contentStyle={{ backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: "8px", fontSize: "12px" }}
+          labelStyle={{ color: "#9ca3af" }}
+          formatter={(value: number) => [`$${value.toLocaleString()}`, "Precio"]}
+        />
+        <Line type="monotone" dataKey="price" stroke="#ef4444" strokeWidth={2} dot={false} />
+      </LineChart>
+    </ResponsiveContainer>
   );
 }
