@@ -80,23 +80,32 @@
 - [x] CTA "Probar 7 días gratis"
 - [x] Footer con links
 
-### 2. Stripe + planes con límites
-- [ ] Stripe Checkout para suscripciones
-- [ ] Webhooks de Stripe → actualizar plan en Supabase
-- [ ] Bloquear features según plan (máx cacerías, etc.)
-- [ ] Dashboard de billing (cancelar, cambiar plan)
+### 2. Pagos con Mercado Pago (reemplaza a Stripe, que no soporta Argentina)
+- [x] Backend: `POST /api/mp/create-preference` — crea preferencia de checkout
+- [x] Backend: `POST /api/mp/webhook` — IPN, actualiza plan al aprobarse el pago
+- [x] Backend: `GET /api/mp/subscription` — devuelve plan + expiración
+- [x] Frontend: BillingPage con planes en ARS ($3k/$8k/$12k)
+- [x] Expiraciones automáticas a los 30 días
+- [ ] **PENDIENTE**: conseguir `MP_ACCESS_TOKEN` de cuenta Mercado Pago Argentina
+- [ ] **PENDIENTE**: configurar IPN webhook en MP Dashboard
+- [ ] **PENDIENTE**: `ALTER TABLE profiles ADD COLUMN mp_plan_expires_at TIMESTAMPTZ;`
 
 ### 3. Onboarding tutorial
-- [ ] Tooltips guiados al primer login
-- [ ] Paso a paso: crear cacería → ver monitor → interpretar alertas
+- [x] Tooltips guiados al primer login
+- [x] Paso a paso: crear cacería → ver monitor → interpretar alertas
 
 ### 4. Errores amigables
-- [ ] Traducir errores técnicos a mensajes de usuario
-- [ ] Toast con acciones (reintentar, contactar soporte)
-- [ ] Página de error 404/500 personalizada
+- [x] Traducir errores técnicos a mensajes de usuario
+- [x] Toast con acciones (reintentar, contactar soporte)
+- [x] Página de error 404/500 personalizada
 
 ### 5. Términos y privacidad
-- [ ] Templates + personalizar para Howlify
-- [ ] Link en footer y registro
+- [x] Templates + personalizar para Howlify
+- [x] Link en footer y registro
+
+### 6. Beta gratuita (situación actual)
+- [x] Backend: `PAYMENT_ENABLED=false` — saltea límites de planes (max_cazas_activas=999, todo disponible)
+- [x] Frontend: BillingPage muestra cartel de beta gratuita en vez de checkout
+- [x] Cuando llegue el momento: `PAYMENT_ENABLED=true` + configurar MP → se activan los pagos
 
 ## 📈 Fases de escalado

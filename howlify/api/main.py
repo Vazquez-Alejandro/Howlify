@@ -3,14 +3,15 @@ import re
 import time
 import json
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 from dotenv import load_dotenv
-import stripe
 
 load_dotenv()
+
+import requests
 
 from fastapi import FastAPI, HTTPException, Header, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -599,110 +600,139 @@ def export_to_sheets(data: dict, authorization: str = Header(default="")):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ─── Stripe / Billing ────────────────────────────────────
+# ─── Mercado Pago / Billing ─────────────────────────────
 
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
+MP_ACCESS_TOKEN = os.getenv("MP_ACCESS_TOKEN", "")
+MP_API_BASE = "https://api.mercadopago.com"
 
-PRICE_MAP = {
-    os.getenv("STRIPE_PRICE_STARTER", ""): "starter",
-    os.getenv("STRIPE_PRICE_PRO", ""): "pro",
-    os.getenv("STRIPE_PRICE_RESELLER", ""): "business_reseller",
-    os.getenv("STRIPE_PRICE_MONITOR", ""): "business_monitor",
+MP_PRICES = {
+    "pro": int(os.getenv("MP_PRICE_PRO_ARS", "3000")),
+    "business_reseller": int(os.getenv("MP_PRICE_RESELLER_ARS", "8000")),
+    "business_monitor": int(os.getenv("MP_PRICE_MONITOR_ARS", "12000")),
 }
 
-@app.post("/api/stripe/webhook")
-async def stripe_webhook(request: Request):
-    payload = await request.body()
-    sig = request.headers.get("stripe-signature", "")
-    secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-    if not secret:
-        return JSONResponse(status_code=400, content={"error": "Webhook secret not configured"})
-    try:
-        event = stripe.Webhook.construct_event(payload, sig, secret)
-    except (ValueError, stripe.error.SignatureVerificationError):
-        return JSONResponse(status_code=400, content={"error": "Invalid signature"})
+MP_DURATION_DAYS = 30  # días de acceso por pago
 
-    if event["type"] == "checkout.session.completed":
-        session = event["data"]["object"]
-        customer_email = session.get("customer_email") or session.get("customer_details", {}).get("email", "")
-        client_ref = session.get("client_reference_id", "")
-        mode = session.get("mode", "payment")
-        if mode == "subscription":
-            sub_id = session.get("subscription")
-            if sub_id:
-                try:
-                    sub = stripe.Subscription.retrieve(sub_id)
-                    items = sub.get("items", {}).get("data", [])
-                    if items:
-                        price_id = items[0].get("price", {}).get("id", "")
-                        plan = PRICE_MAP.get(price_id, "")
-                        if plan:
-                            lookup = supabase.table("profiles").select("user_id").eq("email", customer_email).limit(1).execute()
-                            if lookup.data:
-                                supabase.table("profiles").update({"plan": plan}).eq("email", customer_email).execute()
-                                print(f"✅ Plan actualizado a {plan} para {customer_email}")
-                except Exception as e:
-                    print(f"❌ Error procesando subscription: {e}")
-        elif mode == "payment":
-            if client_ref:
-                supabase.table("profiles").update({"plan": "pro"}).eq("user_id", client_ref).execute()
-                print(f"✅ Plan actualizado a pro para user {client_ref}")
-    return {"received": True}
-
-@app.post("/api/stripe/create-checkout")
-def create_checkout(data: dict, authorization: str = Header(default="")):
+@app.post("/api/mp/create-preference")
+def mp_create_preference(data: dict, authorization: str = Header(default="")):
     uid = get_user_id(authorization)
     plan = data.get("plan", "pro")
-    price_key = f"STRIPE_PRICE_{plan.upper()}"
-    price_id = os.getenv(price_key, "")
-    if not price_id:
-        raise HTTPException(status_code=400, detail=f"No price configured for plan {plan}")
-    profile = supabase.table("profiles").select("email").eq("user_id", uid).limit(1).execute()
-    email = profile.data[0].get("email", "") if profile.data else ""
+    if plan not in MP_PRICES:
+        raise HTTPException(status_code=400, detail=f"Plan inválido: {plan}")
+
+    price = MP_PRICES[plan]
+    profile = supabase.table("profiles").select("email, username").eq("user_id", uid).limit(1).execute()
+    if not profile.data:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    email = profile.data[0].get("email", "")
+    username = profile.data[0].get("username", "")
+
+    PLAN_LABEL = {"pro": "Pro", "business_reseller": "Business Reseller", "business_monitor": "Business Monitor"}
+    title = f"Howlify - Plan {PLAN_LABEL.get(plan, plan)}"
+    base_url = os.getenv("APP_BASE_URL", "http://localhost:5173")
+
+    payload = {
+        "items": [
+            {
+                "title": title,
+                "quantity": 1,
+                "unit_price": price,
+                "currency_id": "ARS",
+            }
+        ],
+        "payer": {"email": email} if email else {},
+        "external_reference": json.dumps({"user_id": uid, "plan": plan}),
+        "back_urls": {
+            "success": f"{base_url}/dashboard?billing=success",
+            "failure": f"{base_url}/dashboard?billing=failure",
+            "pending": f"{base_url}/dashboard?billing=pending",
+        },
+        "notification_url": f"{base_url}/api/mp/webhook",
+        "auto_return": "approved",
+        "binary_mode": True,
+        "statement_descriptor": "HOWLIFY",
+    }
+
+    headers = {
+        "Authorization": f"Bearer {MP_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
     try:
-        session = stripe.checkout.Session.create(
-            mode="subscription",
-            payment_method_types=["card"],
-            line_items=[{"price": price_id, "quantity": 1}],
-            success_url=os.getenv("STRIPE_SUCCESS_URL", "http://localhost:5173/dashboard?billing=success"),
-            cancel_url=os.getenv("STRIPE_CANCEL_URL", "http://localhost:5173/dashboard?billing=cancel"),
-            customer_email=email or None,
-            client_reference_id=uid,
-        )
-        return {"url": session.url}
-    except Exception as e:
+        resp = requests.post(f"{MP_API_BASE}/checkout/preferences", json=payload, headers=headers)
+        if resp.status_code not in (200, 201):
+            raise HTTPException(status_code=500, detail=f"Error MP: {resp.text}")
+        data = resp.json()
+        return {"url": data.get("init_point", data.get("sandbox_init_point", ""))}
+    except requests.RequestException as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/stripe/subscription")
-def get_subscription(authorization: str = Header(default="")):
+
+@app.post("/api/mp/webhook")
+async def mp_webhook(request: Request):
+    """IPN webhook - Mercado Pago nos avisa cuando un pago se concreta."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    # MP puede enviar el id por query o por body
+    topic = request.query_params.get("topic", "") or body.get("topic", "")
+    payment_id = request.query_params.get("id", "") or body.get("id", "")
+
+    if topic == "payment" or topic == "merchant_order" or (not topic and payment_id):
+        if not payment_id:
+            return {"received": True}
+        headers = {"Authorization": f"Bearer {MP_ACCESS_TOKEN}"}
+        try:
+            resp = requests.get(f"{MP_API_BASE}/v1/payments/{payment_id}", headers=headers)
+            if resp.status_code != 200:
+                return JSONResponse(status_code=400, content={"error": "Cannot verify payment"})
+            payment = resp.json()
+            if payment.get("status") == "approved" or payment.get("status") == "authorized":
+                ext_ref = payment.get("external_reference", "")
+                if ext_ref:
+                    try:
+                        ref = json.loads(ext_ref)
+                        user_id = ref.get("user_id", "")
+                        plan = ref.get("plan", "pro")
+                        if user_id:
+                            # Actualizar plan + fecha de expiración
+                            expires_at = (datetime.utcnow() + timedelta(days=MP_DURATION_DAYS)).isoformat()
+                            supabase.table("profiles").update({
+                                "plan": plan,
+                                "mp_plan_expires_at": expires_at,
+                            }).eq("user_id", user_id).execute()
+                            print(f"✅ Plan actualizado a {plan} para user {user_id} (expira {expires_at})")
+                    except json.JSONDecodeError:
+                        print(f"❌ Invalid external_reference: {ext_ref}")
+        except requests.RequestException as e:
+            print(f"❌ Error consultando pago MP: {e}")
+    return {"received": True}
+
+
+@app.get("/api/mp/subscription")
+def mp_get_subscription(authorization: str = Header(default="")):
     uid = get_user_id(authorization)
-    profile = supabase.table("profiles").select("plan, email, stripe_customer_id").eq("user_id", uid).limit(1).execute()
+    profile = supabase.table("profiles").select("plan, email, mp_plan_expires_at").eq("user_id", uid).limit(1).execute()
     if not profile.data:
         raise HTTPException(status_code=404, detail="Profile not found")
     p = profile.data[0]
-    return {"plan": p.get("plan", "starter"), "email": p.get("email", ""), "stripe_customer_id": p.get("stripe_customer_id")}
+    plan = p.get("plan", "starter")
+    expires_at = p.get("mp_plan_expires_at")
 
-@app.post("/api/stripe/customer-portal")
-def customer_portal(authorization: str = Header(default="")):
-    uid = get_user_id(authorization)
-    profile = supabase.table("profiles").select("stripe_customer_id, email").eq("user_id", uid).limit(1).execute()
-    cust_id = profile.data[0].get("stripe_customer_id", "") if profile.data else ""
-    if not cust_id:
-        # Crear customer si no existe
-        email = profile.data[0].get("email", "") if profile.data else ""
-        if not email:
-            raise HTTPException(status_code=400, detail="Email not found")
-        cust = stripe.Customer.create(email=email, metadata={"user_id": uid})
-        cust_id = cust.id
-        supabase.table("profiles").update({"stripe_customer_id": cust_id}).eq("user_id", uid).execute()
-    try:
-        session = stripe.billing_portal.Session.create(
-            customer=cust_id,
-            return_url=os.getenv("STRIPE_RETURN_URL", "http://localhost:5173/dashboard"),
-        )
-        return {"url": session.url}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # Si expiró, volver a starter
+    if expires_at and plan != "starter":
+        try:
+            exp = datetime.fromisoformat(expires_at)
+            if exp < datetime.utcnow():
+                supabase.table("profiles").update({"plan": "starter", "mp_plan_expires_at": None}).eq("user_id", uid).execute()
+                plan = "starter"
+                expires_at = None
+        except (ValueError, TypeError):
+            pass
+
+    return {"plan": plan, "email": p.get("email", ""), "expires_at": expires_at}
 
 # ─── Admin ───────────────────────────────────────────────
 

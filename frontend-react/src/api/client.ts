@@ -129,10 +129,10 @@ export const api = {
   monitorLatestPrices: () => request<{ prices: Record<string, { price: number; checked_at: string }> }>("/api/monitor/latest-prices"),
   monitorAllHistory: () => request<{ history: { caza_id: number; price: number; checked_at: string }[] }>("/api/monitor/all-history"),
 
-  // Stripe / Billing
-  createCheckout: (plan: string) => request<{ url: string }>("/api/stripe/create-checkout", { method: "POST", body: JSON.stringify({ plan }) }),
-  getSubscription: () => request<StripeSubscription>("/api/stripe/subscription"),
-  customerPortal: () => request<{ url: string }>("/api/stripe/customer-portal", { method: "POST", body: "{}" }),
+  // Mercado Pago / Billing
+  createCheckout: (plan: string) => request<{ url: string }>("/api/mp/create-preference", { method: "POST", body: JSON.stringify({ plan }) }),
+
+  getSubscription: () => request<Subscription>("/api/mp/subscription"),
 };
 
 export interface Caza {
@@ -157,6 +157,8 @@ export interface HuntResult {
   price_avg?: number;
   descuento?: number;
   match_descuento?: boolean;
+  precio_personalizado?: boolean;
+  precio_alternativo?: number;
 }
 
 export interface MonitorRule {
@@ -188,8 +190,8 @@ export interface Grupo {
   color: string;
 }
 
-export interface StripeSubscription {
+export interface Subscription {
   plan: string;
   email: string;
-  stripe_customer_id: string | null;
+  expires_at: string | null;
 }

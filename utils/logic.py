@@ -52,6 +52,14 @@ def normalize_plan_family(plan: str) -> str:
     return "starter"
 
 def get_effective_plan_rules(plan_name):
+    if os.getenv("PAYMENT_ENABLED", "false").lower() != "true":
+        # Modo gratuito — sin límites
+        return {
+            "max_cazas_activas": 999,
+            "freq_options": ["15min", "1h", "6h", "12h", "24h"],
+            "plan_key": "business_monitor",
+            "reseller_markup": 0.40,
+        }
     family = normalize_plan_family(plan_name)
     return PLAN_RULES.get(family, PLAN_RULES["starter"])
 

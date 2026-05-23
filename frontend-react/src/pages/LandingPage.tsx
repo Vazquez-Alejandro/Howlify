@@ -40,6 +40,7 @@ const PLANS = [
 
 const FEATURES = [
   { icon: "🛒", title: "Multi-plataforma", desc: "Monitoreá Mercado Libre y más. Detección de violaciones MAP, precios dinámicos y cambios de stock." },
+  { icon: "🎭", title: "Detección de Precio Personalizado", desc: "ML muestra precios distintos según quién mira. Howlify lo detecta automáticamente consultando con múltiples identidades y te alerta si el precio no es objetivo." },
   { icon: "📡", title: "Alertas en Tiempo Real", desc: "Recibí notificaciones por Telegram, WhatsApp o email cuando un precio cambie o se detecte una infracción." },
   { icon: "📊", title: "Dashboard Inteligente", desc: "Visualizá rankings de riesgo, históricos de precio y métricas de cumplimiento en un solo lugar." },
   { icon: "📤", title: "Exportación a Google Sheets", desc: "Exportá toda la data de monitoreo a tu propia planilla para análisis y reportes personalizados." },

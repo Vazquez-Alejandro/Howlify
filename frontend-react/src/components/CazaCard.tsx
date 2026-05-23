@@ -11,7 +11,7 @@ interface Props {
 
 export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
   const { toast } = useToast();
-  const [results, setResults] = useState<{ title: string; price: number; url: string; price_error?: boolean; price_avg?: number; descuento?: number; match_descuento?: boolean }[] | null>(null);
+  const [results, setResults] = useState<{ title: string; price: number; url: string; price_error?: boolean; price_avg?: number; descuento?: number; match_descuento?: boolean; precio_personalizado?: boolean; precio_alternativo?: number }[] | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [loadingResults, setLoadingResults] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -182,6 +182,11 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                     )}
                   </div>
                   <span className={`font-medium text-sm ml-3 shrink-0 ${r.price_error ? "text-yellow-400" : esDescuento && r.match_descuento ? "text-green-400" : "text-gray-400"}`}>${(r.price || 0).toLocaleString()}</span>
+                  {r.precio_personalizado && (
+                    <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-bold bg-purple-500/20 text-purple-400 rounded border border-purple-500/30 ml-2" title={`Precio alternativo: $${(r.precio_alternativo || 0).toLocaleString()}`}>
+                      🎭 ML variable
+                    </span>
+                  )}
                   <a
                     href={r.url}
                     target="_blank"
