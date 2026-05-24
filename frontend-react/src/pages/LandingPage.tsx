@@ -41,9 +41,12 @@ const PLANS = [
 const FEATURES = [
   { icon: "🛒", title: "Multi-plataforma", desc: "Monitoreá Mercado Libre y más. Detección de violaciones MAP, precios dinámicos y cambios de stock." },
   { icon: "🎭", title: "Detección de Precio Personalizado", desc: "ML muestra precios distintos según quién mira. Howlify lo detecta automáticamente consultando con múltiples identidades y te alerta si el precio no es objetivo." },
-  { icon: "📡", title: "Alertas en Tiempo Real", desc: "Recibí notificaciones por Telegram, WhatsApp o email cuando un precio cambie o se detecte una infracción." },
+  { icon: "📡", title: "Alertas multicanal", desc: "Recibí notificaciones por Telegram, WhatsApp o email cuando un precio cambie o se detecte una infracción al instante." },
   { icon: "📊", title: "Dashboard Inteligente", desc: "Visualizá rankings de riesgo, históricos de precio y métricas de cumplimiento en un solo lugar." },
   { icon: "📤", title: "Exportación a Google Sheets", desc: "Exportá toda la data de monitoreo a tu propia planilla para análisis y reportes personalizados." },
+  { icon: "📱", title: "App PWA instalable", desc: "Instalá Howlify como app en tu celular. Funciona sin descargar de stores, ocupa casi nada y tiene la misma potencia que la web." },
+  { icon: "📈", title: "Historial de precios", desc: "Evolución gráfica del precio de cada producto con tendencias, comparativas y alertas visuales de subas y bajas." },
+  { icon: "🔔", title: "Alertas personalizables", desc: "Configurá alertas por precio mínimo o descuento porcentual. Recibí avisos cuando un producto llegue al valor que querés." },
 ];
 
 export default function LandingPage() {
@@ -91,10 +94,10 @@ export default function LandingPage() {
           <p className="text-gray-400 text-center mb-12">Monitoreo inteligente, alertas instantáneas, todo en un dashboard diseñado para cazadores de ofertas.</p>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {FEATURES.map((f) => (
-              <div key={f.title} className="bg-gray-900/60 rounded-2xl p-6 text-center hover:bg-gray-900/80 transition-all" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
+              <div key={f.title} className="h-full bg-gray-900/60 rounded-2xl p-6 text-center hover:bg-gray-900/80 transition-all flex flex-col" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                 <span className="text-3xl">{f.icon}</span>
                 <h3 className="text-lg font-semibold mt-4 mb-2">{f.title}</h3>
-                <p className="text-sm text-gray-400 leading-relaxed">{f.desc}</p>
+                <p className="text-sm text-gray-400 leading-relaxed flex-1">{f.desc}</p>
               </div>
             ))}
           </div>
