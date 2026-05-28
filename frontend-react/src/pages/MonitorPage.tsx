@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { api, type Caza, type MonitorRule, type Infraccion, type Grupo } from "../api/client";
 import { useToast } from "../components/Toast";
 import PageTransition from "../components/PageTransition";
-import SkeletonCard from "../components/SkeletonCard";
+
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, ScatterChart, Scatter, CartesianGrid,
