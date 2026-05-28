@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ToastProvider } from "./components/Toast";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { AnimatePresence } from "framer-motion";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
@@ -50,7 +51,9 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
-          <AnimatedRoutes />
+          <ErrorBoundary>
+            <AnimatedRoutes />
+          </ErrorBoundary>
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>

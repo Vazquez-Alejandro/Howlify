@@ -330,8 +330,15 @@ export default function MonitorPage() {
         {cazas.length === 0 ? (
           <div className="text-center py-16 bg-gray-900/40 rounded-2xl" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
             <p className="text-4xl mb-3">📡</p>
-            <p className="text-lg font-medium text-gray-300">No hay productos monitoreados</p>
-            <p className="text-sm text-gray-500 mt-1">Creá una cacería desde Mis Rastreadores para empezar</p>
+            <p className="text-lg font-medium text-gray-300">Monitor vacío</p>
+            <p className="text-sm text-gray-500 mt-1 mb-6">Primero creá algunas cacerías desde Mis Rastreadores, luego volvé acá para ver el radar de cumplimiento MAP.</p>
+            <div className="flex gap-2 justify-center">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-800/40 rounded-lg text-xs text-gray-400 border border-gray-700/50">1️⃣ Crear cacería</span>
+              <span className="text-gray-600 text-xs self-center">→</span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-800/40 rounded-lg text-xs text-gray-400 border border-gray-700/50">2️⃣ Olfatear precios</span>
+              <span className="text-gray-600 text-xs self-center">→</span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-800/40 rounded-lg text-xs text-gray-400 border border-gray-700/50">3️⃣ Asignar reglas MAP</span>
+            </div>
           </div>
         ) : (
           <>

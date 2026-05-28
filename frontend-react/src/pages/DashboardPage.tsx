@@ -203,15 +203,33 @@ export default function DashboardPage() {
                 </h1>
               </div>
               {view === "rastreadores" && cazas.length > 0 && (
-                <button
-                  onClick={handleHuntAll}
-                  disabled={huntAllLoading}
-                  className="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-medium text-sm hover:from-red-600 hover:to-red-700 transition-all disabled:opacity-50 shadow-lg shadow-red-500/20 flex items-center gap-2"
-                >
-                  {huntAllLoading ? (
-                    <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Olfateando...</>
-                  ) : "🔎 Olfatear todas"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button onClick={async () => {
+                    const token = localStorage.getItem("token");
+                    try {
+                      const res = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/export/csv`, {
+                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                      });
+                      if (!res.ok) throw new Error("Error al exportar");
+                      const blob = await res.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a"); a.href = url; a.download = "howlify_cazas.csv"; a.click();
+                      URL.revokeObjectURL(url);
+                    } catch { toast("Error al descargar CSV", "error"); }
+                  }}
+                    className="px-3 py-2 bg-gray-800/50 text-gray-300 rounded-xl text-xs font-medium hover:bg-gray-700/50 transition-all border border-gray-700/50 flex items-center gap-1.5">
+                    📥 CSV
+                  </button>
+                  <button
+                    onClick={handleHuntAll}
+                    disabled={huntAllLoading}
+                    className="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-medium text-sm hover:from-red-600 hover:to-red-700 transition-all disabled:opacity-50 shadow-lg shadow-red-500/20 flex items-center gap-2"
+                  >
+                    {huntAllLoading ? (
+                      <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Olfateando...</>
+                    ) : "🔎 Olfatear todas"}
+                  </button>
+                </div>
               )}
             </div>
             {/* Stats bar */}
@@ -245,9 +263,26 @@ export default function DashboardPage() {
               {loading && <SkeletonCard count={3} />}
 
               {!loading && cazas.length === 0 && (
-                <div className="text-center py-16">
-                  <p className="text-lg font-medium text-gray-300">No tenés cacerías activas</p>
-                  <p className="text-sm text-gray-500 mt-1">Agregá una desde el panel de abajo</p>
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 bg-red-500/10 rounded-3xl flex items-center justify-center mx-auto mb-5">
+                    <span className="text-4xl">🐺</span>
+                  </div>
+                  <p className="text-xl font-bold text-white mb-2">Empezá a monitorear precios</p>
+                  <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
+                    Seguí estos pasos para crear tu primera cacería:
+                  </p>
+                  <div className="max-w-sm mx-auto space-y-3 text-left">
+                    {[
+                      { step: "1", text: "Pegá el link del producto que querés monitorear" },
+                      { step: "2", text: "Definí tu precio máximo y frecuencia de olfateo" },
+                      { step: "3", text: "¡Listo! Recibí alertas cuando baje de precio" },
+                    ].map(s => (
+                      <div key={s.step} className="flex items-center gap-3 bg-gray-800/30 rounded-xl px-4 py-3 border border-gray-800/50">
+                        <span className="w-7 h-7 rounded-full bg-red-500/20 text-red-400 text-xs font-bold flex items-center justify-center shrink-0">{s.step}</span>
+                        <span className="text-sm text-gray-300">{s.text}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 

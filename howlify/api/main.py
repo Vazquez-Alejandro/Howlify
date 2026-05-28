@@ -13,12 +13,27 @@ load_dotenv()
 
 import requests
 
-from fastapi import FastAPI, HTTPException, Header, Query, Request
+from fastapi import FastAPI, HTTPException, Header, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from auth.supabase_client import supabase
+
+# ─── Rate limiter ────────────────────────────────────────
+_hunt_limits: dict[str, list[float]] = {}
+
+def rate_limit_hunt(uid: str):
+    now = time.time()
+    window = 30.0
+    max_requests = 2
+    timestamps = _hunt_limits.get(uid, [])
+    timestamps = [t for t in timestamps if now - t < window]
+    if len(timestamps) >= max_requests:
+        retry_after = int(window - (now - timestamps[0]))
+        raise HTTPException(status_code=429, detail=f"Demasiadas solicitudes. Esperá {retry_after}s.")
+    timestamps.append(now)
+    _hunt_limits[uid] = timestamps
 
 app = FastAPI(title="Howlify API", version="1.0.0")
 
@@ -77,6 +92,9 @@ class ResetPasswordRequest(BaseModel):
     access_token: str
     refresh_token: str
     password: str
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 class ResendVerificationRequest(BaseModel):
     email: str
@@ -212,6 +230,19 @@ def reset_password(req: ResetPasswordRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@app.post("/api/auth/refresh")
+def refresh_token(refresh_req: RefreshTokenRequest):
+    try:
+        res = supabase.auth.refresh_session(refresh_req.refresh_token)
+        if res.session:
+            return {
+                "token": res.session.access_token,
+                "refresh_token": res.session.refresh_token,
+            }
+        raise HTTPException(status_code=401, detail="No se pudo renovar la sesión")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
 @app.get("/api/auth/profile")
 def get_profile(authorization: str = Header(default="")):
     uid = get_user_id(authorization)
@@ -337,6 +368,7 @@ def delete_caza(caza_id: int, authorization: str = Header(default="")):
 @app.post("/api/hunt/{caza_id}")
 def hunt_single(caza_id: int, authorization: str = Header(default="")):
     uid = get_user_id(authorization)
+    rate_limit_hunt(uid)
     res = supabase.table("cazas").select("*").eq("id", caza_id).limit(1).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Cacería no encontrada")
@@ -376,6 +408,7 @@ def hunt_single(caza_id: int, authorization: str = Header(default="")):
 @app.post("/api/hunt/all")
 def hunt_all(authorization: str = Header(default="")):
     uid = get_user_id(authorization)
+    rate_limit_hunt(uid)
     from db.database import obtener_cazas
     cazas = obtener_cazas(uid, "starter")
     results = {}
@@ -420,6 +453,7 @@ def hunt_all(authorization: str = Header(default="")):
 @app.post("/api/hunt/async/{caza_id}")
 def hunt_single_async(caza_id: int, authorization: str = Header(default="")):
     uid = get_user_id(authorization)
+    rate_limit_hunt(uid)
     try:
         from howlify.tasks import hunt_single_task
         task = hunt_single_task.delay(caza_id, uid)
@@ -431,6 +465,7 @@ def hunt_single_async(caza_id: int, authorization: str = Header(default="")):
 @app.post("/api/hunt/async/all")
 def hunt_all_async(authorization: str = Header(default="")):
     uid = get_user_id(authorization)
+    rate_limit_hunt(uid)
     try:
         from howlify.tasks import hunt_all_user_task
         task = hunt_all_user_task.delay(uid)
@@ -610,6 +645,32 @@ def export_to_sheets(data: dict, authorization: str = Header(default="")):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+import csv, io
+
+@app.get("/api/export/csv")
+def export_csv(authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    from db.database import obtener_cazas
+    cazas = obtener_cazas(uid, "starter")
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "Producto", "URL", "Precio Máx", "Último Precio", "Estado", "Creado"])
+    for c in cazas:
+        writer.writerow([
+            c.get("id", ""),
+            c.get("producto") or c.get("keyword", ""),
+            c.get("url") or c.get("link", ""),
+            c.get("precio_max", 0),
+            c.get("last_price", ""),
+            c.get("estado", "active"),
+            c.get("created_at", ""),
+        ])
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=howlify_cazas.csv"},
+    )
 
 # ─── Mercado Pago / Billing ─────────────────────────────
 
