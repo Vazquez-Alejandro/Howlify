@@ -12,6 +12,7 @@ import MonitorPage from "./MonitorPage";
 import BillingPage from "./BillingPage";
 import OnboardingTour from "../components/OnboardingTour";
 import { useRates } from "../hooks/useRates";
+import PushNotifToggle from "../components/PushNotifToggle";
 
 type View = "rastreadores" | "perfil" | "admin" | "monitor" | "revender" | "facturacion";
 
@@ -206,6 +207,7 @@ export default function DashboardPage() {
               </div>
               {view === "rastreadores" && cazas.length > 0 && (
                 <div className="flex items-center gap-2">
+                  <PushNotifToggle />
                   <button onClick={() => setShowUsd(!showUsd)}
                     className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border ${showUsd ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "bg-gray-800/50 text-gray-400 border-gray-700/50"}`}>
                     {showUsd ? "ARS + USD" : "Solo ARS"}

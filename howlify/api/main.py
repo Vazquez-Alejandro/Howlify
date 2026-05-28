@@ -20,6 +20,8 @@ from pydantic import BaseModel
 
 from auth.supabase_client import supabase
 
+from pywebpush import webpush, WebPushException
+
 # ─── Rate limiter ────────────────────────────────────────
 _hunt_limits: dict[str, list[float]] = {}
 
@@ -517,6 +519,27 @@ def get_history(caza_id: int, authorization: str = Header(default="")):
         .execute()
     return {"history": res.data or []}
 
+@app.get("/api/public/history/{caza_id}")
+def public_history(caza_id: int):
+    res = supabase.table("cazas").select("id, producto, keyword, link, url, precio_max").eq("id", caza_id).limit(1).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Cacería no encontrada")
+    caza = res.data[0]
+    hist = supabase.table("price_history") \
+        .select("checked_at, price, title") \
+        .eq("caza_id", caza_id) \
+        .order("checked_at", desc=True) \
+        .limit(50) \
+        .execute()
+    prices = [{"price": float(h["price"]), "checked_at": h["checked_at"]} for h in (hist.data or []) if h.get("price")]
+    return {
+        "id": caza.get("id"),
+        "producto": caza.get("producto") or caza.get("keyword", "Producto"),
+        "url": caza.get("link") or caza.get("url", ""),
+        "precio_max": caza.get("precio_max", 0),
+        "history": prices,
+    }
+
 @app.get("/api/predict/{caza_id}")
 def predict_price(caza_id: int, authorization: str = Header(default="")):
     uid = get_user_id(authorization)
@@ -735,6 +758,55 @@ def get_rates():
         }
     except:
         return {"blue": 1300, "tarjeta": 1500, "oficial": 1000}
+
+# ─── PWA Push Notifications ──────────────────────────────
+
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
+VAPID_CLAIM = os.getenv("VAPID_CLAIM_EMAIL", "mailto:howlify@example.com")
+
+def push_notify_user(uid: str, title: str, body: str, url: str = ""):
+    if not VAPID_PRIVATE_KEY:
+        return
+    subs = supabase.table("push_subscriptions").select("subscription").eq("user_id", uid).execute()
+    for row in subs.data or []:
+        try:
+            sub = json.loads(row["subscription"]) if isinstance(row["subscription"], str) else row["subscription"]
+            webpush(
+                subscription_info=sub,
+                data=json.dumps({"title": title, "body": body, "url": url}),
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": VAPID_CLAIM},
+            )
+        except WebPushException:
+            supabase.table("push_subscriptions").delete().eq("user_id", uid).execute()
+        except Exception:
+            pass
+
+@app.post("/api/push/subscribe")
+def push_subscribe(data: dict, authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    sub = data.get("subscription", {})
+    if not sub.get("endpoint"):
+        raise HTTPException(400, "Falta endpoint")
+    supabase.table("push_subscriptions").upsert({
+        "user_id": uid,
+        "subscription": json.dumps(sub),
+    }, on_conflict="user_id").execute()
+    push_notify_user(uid, "Howlify", "Notificaciones push activadas ✅")
+    return {"message": "Suscripción guardada"}
+
+@app.delete("/api/push/subscribe")
+def push_unsubscribe(authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    supabase.table("push_subscriptions").delete().eq("user_id", uid).execute()
+    return {"message": "Suscripción eliminada"}
+
+@app.post("/api/push/test")
+def push_test(authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    push_notify_user(uid, "🧪 Prueba", "Si ves esto, las notificaciones push funcionan.", "/monitor")
+    return {"message": "Notificación enviada"}
 
 # ─── Mercado Pago / Billing ─────────────────────────────
 

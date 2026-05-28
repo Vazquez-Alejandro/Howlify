@@ -399,6 +399,55 @@ def ejecutar_reporte_diario_total(force=False):
         print(f"❌ Error crítico en reporte diario: {e}")
 
 
+def ejecutar_reporte_semanal(force=False):
+    import pytz
+    from datetime import datetime
+    from services.notification_service import enviar_whatsapp, enviar_telegram
+    from services.alerts_service import obtener_contacto_usuario
+
+    tz = pytz.timezone('America/Argentina/Buenos_Aires')
+    now = datetime.now(tz)
+    if not force and now.weekday() != 6:
+        print("⏭️ No es domingo, saltando reporte semanal")
+        return
+
+    try:
+        print(f"📅 Reporte semanal {now.strftime('%d/%m/%Y')}...")
+        res = supabase.table("profiles").select("user_id, username, telegram_id, whatsapp_number").eq("report_enabled", True).execute()
+        for u in (res.data or []):
+            uid = u["user_id"]
+            username = u.get("username", "Cazador")
+            res_cazas = supabase.table("cazas").select("*").eq("user_id", uid).execute()
+            cazas = res_cazas.data or []
+            if not cazas:
+                continue
+            total = len(cazas)
+            activas = sum(1 for c in cazas if c.get("estado") in ("active", None))
+            con_precio = sum(1 for c in cazas if c.get("last_price"))
+            en_alerta = sum(1 for c in cazas if c.get("last_price") and c.get("precio_max") and c["last_price"] <= c["precio_max"])
+            ahorro = sum(c["precio_max"] - c["last_price"] for c in cazas if c.get("last_price") and c.get("precio_max") and c["last_price"] < c["precio_max"])
+
+            mensaje = (
+                f"🐺 *Howlify — Resumen Semanal*\n"
+                f"Hola {username}, esto pasó esta semana:\n\n"
+                f"📦 *Cacerías activas:* {activas} / {total}\n"
+                f"💰 *Con precio detectado:* {con_precio}\n"
+                f"🚨 *En alerta:* {en_alerta}\n"
+                f"💵 *Ahorro potencial:* ${ahorro:,.0f}\n\n"
+                f"🧠 *Tip:* Revisá tus cacerías en howlify.app/dashboard\n"
+                f"🐺 ¡Seguí olfateando!"
+            )
+
+            if u.get("telegram_id"):
+                enviar_telegram(u["telegram_id"], mensaje)
+            if u.get("whatsapp_number"):
+                enviar_whatsapp(u["whatsapp_number"], mensaje)
+            print(f"✅ Reporte semanal enviado a {username}")
+
+    except Exception as e:
+        print(f"❌ Error en reporte semanal: {e}")
+
+
 def guardar_config_reporte(user_id, enabled, hora, dias):
     # ✅ conviene usar safe_query porque es perfil de usuario
     return bool(safe_query("profiles_update", [

@@ -132,6 +132,14 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                 </button>
               )}
               <PredictionBadge cazaId={caza.id} />
+              <button onClick={() => {
+                const url = `${window.location.origin}/p/${caza.id}`;
+                if (navigator.share) navigator.share({ title: `Precio de ${kw}`, url });
+                else navigator.clipboard.writeText(url).then(() => toast("Link copiado", "success"));
+              }}
+                className="px-2 py-0.5 bg-gray-800/30 text-gray-500 rounded-lg text-xs hover:text-gray-300 hover:bg-gray-700/30 transition-all border border-gray-700/30">
+                🔗
+              </button>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
@@ -241,9 +249,9 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                       href={r.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-2.5 py-1 bg-gray-800/50 text-gray-400 rounded-lg text-xs hover:bg-gray-700/50 hover:text-gray-200 transition-all border border-gray-700/50 shrink-0"
+                      className="px-2.5 py-1 bg-red-500/10 text-red-400 rounded-lg text-xs hover:bg-red-500/20 transition-all border border-red-500/30 shrink-0 font-medium"
                     >
-                      Ver
+                      🛒 Comprar
                     </a>
                   </div>
                 </div>
