@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { api, type Caza, type MonitorRule, type Infraccion, type Grupo, type AlertRule } from "../api/client";
 import { useToast } from "../components/Toast";
 import PageTransition from "../components/PageTransition";
@@ -73,6 +73,9 @@ export default function MonitorPage() {
   const [compareIds, setCompareIds] = useState<number[]>([]);
   const [evidenciaModal, setEvidenciaModal] = useState<string | null>(null);
   const [assigningGroup, setAssigningGroup] = useState<number | null>(null);
+  const [showReportMenu, setShowReportMenu] = useState(false);
+  const [generating, setGenerating] = useState<string | null>(null);
+  const reportRef = useRef<HTMLDivElement>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -96,6 +99,14 @@ export default function MonitorPage() {
   };
 
   useEffect(() => { loadData(); }, []);
+
+  useEffect(() => {
+    if (showReportMenu) {
+      const close = () => setShowReportMenu(false);
+      document.addEventListener("click", close);
+      return () => document.removeEventListener("click", close);
+    }
+  }, [showReportMenu]);
 
   useEffect(() => {
     if (assigningGroup !== null) {
@@ -394,6 +405,24 @@ export default function MonitorPage() {
                     className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all border ${compareMode ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-gray-800/40 text-gray-400 border-gray-700/30 hover:text-gray-200 hover:bg-gray-700/50"}`}>
                     🔍 {compareMode ? "Salir comparar" : "Comparar"}
                   </button>
+                  <div className="relative" ref={reportRef}>
+                    <button onClick={() => setShowReportMenu(!showReportMenu)}
+                      className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-gray-800/40 text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 transition-all border border-gray-700/30">
+                      📬 Reporte
+                    </button>
+                    {showReportMenu && (
+                      <div className="absolute top-full right-0 mt-1 z-50 bg-gray-900 border border-gray-700/50 rounded-xl p-1.5 shadow-2xl min-w-[160px]">
+                        <button onClick={async () => { setGenerating("daily"); await api.post("/api/reports/generate", { type: "daily" }); setGenerating(null); setShowReportMenu(false); toast("Reporte diario enviado", "success"); }}
+                          className="block w-full text-left px-3 py-2 text-xs text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors" disabled={!!generating}>
+                          {generating === "daily" ? "⏳ Generando..." : "📊 Diario"}
+                        </button>
+                        <button onClick={async () => { setGenerating("weekly"); await api.post("/api/reports/generate", { type: "weekly" }); setGenerating(null); setShowReportMenu(false); toast("Reporte semanal enviado", "success"); }}
+                          className="block w-full text-left px-3 py-2 text-xs text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors" disabled={!!generating}>
+                          {generating === "weekly" ? "⏳ Generando..." : "📅 Semanal"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <button onClick={async () => {
                   const rows = sorted.map(r => ({
                     Producto: r.producto, Precio: r.precio,

@@ -764,6 +764,37 @@ def get_evidencia(caza_id: int, authorization: str = Header(default=""), token: 
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     return FileResponse(path, media_type="image/png")
 
+# ─── Reportes ────────────────────────────────────────────
+
+@app.post("/api/reports/generate")
+def generate_report(body: dict, authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    tipo = body.get("type", "daily")
+    try:
+        from services.database_service import ejecutar_reporte_diario_total, ejecutar_reporte_semanal
+        if tipo == "daily":
+            ejecutar_reporte_diario_total(force=True)
+            return {"message": "Reporte diario generado y enviado"}
+        elif tipo == "weekly":
+            ejecutar_reporte_semanal(force=True)
+            return {"message": "Reporte semanal generado y enviado"}
+        return {"message": f"Reporte {tipo} no soportado"}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error generando reporte: {e}"})
+
+@app.post("/api/reports/test-alert")
+def test_alert_rule(body: dict, authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    caza_id = body.get("caza_id")
+    if not caza_id:
+        raise HTTPException(400, "Falta caza_id")
+    try:
+        from engine.engine import evaluar_reglas_alerta
+        evaluar_reglas_alerta(caza_id, uid)
+        return {"message": "Reglas evaluadas. Revisá tus notificaciones."}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error: {e}"})
+
 # ─── Google Sheets Export ─────────────────────────────────
 
 @app.post("/api/export/sheets")
