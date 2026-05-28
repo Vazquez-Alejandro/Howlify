@@ -3,6 +3,9 @@ import { api, type Caza, type MonitorRule, type Infraccion, type Grupo, type Ale
 import { useToast } from "../components/Toast";
 import PageTransition from "../components/PageTransition";
 import AlertRuleEditor from "../components/AlertRuleEditor";
+import KPIDashboard from "../components/KPIDashboard";
+import AlertHistory from "../components/AlertHistory";
+import Seasonality from "../components/Seasonality";
 
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -10,7 +13,7 @@ import {
 } from "recharts";
 
 type RiskColor = "⚪" | "🔴" | "🟠" | "🟡" | "🟢";
-type ChartTab = "general" | "historico" | "alertas" | "ranking";
+type ChartTab = "general" | "historico" | "alertas" | "ranking" | "comparar" | "estacionalidad";
 
 function Sparkline({ data, width = 60, height = 20 }: { data: number[]; width?: number; height?: number }) {
   if (data.length < 2) return <span className="text-gray-600 text-[10px]">—</span>;
@@ -666,9 +669,11 @@ export default function MonitorPage() {
                     <AlertRuleEditor rules={alertConfig} onChange={setAlertConfig} />
                   </div>
                 )}
-              </div>
+            </div>
 
-              <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
+            <KPIDashboard />
+
+            <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                 <h3 className="text-sm font-semibold text-gray-300 mb-4">⚙️ Grupos</h3>
                 <div className="space-y-4">
                   <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-800/50">
@@ -722,6 +727,11 @@ export default function MonitorPage() {
                   </div>
                 </div>
               </div>
+
+              <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
+                <h3 className="text-sm font-semibold text-gray-300 mb-3">📜 Últimas alertas</h3>
+                <AlertHistory />
+              </div>
             </div>
 
             <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
@@ -732,6 +742,7 @@ export default function MonitorPage() {
                   { key: "comparar" as ChartTab, label: "Comparar", icon: "🔍" },
                   { key: "alertas" as ChartTab, label: "Alertas", icon: "🚨" },
                   { key: "ranking" as ChartTab, label: "Ranking", icon: "🏆" },
+                  { key: "estacionalidad" as ChartTab, label: "Estacionalidad", icon: "📅" },
                 ]).map(t => (
                   <button key={t.key} onClick={() => setChartTab(t.key)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${chartTab === t.key ? "bg-red-500/20 text-red-400" : "text-gray-500 hover:text-gray-300"}`}>
@@ -875,6 +886,23 @@ export default function MonitorPage() {
                       {compareIds.length === 1 ? "Seleccioná al menos un producto más para comparar" : "Activá 🔍 Comparar en la tabla y seleccioná 2+ productos"}
                     </div>
                   )}
+                </div>
+              )}
+
+              {chartTab === "estacionalidad" && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-1.5">
+                    📅 Estacionalidad de precios
+                    <InfoButton description="Precio promedio por día de la semana. Detecta patrones como 'baja los jueves' o 'sube los lunes'." />
+                  </h4>
+                  <div className="mb-3">
+                    <select value={selectedProducto || ""} onChange={e => setSelectedProducto(e.target.value || null)}
+                      className="px-3 py-1.5 bg-gray-800/50 border border-gray-700/50 rounded-lg text-xs text-white focus:outline-none focus:border-red-500/50">
+                      <option value="">Seleccionar producto...</option>
+                      {radarRows.map(r => <option key={r.id} value={r.producto}>{r.producto}</option>)}
+                    </select>
+                  </div>
+                  <Seasonality cazaId={selectedRow?.id ?? null} />
                 </div>
               )}
 

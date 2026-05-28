@@ -764,6 +764,122 @@ def get_evidencia(caza_id: int, authorization: str = Header(default=""), token: 
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     return FileResponse(path, media_type="image/png")
 
+# ─── Alert History + KPIs ─────────────────────────────────
+
+@app.get("/api/alerts/history")
+def get_alert_history(authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    res = supabase.table("alertas_enviadas").select("*").eq("user_id", uid).order("created_at", desc=True).limit(100).execute()
+    return {"alerts": res.data or []}
+
+@app.get("/api/kpi/summary")
+def get_kpi_summary(authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+
+    cazas = supabase.table("cazas").select("id, precio_max, last_price").eq("user_id", uid).execute()
+    cazas_data = cazas.data or []
+    total_cazas = len(cazas_data)
+    ahorro_total = 0
+    productos_con_precio = 0
+    for c in cazas_data:
+        lp = c.get("last_price")
+        pm = c.get("precio_max")
+        if lp and pm and lp < pm:
+            ahorro_total += pm - lp
+        if lp:
+            productos_con_precio += 1
+
+    alertas = supabase.table("alertas_enviadas").select("id, created_at").eq("user_id", uid).execute()
+    total_alertas = len(alertas.data or [])
+
+    res_hist = supabase.table("price_history").select("price, checked_at").eq("user_id", uid).order("checked_at", desc=True).limit(5000).execute()
+    prices = [float(h["price"]) for h in (res_hist.data or []) if h.get("price")]
+    precio_promedio = round(sum(prices) / len(prices), 2) if prices else 0
+
+    rules = supabase.table("monitor_rules").select("caza_id, alert_config").eq("user_id", uid).eq("is_active", True).execute()
+    reglas_activas = 0
+    for r in (rules.data or []):
+        ac = r.get("alert_config")
+        if ac and (isinstance(ac, list) and len(ac) > 0):
+            reglas_activas += 1
+
+    return {
+        "total_cazas": total_cazas,
+        "productos_con_precio": productos_con_precio,
+        "ahorro_total": ahorro_total,
+        "total_alertas": total_alertas,
+        "precio_promedio": precio_promedio,
+        "reglas_activas": reglas_activas,
+    }
+
+@app.get("/api/kpi/seasonality/{caza_id}")
+def get_seasonality(caza_id: int, authorization: str = Header(default="")):
+    get_user_id(authorization)
+    res = supabase.table("price_history").select("price, checked_at").eq("caza_id", caza_id).order("checked_at").limit(200).execute()
+    data = res.data or []
+    from collections import defaultdict
+    day_map = defaultdict(list)
+    for h in data:
+        try:
+            dt = datetime.fromisoformat(h["checked_at"].replace("Z", "+00:00"))
+            day_map[dt.strftime("%A")].append(float(h["price"]))
+        except:
+            pass
+    seasonality = {}
+    for day, prices in day_map.items():
+        if len(prices) >= 2:
+            seasonality[day] = {
+                "avg": round(sum(prices) / len(prices), 2),
+                "min": min(prices),
+                "max": max(prices),
+                "count": len(prices),
+            }
+    return {"seasonality": seasonality}
+
+@app.get("/api/kpi/inflated-prices")
+def get_inflated_prices(authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    cazas = supabase.table("cazas").select("id, producto").eq("user_id", uid).execute()
+    caza_ids = [c["id"] for c in (cazas.data or [])]
+    if not caza_ids:
+        return {"inflated": []}
+
+    all_hist = supabase.table("price_history").select("caza_id, price, checked_at").in_("caza_id", caza_ids).order("checked_at").limit(5000).execute()
+    hist_by_caza: dict[int, list[dict]] = {}
+    for h in (all_hist.data or []):
+        cid = h["caza_id"]
+        if cid not in hist_by_caza:
+            hist_by_caza[cid] = []
+        hist_by_caza[cid].append(h)
+
+    inflated = []
+    for cid, hist in hist_by_caza.items():
+        if len(hist) < 5:
+            continue
+        prices = [float(h["price"]) for h in hist if h.get("price")]
+        # Look for a spike (price up >15%) followed by a drop
+        for i in range(1, len(prices) - 2):
+            spike = (prices[i] - prices[i-1]) / prices[i-1] * 100
+            drop = (prices[i+2] - prices[i+1]) / prices[i+1] * 100
+            if spike > 15 and drop < -10:
+                from services.database_service import safe_query
+                caza_info = safe_query("cazas_get", [{"col": "id", "val": cid}])
+                nombre = ""
+                if caza_info:
+                    nombre = caza_info[0].get("producto", "") if isinstance(caza_info, list) else caza_info.get("producto", "")
+                inflated.append({
+                    "caza_id": cid,
+                    "producto": nombre,
+                    "fecha_spike": hist[i]["checked_at"],
+                    "precio_spike": prices[i],
+                    "fecha_drop": hist[i+2]["checked_at"],
+                    "precio_drop": prices[i+2],
+                    "spike_pct": round(spike, 1),
+                    "drop_pct": round(drop, 1),
+                })
+                break
+    return {"inflated": inflated}
+
 # ─── Reportes ────────────────────────────────────────────
 
 @app.post("/api/reports/generate")
