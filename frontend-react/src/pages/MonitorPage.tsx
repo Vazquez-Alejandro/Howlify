@@ -69,6 +69,8 @@ export default function MonitorPage() {
   const [mode, setMode] = useState<"id" | "grupo">("id");
   const [viewMode, setViewMode] = useState<"table" | "heatmap">("table");
   const [chartTab, setChartTab] = useState<ChartTab>("general");
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareIds, setCompareIds] = useState<number[]>([]);
   const [evidenciaModal, setEvidenciaModal] = useState<string | null>(null);
   const [assigningGroup, setAssigningGroup] = useState<number | null>(null);
 
@@ -387,7 +389,12 @@ export default function MonitorPage() {
             <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-gray-300">📡 Radar de Precios</h3>
-                <button onClick={async () => {
+                <div className="flex items-center gap-2">
+                  <button onClick={() => { setCompareMode(!compareMode); if (compareMode) setCompareIds([]); }}
+                    className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all border ${compareMode ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : "bg-gray-800/40 text-gray-400 border-gray-700/30 hover:text-gray-200 hover:bg-gray-700/50"}`}>
+                    🔍 {compareMode ? "Salir comparar" : "Comparar"}
+                  </button>
+                  <button onClick={async () => {
                   const rows = sorted.map(r => ({
                     Producto: r.producto, Precio: r.precio,
                     "Mín. MAP": r.minP, "Máx. MAP": r.maxP,
@@ -438,7 +445,8 @@ export default function MonitorPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-gray-500 text-xs uppercase border-b border-gray-800/50">
-                      <th className="py-3 pr-3"></th>
+                        <th className="py-3 pr-3"></th>
+                      {compareMode && <th className="py-3 pr-2 text-xs">Sel.</th>}
                       <th className="py-3 pr-4">Grupo</th>
                       <th className="py-3 pr-4">Riesgo</th>
                       <th className="py-3 pr-4">ID</th>
@@ -481,6 +489,13 @@ export default function MonitorPage() {
                             </div>
                           )}
                         </td>
+                        {compareMode && (
+                          <td className="py-3 pr-2 text-center">
+                            <input type="checkbox" checked={compareIds.includes(row.id)}
+                              onChange={() => setCompareIds(prev => prev.includes(row.id) ? prev.filter(id => id !== row.id) : [...prev, row.id])}
+                              className="accent-blue-500 cursor-pointer" />
+                          </td>
+                        )}
                         <td className="py-3 pr-4 text-xs text-gray-500">{row.grupoNombre}</td>
                         <td className="py-3 pr-4 text-lg">{row.riesgo}</td>
                         <td className="py-3 pr-4 text-gray-500 text-xs">{row.id}</td>
@@ -685,6 +700,7 @@ export default function MonitorPage() {
                 {([
                   { key: "general" as ChartTab, label: "Visión General", icon: "📊" },
                   { key: "historico" as ChartTab, label: "Histórico", icon: "📈" },
+                  { key: "comparar" as ChartTab, label: "Comparar", icon: "🔍" },
                   { key: "alertas" as ChartTab, label: "Alertas", icon: "🚨" },
                   { key: "ranking" as ChartTab, label: "Ranking", icon: "🏆" },
                 ]).map(t => (
@@ -771,6 +787,63 @@ export default function MonitorPage() {
                   ) : (
                     <div className="text-center py-12 text-gray-500 text-sm">
                       {!selectedProducto ? "Seleccioná un producto para ver su histórico" : "Sin datos de historial"}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {chartTab === "comparar" && (
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <h4 className="text-sm font-semibold text-gray-300 flex items-center gap-1.5">
+                      🔍 Comparativa de precios
+                    </h4>
+                    {compareIds.length === 0 && (
+                      <span className="text-xs text-gray-500 ml-2">Seleccioná productos en la tabla con el botón 🔍 Comparar</span>
+                    )}
+                    {compareIds.length > 0 && (
+                      <button onClick={() => setCompareIds([])} className="text-xs text-gray-500 hover:text-gray-300 ml-2 px-2 py-0.5 rounded bg-gray-800/40 border border-gray-700/30">
+                        Limpiar selección
+                      </button>
+                    )}
+                  </div>
+                  {compareIds.length >= 2 ? (
+                    <>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <LineChart>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                          <XAxis dataKey="checked_at" tick={{ fill: "#9ca3af", fontSize: 10 }}
+                            tickFormatter={(v) => new Date(v).toLocaleDateString()} allowDuplicatedCategory={false} />
+                          <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                          <Tooltip />
+                          {compareIds.map((id, i) => {
+                            const hist = allHistory.filter(h => h.caza_id === id).slice(-30);
+                            const row = radarRows.find(r => r.id === id);
+                            const colors = ["#ef4444", "#22c55e", "#3b82f6", "#f59e0b", "#8b5cf6", "#ec4899"];
+                            return (
+                              <Line key={id} type="monotone" dataKey="price" stroke={colors[i % colors.length]}
+                                strokeWidth={2} dot={{ r: 2 }} name={row?.producto || `#${id}`}
+                                data={hist.map(h => ({ ...h, checked_at: h.checked_at }))} />
+                            );
+                          })}
+                        </LineChart>
+                      </ResponsiveContainer>
+                      <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {compareIds.map(id => {
+                          const row = radarRows.find(r => r.id === id);
+                          return (
+                            <div key={id} className="bg-gray-800/30 rounded-xl p-3 border border-gray-800/50">
+                              <p className="text-xs font-medium text-gray-300 truncate">{row?.producto || `#${id}`}</p>
+                              <p className="text-sm font-bold text-white mt-1">${row?.precio.toLocaleString()}</p>
+                              <p className="text-[10px] text-gray-500 mt-0.5">MAP ${row?.minP.toLocaleString()} - ${row?.maxP.toLocaleString()}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center py-12 text-gray-500 text-sm">
+                      {compareIds.length === 1 ? "Seleccioná al menos un producto más para comparar" : "Activá 🔍 Comparar en la tabla y seleccioná 2+ productos"}
                     </div>
                   )}
                 </div>
