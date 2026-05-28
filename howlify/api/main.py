@@ -597,6 +597,7 @@ def upsert_monitor_rule(caza_id: int, body: dict, authorization: str = Header(de
             "target_price": int(body.get("target_price", 0)),
             "min_price_allowed": int(body.get("min_price_allowed", 0)),
             "max_price_allowed": int(body.get("max_price_allowed", 0)),
+            "alert_config": body.get("alert_config", []),
             "is_active": True,
         }
         supabase.table("monitor_rules").upsert(payload, on_conflict="caza_id").execute()
@@ -609,6 +610,70 @@ def delete_monitor_rule(caza_id: int, authorization: str = Header(default="")):
     uid = get_user_id(authorization)
     supabase.table("monitor_rules").update({"is_active": False}).eq("user_id", uid).eq("caza_id", caza_id).execute()
     return {"message": "Regla desactivada"}
+
+@app.post("/api/monitor/evaluate-rules/{caza_id}")
+def evaluate_monitor_rules(caza_id: int, authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    rules = supabase.table("monitor_rules").select("*").eq("user_id", uid).eq("caza_id", caza_id).limit(1).execute()
+    if not rules.data:
+        return {"triggered": []}
+    rule = rules.data[0]
+    if not rule.get("is_active"):
+        return {"triggered": []}
+    alert_config = rule.get("alert_config")
+    if not alert_config:
+        return {"triggered": []}
+    if isinstance(alert_config, str):
+        alert_config = json.loads(alert_config)
+
+    history = supabase.table("price_history").select("price, checked_at").eq("caza_id", caza_id).order("checked_at", desc=True).limit(10).execute()
+    prices = [float(h["price"]) for h in (history.data or []) if h.get("price")]
+    if not prices:
+        return {"triggered": []}
+    current = prices[0]
+    triggered = []
+
+    for r in alert_config:
+        if not r.get("enabled", True):
+            continue
+        rtype = r.get("type", "")
+        threshold = float(r.get("threshold", 0))
+        match = False
+
+        if rtype == "below_price":
+            match = current <= threshold
+        elif rtype == "above_price":
+            match = current >= threshold
+        elif rtype == "pct_drop" and len(prices) >= 2:
+            pct = ((prices[1] - current) / prices[1]) * 100
+            match = pct >= threshold
+        elif rtype == "consecutive_drop" and len(prices) >= int(threshold):
+            consec = 0
+            for i in range(1, len(prices)):
+                if prices[i] < prices[i-1]:
+                    consec += 1
+                else:
+                    consec = 0
+                if consec >= int(threshold) and i >= int(threshold) - 1:
+                    match = True
+                    break
+        elif rtype == "velocity_drop":
+            history24 = supabase.table("price_history").select("price").eq("caza_id", caza_id).gte("checked_at", (datetime.utcnow() - timedelta(hours=24)).isoformat()).order("checked_at").limit(2).execute()
+            hp = [float(h["price"]) for h in (history24.data or []) if h.get("price")]
+            if len(hp) >= 2 and hp[0] > 0:
+                pct = ((hp[0] - current) / hp[0]) * 100
+                match = pct >= threshold
+        elif rtype == "below_hist_min":
+            all_prices = supabase.table("price_history").select("price").eq("caza_id", caza_id).order("price").limit(1).execute()
+            if all_prices.data:
+                historical_min = float(all_prices.data[0]["price"])
+                if historical_min > 0:
+                    match = current <= historical_min * 1.01
+
+        if match:
+            triggered.append({"rule": r, "current_price": current})
+
+    return {"triggered": triggered, "current_price": current}
 
 @app.get("/api/monitor/infracciones")
 def get_infracciones(authorization: str = Header(default="")):

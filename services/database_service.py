@@ -260,6 +260,13 @@ def vigilar_ofertas(refresh_token=None):
 
             guardar_historial(caza_id, resultados, user_id)
 
+            # Evaluar reglas de alerta configurables
+            try:
+                from engine.engine import evaluar_reglas_alerta
+                evaluar_reglas_alerta(caza_id, user_id)
+            except Exception:
+                pass
+
         except Exception as e:
             print(f"⚠ error en caza {caza_id}: {e}")
         finally:

@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
-import { api, type Caza, type MonitorRule, type Infraccion, type Grupo } from "../api/client";
+import { api, type Caza, type MonitorRule, type Infraccion, type Grupo, type AlertRule } from "../api/client";
 import { useToast } from "../components/Toast";
 import PageTransition from "../components/PageTransition";
+import AlertRuleEditor from "../components/AlertRuleEditor";
 
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -11,7 +12,19 @@ import {
 type RiskColor = "⚪" | "🔴" | "🟠" | "🟡" | "🟢";
 type ChartTab = "general" | "historico" | "alertas" | "ranking";
 
-function InfoButton({ description }: { description: string }) {
+function Sparkline({ data, width = 60, height = 20 }: { data: number[]; width?: number; height?: number }) {
+  if (data.length < 2) return <span className="text-gray-600 text-[10px]">—</span>;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const points = data.map((v, i) => `${(i / (data.length - 1)) * width},${height - ((v - min) / range) * (height - 2) - 1}`).join(" ");
+  const color = data[data.length - 1] < data[0] ? "#22c55e" : "#ef4444";
+  return (
+    <svg width={width} height={height} className="inline-block">
+      <polyline fill="none" stroke={color} strokeWidth="1.5" points={points} />
+    </svg>
+  );
+}
   const [open, setOpen] = useState(false);
   return (
     <div className="relative inline-block">
@@ -54,6 +67,7 @@ export default function MonitorPage() {
   const [loading, setLoading] = useState(true);
   const [selectedProducto, setSelectedProducto] = useState<string | null>(null);
   const [mode, setMode] = useState<"id" | "grupo">("id");
+  const [viewMode, setViewMode] = useState<"table" | "heatmap">("table");
   const [chartTab, setChartTab] = useState<ChartTab>("general");
   const [evidenciaModal, setEvidenciaModal] = useState<string | null>(null);
   const [assigningGroup, setAssigningGroup] = useState<number | null>(null);
@@ -106,6 +120,7 @@ export default function MonitorPage() {
     const currP = lp?.price || 0;
     const mP = rule?.min_price_allowed || 0;
     const maxP = rule?.max_price_allowed || 0;
+    const hist = allHistory.filter(h => h.caza_id === bid).slice(-20);
     let riesgo: RiskColor = "⚪";
     if (mP > 0 || maxP > 0) {
       if (currP <= 0) riesgo = "⚪";
@@ -129,8 +144,9 @@ export default function MonitorPage() {
       grupoColor: gInfo?.color || "#808080",
       tieneEvidencia: !!(inf?.url_captura && inf.url_captura.trim()),
       progreso: mP > 0 && maxP > mP ? Math.max(0, Math.min(1, (currP - mP) / (maxP - mP))) : 0,
+      sparkline: hist.map(h => h.price),
     };
-  }), [cazas, rulesMap, infraMap, latestPrices, relaciones, gruposMap]);
+  }), [cazas, rulesMap, infraMap, latestPrices, relaciones, gruposMap, allHistory]);
 
   const sorted = useMemo(() => {
     const copy = [...radarRows];
@@ -194,10 +210,18 @@ export default function MonitorPage() {
 
   // Config form
   const [mapForm, setMapForm] = useState({ min: 0, max: 0, grupoId: 0 });
+  const [alertConfig, setAlertConfig] = useState<AlertRule[]>([]);
   const [saveVersion, setSaveVersion] = useState(0);
   useEffect(() => {
     if (selectedRow) setMapForm({ min: selectedRow.minP, max: selectedRow.maxP, grupoId: selectedRow.grupoId ?? 0 });
   }, [selectedProducto, saveVersion]);
+
+  useEffect(() => {
+    if (selectedRow) {
+      const r = rules.find(x => x.caza_id === selectedRow.id);
+      setAlertConfig(r?.alert_config || []);
+    }
+  }, [selectedProducto, rules, saveVersion]);
 
   const [newGrupoName, setNewGrupoName] = useState("");
   const [newGrupoEmoji, setNewGrupoEmoji] = useState("📁");
@@ -220,6 +244,7 @@ export default function MonitorPage() {
       const ruleRes = await api.upsertMonitorRule(selectedRow.id, {
         product_name: selectedRow.producto, product_url: selectedRow.url,
         source: "generic", min_price_allowed: mapForm.min, max_price_allowed: mapForm.max,
+        alert_config: alertConfig,
       });
       console.log("[handleSaveConfig] upsertMonitorRule result:", ruleRes);
       const groupRes = await api.assignMonitorGrupo(selectedRow.id, mapForm.grupoId || null);
@@ -380,6 +405,35 @@ export default function MonitorPage() {
                 <button onClick={() => setMode("grupo")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${mode === "grupo" ? "bg-red-500/20 text-red-400" : "text-gray-500 hover:text-gray-300"}`}>Por grupo</button>
               </div>
 
+              {viewMode === "heatmap" && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 mb-6">
+                  {sorted.map(row => {
+                    const riskBg = row.riesgo === "🔴" ? "bg-red-500/20 border-red-500/40"
+                      : row.riesgo === "🟠" ? "bg-orange-500/20 border-orange-500/40"
+                      : row.riesgo === "🟡" ? "bg-yellow-500/20 border-yellow-500/40"
+                      : row.riesgo === "🟢" ? "bg-green-500/20 border-green-500/40"
+                      : "bg-gray-800/30 border-gray-700/30";
+                    return (
+                      <button key={row.id} onClick={() => setSelectedProducto(row.producto)}
+                        className={`${riskBg} border rounded-xl p-3 text-left transition-all hover:scale-[1.02] ${selectedProducto === row.producto ? "ring-2 ring-red-500/50" : ""}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] text-gray-500">#{row.id}</span>
+                          <span className="text-sm">{row.riesgo}</span>
+                        </div>
+                        <p className="text-xs font-medium text-gray-200 truncate">{row.producto}</p>
+                        <p className="text-xs tabular-nums text-gray-400 mt-1">${row.precio.toLocaleString()}</p>
+                        <Sparkline data={row.sparkline} width={80} height={16} />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="flex gap-1 bg-gray-800/40 rounded-lg p-0.5 mb-5 w-fit overflow-x-auto flex-nowrap">
+                <button onClick={() => setViewMode("table")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === "table" ? "bg-red-500/20 text-red-400" : "text-gray-500 hover:text-gray-300"}`}>📋 Tabla</button>
+                <button onClick={() => setViewMode("heatmap")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === "heatmap" ? "bg-red-500/20 text-red-400" : "text-gray-500 hover:text-gray-300"}`}>🔥 Heatmap</button>
+              </div>
+
+{viewMode === "table" && (<>
                <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -393,6 +447,7 @@ export default function MonitorPage() {
                       <th className="py-3 pr-4 text-right">Mín. MAP</th>
                       <th className="py-3 pr-4 text-right">Máximo</th>
                       <th className="py-3 pr-4 text-center">Estado</th>
+                      <th className="py-3 pr-3 text-center text-[10px]">Tendencia</th>
                       <th className="py-3 pr-4 text-center">E</th>
                       <th className="py-3">Rango</th>
                     </tr>
@@ -434,6 +489,9 @@ export default function MonitorPage() {
                         <td className="py-3 pr-4 text-right tabular-nums text-red-400">{row.minP > 0 ? `$${row.minP.toLocaleString()}` : "-"}</td>
                         <td className="py-3 pr-4 text-right tabular-nums text-red-400">{row.maxP > 0 ? `$${row.maxP.toLocaleString()}` : "-"}</td>
                         <td className="py-3 pr-4 text-center">{row.riesgo === "⚪" ? <span className="text-gray-600">—</span> : <span className="text-lg">{row.riesgo}</span>}</td>
+                        <td className="py-3 pr-3 text-center">
+                          <Sparkline data={row.sparkline} />
+                        </td>
                         <td className="py-3 pr-4 text-center">
                           {row.tieneEvidencia
                             ? <button onClick={(e) => { e.stopPropagation(); setEvidenciaModal(String(row.id)); }} className="text-sm cursor-pointer hover:scale-125 transition-transform" title="Ver evidencia">📸</button>
@@ -494,8 +552,8 @@ export default function MonitorPage() {
                   </div>
                 ))}
               </div>
-            </div>
-
+            </>)}
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                 <h3 className="text-sm font-semibold text-gray-300 mb-4">🔧 Configurar producto</h3>
@@ -544,8 +602,7 @@ export default function MonitorPage() {
                             title="Asignar grupo">
                             {assigningLoading === selectedRow?.id ? "⏳" : "Asignar"}
                           </button>
-                        </div>
-                      </div>
+              </div>
                     </div>
                     <div className="flex gap-2">
                       <button onClick={handleSaveConfig} disabled={saving}
@@ -558,6 +615,11 @@ export default function MonitorPage() {
                         {deletingRule === selectedRow.id ? "⏳" : "🗑️"}
                       </button>
                     </div>
+                  </div>
+                )}
+                {selectedRow && (
+                  <div className="mt-4 pt-4 border-t border-gray-800/50">
+                    <AlertRuleEditor rules={alertConfig} onChange={setAlertConfig} />
                   </div>
                 )}
               </div>

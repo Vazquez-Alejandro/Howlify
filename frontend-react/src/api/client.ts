@@ -241,6 +241,16 @@ export interface MonitorRule {
   min_price_allowed: number;
   max_price_allowed: number;
   is_active: boolean;
+  alert_config?: AlertRule[];
+}
+
+export interface AlertRule {
+  id: string;
+  type: "pct_drop" | "below_price" | "above_price" | "consecutive_drop" | "velocity_drop" | "below_hist_min" | "restock";
+  threshold: number;
+  channel: "push" | "whatsapp" | "telegram" | "email" | "all";
+  cooldown: number;
+  enabled: boolean;
 }
 
 export interface Infraccion {
