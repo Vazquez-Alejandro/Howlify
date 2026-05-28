@@ -106,6 +106,7 @@ class CazaCreate(BaseModel):
     frecuencia: str = "1 h"
     tipo: str = "piso"
     source: str = "generic"
+    etiqueta: str = ""
 
 # ─── Helpers ────────────────────────────────────────────
 
@@ -354,6 +355,7 @@ def update_caza(caza_id: int, data: CazaCreate, authorization: str = Header(defa
         "frecuencia": data.frecuencia,
         "tipo_alerta": data.tipo,
         "source": src,
+        "etiqueta": data.etiqueta,
     }).eq("id", caza_id).eq("user_id", uid).execute()
     return {"message": "Cacería actualizada"}
 
@@ -403,6 +405,12 @@ def hunt_single(caza_id: int, authorization: str = Header(default="")):
                     descuento = int((1 - precio_r / ref) * 100) if ref > 0 else 0
                     r["descuento"] = descuento
                     r["match_descuento"] = descuento >= max(precio_max_raw, 0)
+                if tipo_alerta == "grande":
+                    from engine.engine import _obtener_precio_referencia
+                    ref = _obtener_precio_referencia(caza_id) or precio_r
+                    drop_pct = int((1 - precio_r / ref) * 100) if ref > 0 else 0
+                    r["drop_pct"] = drop_pct
+                    r["match_grande"] = drop_pct >= 25
     return {"results": resultados}
 
 @app.post("/api/hunt/all")
@@ -442,6 +450,12 @@ def hunt_all(authorization: str = Header(default="")):
                             descuento = int((1 - precio_r / ref) * 100) if ref > 0 else 0
                             r["descuento"] = descuento
                             r["match_descuento"] = descuento >= max(precio_max_raw, 0)
+                        if tipo_alerta == "grande":
+                            from engine.engine import _obtener_precio_referencia
+                            ref = _obtener_precio_referencia(c.get("id")) or precio_r
+                            drop_pct = int((1 - precio_r / ref) * 100) if ref > 0 else 0
+                            r["drop_pct"] = drop_pct
+                            r["match_grande"] = drop_pct >= 25
             results[rid] = res
         except Exception as e:
             results[rid] = {"error": str(e)}
@@ -502,6 +516,42 @@ def get_history(caza_id: int, authorization: str = Header(default="")):
         .limit(50) \
         .execute()
     return {"history": res.data or []}
+
+@app.get("/api/predict/{caza_id}")
+def predict_price(caza_id: int, authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    res = supabase.table("price_history") \
+        .select("checked_at, price") \
+        .eq("caza_id", caza_id) \
+        .order("checked_at", desc=False) \
+        .limit(30) \
+        .execute()
+    prices = [float(p["price"]) for p in (res.data or []) if p.get("price")]
+    if len(prices) < 3:
+        return {"predictable": False, "reason": "Se necesitan al menos 3 mediciones"}
+    import numpy as np
+    xs = np.arange(len(prices))
+    ys = np.array(prices)
+    slope, intercept = np.polyfit(xs, ys, 1)
+    trend = "subiendo" if slope > 0 else "bajando" if slope < 0 else "estable"
+    next_val = intercept + slope * len(prices)
+    cambio_pct = ((next_val - prices[-1]) / prices[-1]) * 100
+    ma_3 = np.mean(prices[-3:]) if len(prices) >= 3 else prices[-1]
+    ma_7 = np.mean(prices) if len(prices) >= 7 else None
+    prob_baja = max(0, min(100, round(-slope / (prices[-1] / 100) * 10 + 50))) if slope < 0 else max(0, min(30, 30 - slope * 100))
+    return {
+        "predictable": True,
+        "trend": trend,
+        "last_price": prices[-1],
+        "predicted_next": round(next_val),
+        "cambio_pct": round(cambio_pct, 1),
+        "prob_baja_7d": round(prob_baja),
+        "min_30d": round(float(np.min(ys))),
+        "max_30d": round(float(np.max(ys))),
+        "avg_30d": round(float(np.mean(ys))),
+        "ma_3": round(float(ma_3)),
+        "ma_7": round(float(ma_7)) if ma_7 else None,
+    }
 
 # ─── Monitor ────────────────────────────────────────────
 
@@ -671,6 +721,20 @@ def export_csv(authorization: str = Header(default="")):
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=howlify_cazas.csv"},
     )
+
+@app.get("/api/rates")
+def get_rates():
+    import requests as req
+    try:
+        blue = req.get("https://dolarapi.com/v1/dolares/blue", timeout=5).json()
+        tarjeta = req.get("https://dolarapi.com/v1/dolares/tarjeta", timeout=5).json()
+        return {
+            "blue": float(blue.get("venta", 0)),
+            "tarjeta": float(tarjeta.get("venta", 0)),
+            "oficial": float(req.get("https://dolarapi.com/v1/dolares/oficial", timeout=5).json().get("venta", 0)),
+        }
+    except:
+        return {"blue": 1300, "tarjeta": 1500, "oficial": 1000}
 
 # ─── Mercado Pago / Billing ─────────────────────────────
 

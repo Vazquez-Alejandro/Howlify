@@ -11,6 +11,7 @@ import Logo from "../components/Logo";
 import MonitorPage from "./MonitorPage";
 import BillingPage from "./BillingPage";
 import OnboardingTour from "../components/OnboardingTour";
+import { useRates } from "../hooks/useRates";
 
 type View = "rastreadores" | "perfil" | "admin" | "monitor" | "revender" | "facturacion";
 
@@ -36,6 +37,7 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"fecha" | "nombre" | "precio">("fecha");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const { showUsd, setShowUsd } = useRates();
 
   const filteredCazas = cazas
     .filter((c) => {
@@ -204,6 +206,10 @@ export default function DashboardPage() {
               </div>
               {view === "rastreadores" && cazas.length > 0 && (
                 <div className="flex items-center gap-2">
+                  <button onClick={() => setShowUsd(!showUsd)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border ${showUsd ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "bg-gray-800/50 text-gray-400 border-gray-700/50"}`}>
+                    {showUsd ? "ARS + USD" : "Solo ARS"}
+                  </button>
                   <button onClick={async () => {
                     const token = localStorage.getItem("token");
                     try {
@@ -509,7 +515,7 @@ type CazaTipo = "producto" | "vuelo" | "alojamiento";
 function NewCazaForm({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
   const [tipo, setTipo] = useState<CazaTipo>("producto");
-  const [alertaTipo, setAlertaTipo] = useState<"piso" | "descuento">("piso");
+  const [alertaTipo, setAlertaTipo] = useState<"piso" | "descuento" | "grande">("piso");
   const [form, setForm] = useState({ keyword: "", url: "", precio_max: 50000, frecuencia: "1 h" });
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState("");
@@ -575,7 +581,7 @@ function NewCazaForm({ onCreated }: { onCreated: () => void }) {
           ))}
         </div>
         <div className="flex gap-2 p-1 bg-gray-800/30 rounded-xl border border-gray-700/50">
-          {(["piso", "descuento"] as const).map((t) => (
+          {(["piso", "descuento", "grande"] as const).map((t) => (
             <button key={t} type="button" onClick={() => setAlertaTipo(t)}
               className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all ${
                 alertaTipo === t
@@ -583,7 +589,7 @@ function NewCazaForm({ onCreated }: { onCreated: () => void }) {
                   : "text-gray-500 hover:text-gray-300"
               }`}
             >
-              {t === "piso" ? "🎯 Por precio" : "📉 Por descuento"}
+              {t === "piso" ? "🎯 Por precio" : t === "descuento" ? "📉 Por descuento" : "🔥 Grandes ofertas"}
             </button>
           ))}
         </div>
@@ -602,7 +608,7 @@ function NewCazaForm({ onCreated }: { onCreated: () => void }) {
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">
-              {alertaTipo === "descuento" ? "Descuento mínimo (%)" : "Precio Máximo"}
+              {alertaTipo === "descuento" ? "Descuento mínimo (%)" : alertaTipo === "grande" ? "Detección (>25% drop)" : "Precio Máximo"}
             </label>
             <input type="number" value={form.precio_max}
               onChange={(e) => setForm({ ...form, precio_max: Number(e.target.value) })}

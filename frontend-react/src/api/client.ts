@@ -116,7 +116,7 @@ export const api = {
 
   updateCaza: (id: number, data: {
     keyword: string; url: string; precio_max: number;
-    frecuencia?: string; tipo?: string;
+    frecuencia?: string; tipo?: string; etiqueta?: string;
   }) => request<{ message: string }>(`/api/cazas/${id}`, {
     method: "PUT", body: JSON.stringify(data),
   }),
@@ -223,6 +223,7 @@ export interface Caza {
   tipo_alerta?: string;
   created_at?: string;
   updated_at?: string;
+  etiqueta?: string;
 }
 
 export interface HuntResult {

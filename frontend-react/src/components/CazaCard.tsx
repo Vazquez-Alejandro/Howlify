@@ -3,6 +3,8 @@ import { LineChart, Line, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { api, type Caza } from "../api/client";
 import { useToast } from "./Toast";
 import { traducirError } from "../utils/errors";
+import Price from "./Price";
+import PredictionBadge from "./PredictionBadge";
 
 interface Props {
   caza: Caza;
@@ -12,7 +14,7 @@ interface Props {
 
 export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
   const { toast } = useToast();
-  const [results, setResults] = useState<{ title: string; price: number; url: string; price_error?: boolean; price_avg?: number; descuento?: number; match_descuento?: boolean; precio_personalizado?: boolean; precio_alternativo?: number }[] | null>(null);
+  const [results, setResults] = useState<{ title: string; price: number; url: string; price_error?: boolean; price_avg?: number; descuento?: number; match_descuento?: boolean; drop_pct?: number; match_grande?: boolean; precio_personalizado?: boolean; precio_alternativo?: number }[] | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [loadingResults, setLoadingResults] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -21,11 +23,13 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
   const [showChart, setShowChart] = useState(false);
 
   const esDescuento = (caza.tipo_alerta || "piso") === "descuento";
+  const esGrande = (caza.tipo_alerta || "piso") === "grande";
   const [editForm, setEditForm] = useState({
     keyword: caza.producto || caza.keyword || "",
     url: caza.link || caza.url || "",
     precio_max: caza.precio_max,
     tipo_alerta: caza.tipo_alerta || "piso",
+    etiqueta: caza.etiqueta || "",
   });
 
   const kw = (caza.producto || caza.keyword || "Sin nombre").toUpperCase();
@@ -69,6 +73,7 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
       url: editForm.url,
       precio_max: editForm.precio_max,
       tipo: editForm.tipo_alerta || "piso",
+      etiqueta: editForm.etiqueta,
     });
     if (res.error) {
       toast(traducirError(res.error), "error");
@@ -94,11 +99,16 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
             </div>
             <div className="flex items-center gap-2 mt-0.5">
               <p className="text-gray-500 text-sm truncate max-w-[180px] sm:max-w-none">{url.slice(0, 55)}</p>
+              {caza.etiqueta && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded text-[10px] font-medium border border-purple-500/20 w-fit">
+                  🏷️ {caza.etiqueta}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3 mt-0.5 flex-wrap">
               {hasPrice && (
                 <span className={`text-sm font-medium ${isAlert ? "text-red-400" : "text-green-400"}`}>
-                  Últ: ${caza.last_price!.toLocaleString()}
+                  Últ: <Price amount={caza.last_price!} />
                   {tendencia && (
                     <span className={`ml-1 text-xs ${tendencia.bajo ? "text-green-500" : tendencia.subio ? "text-red-500" : "text-gray-500"}`}>
                       {tendencia.bajo ? "↓" : tendencia.subio ? "↑" : "→"} {tendencia.pct}%
@@ -112,7 +122,7 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                 </span>
               ) : (
                 <span className="text-sm text-gray-500">
-                  Máx: ${(caza.precio_max || 0).toLocaleString()}
+                  Máx: <Price amount={caza.precio_max || 0} />
                 </span>
               )}
               {priceHistory && priceHistory.length >= 2 && (
@@ -121,6 +131,7 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                   📊
                 </button>
               )}
+              <PredictionBadge cazaId={caza.id} />
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
@@ -141,6 +152,7 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                   url: caza.link || caza.url || "",
                   precio_max: caza.precio_max || 0,
                   tipo_alerta: caza.tipo_alerta || "piso",
+                  etiqueta: caza.etiqueta || "",
                 });
                 setShowEdit(true);
               }}
@@ -212,9 +224,14 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                         -{r.descuento}%
                       </span>
                     )}
+                    {esGrande && r.drop_pct != null && r.drop_pct >= 25 && (
+                      <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-bold bg-orange-500/20 text-orange-400 rounded border border-orange-500/30 animate-pulse">
+                        🔥 -{r.drop_pct}% OFERTÓN
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className={`font-medium text-sm ${r.price_error ? "text-yellow-400" : esDescuento && r.match_descuento ? "text-green-400" : "text-gray-400"}`}>${(r.price || 0).toLocaleString()}</span>
+                    <span className={`font-medium text-sm ${r.price_error ? "text-yellow-400" : esDescuento && r.match_descuento ? "text-green-400" : esGrande && r.match_grande ? "text-orange-400" : "text-gray-400"}`}><Price amount={r.price || 0} /></span>
                     {r.precio_personalizado && (
                       <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-bold bg-purple-500/20 text-purple-400 rounded border border-purple-500/30" title={`Precio alternativo: $${(r.precio_alternativo || 0).toLocaleString()}`}>
                         🎭 ML variable
@@ -278,6 +295,11 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                 <label className="text-xs text-gray-400 ml-1 uppercase">{editForm.tipo_alerta === "descuento" ? "Descuento mínimo (%)" : "Precio máximo"}</label>
                 <input type="number" value={editForm.precio_max} onChange={e => setEditForm(f => ({ ...f, precio_max: Number(e.target.value) }))}
                   className="w-full mt-0.5 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm focus:outline-none focus:border-red-500/50" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 ml-1 uppercase">Etiqueta</label>
+                <input value={editForm.etiqueta} onChange={e => setEditForm(f => ({ ...f, etiqueta: e.target.value }))} placeholder="Ej: Regalo mamá, Para revender"
+                  className="w-full mt-0.5 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-red-500/50" />
               </div>
             </div>
             <div className="flex gap-2 mt-5">
