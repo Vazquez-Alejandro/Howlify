@@ -1,11 +1,20 @@
 import { useState, useEffect } from "react";
-import { useSearchParams, useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { api } from "../api/client";
 import PageTransition from "../components/PageTransition";
 import Logo from "../components/Logo";
 
+function parseHash() {
+  const hash = window.location.hash.replace(/^#/, "");
+  const params = new URLSearchParams(hash);
+  return {
+    access_token: params.get("access_token") || "",
+    refresh_token: params.get("refresh_token") || "",
+    type: params.get("type") || "",
+  };
+}
+
 export default function ResetPasswordPage() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -13,13 +22,14 @@ export default function ResetPasswordPage() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const token_hash = searchParams.get("token_hash");
+  const { access_token, refresh_token, type } = parseHash();
+  const isValid = type === "recovery" && !!access_token;
 
   useEffect(() => {
-    if (!token_hash) {
+    if (!isValid) {
       setError("Enlace inválido o expirado.");
     }
-  }, [token_hash]);
+  }, [isValid]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,7 +39,7 @@ export default function ResetPasswordPage() {
     if (password.length < 6) return setError("La contraseña debe tener al menos 6 caracteres.");
     setLoading(true);
     try {
-      const { error } = await api.resetPassword(token_hash!, password);
+      const { error } = await api.resetPassword(access_token, refresh_token, password);
       if (error) throw new Error(error);
       setSuccess("Contraseña actualizada correctamente.");
       setTimeout(() => navigate("/"), 2500);
@@ -65,7 +75,7 @@ export default function ResetPasswordPage() {
                 <span>{success}</span>
               </div>
             )}
-            {!token_hash ? (
+            {!isValid ? (
               <p className="text-gray-400 text-center py-4">Enlace inválido o expirado.</p>
             ) : (
               <>

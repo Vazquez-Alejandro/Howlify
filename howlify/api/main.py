@@ -74,7 +74,8 @@ class ForgotPasswordRequest(BaseModel):
     email: str
 
 class ResetPasswordRequest(BaseModel):
-    token_hash: str
+    access_token: str
+    refresh_token: str
     password: str
 
 class ResendVerificationRequest(BaseModel):
@@ -201,11 +202,10 @@ def resend_verification(req: ResendVerificationRequest):
 @app.post("/api/auth/reset-password")
 def reset_password(req: ResetPasswordRequest):
     try:
-        verify = supabase.auth.verify_otp({"token_hash": req.token_hash, "type": "recovery"})
-        if verify.user:
-            update = supabase.auth.update_user({"password": req.password})
-            if update.user:
-                return {"message": "Contraseña actualizada correctamente"}
+        supabase.auth.set_session(req.access_token, req.refresh_token)
+        update = supabase.auth.update_user({"password": req.password})
+        if update.user:
+            return {"message": "Contraseña actualizada correctamente"}
         raise HTTPException(status_code=400, detail="No se pudo actualizar la contraseña")
     except HTTPException:
         raise

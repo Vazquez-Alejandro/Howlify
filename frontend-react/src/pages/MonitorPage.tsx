@@ -280,7 +280,41 @@ export default function MonitorPage() {
   };
 
   if (loading) {
-    return <PageTransition><div className="p-6 space-y-4"><SkeletonCard count={6} /></div></PageTransition>;
+    return (
+      <PageTransition>
+        <div className="p-4 md:p-8 space-y-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="bg-gray-900/60 rounded-xl p-4 animate-pulse" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
+                <div className="h-3 bg-gray-800 rounded w-16 mb-3" />
+                <div className="h-6 bg-gray-800 rounded w-12" />
+              </div>
+            ))}
+          </div>
+          <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6 animate-pulse" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
+            <div className="h-4 bg-gray-800 rounded w-32 mb-4" />
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex gap-4">
+                  <div className="h-3 bg-gray-800 rounded w-8" />
+                  <div className="h-3 bg-gray-800 rounded w-16" />
+                  <div className="h-3 bg-gray-800 rounded flex-1" />
+                  <div className="h-3 bg-gray-800 rounded w-20" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="bg-gray-900/60 rounded-2xl p-4 md:p-6 animate-pulse" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
+                <div className="h-4 bg-gray-800 rounded w-40 mb-6" />
+                <div className="h-48 bg-gray-800/50 rounded-lg" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </PageTransition>
+    );
   }
 
   return (
@@ -334,7 +368,7 @@ export default function MonitorPage() {
                   📤 Exportar
                 </button>
               </div>
-              <div className="flex gap-1 bg-gray-800/40 rounded-lg p-0.5 mb-5 w-fit">
+              <div className="flex gap-1 bg-gray-800/40 rounded-lg p-0.5 mb-5 w-fit overflow-x-auto flex-nowrap">
                 <button onClick={() => setMode("id")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${mode === "id" ? "bg-red-500/20 text-red-400" : "text-gray-500 hover:text-gray-300"}`}>Individual</button>
                 <button onClick={() => setMode("grupo")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${mode === "grupo" ? "bg-red-500/20 text-red-400" : "text-gray-500 hover:text-gray-300"}`}>Por grupo</button>
               </div>
@@ -578,7 +612,7 @@ export default function MonitorPage() {
             </div>
 
             <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
-              <div className="flex items-center gap-1.5 mb-5 bg-gray-800/40 rounded-lg p-1 w-fit">
+              <div className="flex items-center gap-1.5 mb-5 bg-gray-800/40 rounded-lg p-1 overflow-x-auto flex-nowrap">
                 {([
                   { key: "general" as ChartTab, label: "Visión General", icon: "📊" },
                   { key: "historico" as ChartTab, label: "Histórico", icon: "📈" },

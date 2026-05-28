@@ -93,10 +93,10 @@ export const api = {
       body: JSON.stringify({ email }),
     }),
 
-  resetPassword: (token_hash: string, password: string) =>
+  resetPassword: (access_token: string, refresh_token: string, password: string) =>
     request<{ message: string }>("/api/auth/reset-password", {
       method: "POST",
-      body: JSON.stringify({ token_hash, password }),
+      body: JSON.stringify({ access_token, refresh_token, password }),
     }),
 
   getProfile: () => request<{ profile: Record<string, unknown> }>("/api/auth/profile"),
@@ -151,6 +151,8 @@ export interface Caza {
   last_price?: number;
   estado?: string;
   tipo_alerta?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface HuntResult {

@@ -34,14 +34,33 @@ export default function DashboardPage() {
   const [simulatedPlan, setSimulatedPlan] = useState("starter");
   const [users, setUsers] = useState<Record<string, unknown>[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"fecha" | "nombre" | "precio">("fecha");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  const filteredCazas = cazas.filter((c) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    const kw = (c.producto || c.keyword || "").toLowerCase();
-    const url = (c.link || c.url || "").toLowerCase();
-    return kw.includes(q) || url.includes(q);
-  });
+  const filteredCazas = cazas
+    .filter((c) => {
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      const kw = (c.producto || c.keyword || "").toLowerCase();
+      const url = (c.link || c.url || "").toLowerCase();
+      return kw.includes(q) || url.includes(q);
+    })
+    .sort((a, b) => {
+      const dir = sortDir === "asc" ? 1 : -1;
+      if (sortBy === "nombre") {
+        const na = (a.producto || a.keyword || "").toLowerCase();
+        const nb = (b.producto || b.keyword || "").toLowerCase();
+        return na.localeCompare(nb) * dir;
+      }
+      if (sortBy === "precio") {
+        const pa = a.last_price ?? 0;
+        const pb = b.last_price ?? 0;
+        return (pa - pb) * dir;
+      }
+      const da = a.created_at || "";
+      const db = b.created_at || "";
+      return da.localeCompare(db) * dir;
+    });
 
   const loadCazas = async () => {
     setLoading(true);
@@ -252,6 +271,19 @@ export default function DashboardPage() {
               {searchQuery && filteredCazas.length === 0 && (
                 <p className="text-sm text-gray-500 mb-4">No se encontraron cacerías para "{searchQuery}"</p>
               )}
+
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                <span className="text-xs text-gray-500 font-medium">Ordenar:</span>
+                {([["fecha", "📅 Fecha"], ["nombre", "🔤 Nombre"], ["precio", "💰 Precio"]] as const).map(([key, label]) => (
+                  <button key={key} onClick={() => {
+                    if (sortBy === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+                    else { setSortBy(key); setSortDir("desc"); }
+                  }}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all border ${sortBy === key ? "bg-red-500/15 text-red-400 border-red-500/30" : "bg-gray-800/30 text-gray-400 border-gray-700/40 hover:bg-gray-700/40"}`}>
+                    {label} {sortBy === key ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                  </button>
+                ))}
+              </div>
 
               <div className="space-y-3">
                 {filteredCazas.map((c) => (
