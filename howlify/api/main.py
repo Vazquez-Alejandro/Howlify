@@ -40,7 +40,13 @@ def rate_limit_hunt(uid: str):
 app = FastAPI(title="Howlify API", version="1.0.0")
 
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse as _JSONResponse
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    print(f"[UNHANDLED] {request.method} {request.url.path}: {exc}")
+    return _JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})
 
 REACT_DIST = Path(__file__).resolve().parents[2] / "frontend-react" / "dist"
 _HAS_REACT = REACT_DIST.exists() and (REACT_DIST / "index.html").exists()
@@ -1232,13 +1238,19 @@ def mp_get_subscription(authorization: str = Header(default="")):
 
 @app.get("/api/admin/users")
 def admin_users(authorization: str = Header(default="")):
-    uid = get_user_id(authorization)
-    profile = supabase.table("profiles").select("role").eq("user_id", uid).limit(1).execute()
-    role = profile.data[0].get("role", "user") if profile.data else "user"
-    if role != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-    res = supabase.table("profiles").select("user_id, email, username, plan, role, created_at").order("created_at", desc=True).limit(30).execute()
-    return {"users": res.data or []}
+    try:
+        uid = get_user_id(authorization)
+        profile = supabase.table("profiles").select("role").eq("user_id", uid).limit(1).execute()
+        role = profile.data[0].get("role", "user") if profile.data else "user"
+        if role != "admin":
+            raise HTTPException(status_code=403, detail="Admin only")
+        res = supabase.table("profiles").select("user_id, email, username, plan, role, created_at").order("created_at", desc=True).limit(30).execute()
+        return {"users": res.data or []}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[admin_users] error: {e}")
+        return JSONResponse(status_code=500, content={"detail": "Error al obtener usuarios"})
 
 if __name__ == "__main__":
     import uvicorn

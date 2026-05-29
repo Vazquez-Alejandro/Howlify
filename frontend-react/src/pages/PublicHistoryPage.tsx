@@ -52,8 +52,6 @@ export default function PublicHistoryPage() {
   const latest = data.history[0]?.price || 0;
   const avg = data.history.length > 0 ? Math.round(data.history.reduce((a, b) => a + b.price, 0) / data.history.length) : 0;
   const min = data.history.length > 0 ? Math.min(...data.history.map(h => h.price)) : 0;
-  const max = data.history.length > 0 ? Math.max(...data.history.map(h => h.price)) : 0;
-
   return (
     <PageTransition>
       <div className="min-h-screen bg-gray-950">
@@ -91,7 +89,7 @@ export default function PublicHistoryPage() {
                   <XAxis dataKey="date" tick={{ fill: "#9ca3af", fontSize: 11 }} />
                   <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} domain={["dataMin - 500", "dataMax + 500"]} />
                   <Tooltip contentStyle={{ backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: "8px", fontSize: "12px" }}
-                    labelStyle={{ color: "#9ca3af" }} formatter={(value: number) => [`$${value.toLocaleString()}`, "Precio"]} />
+                    labelStyle={{ color: "#9ca3af" }} formatter={(value) => [`$${Number(value ?? 0).toLocaleString()}`, "Precio"]} />
                   <Line type="monotone" dataKey="price" stroke="#ef4444" strokeWidth={2} dot={{ fill: "#ef4444", r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>

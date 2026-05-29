@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { api, type Caza, type MonitorRule, type Infraccion, type Grupo } from "../api/client";
-import { useToast } from "../components/Toast";
+import { api, type Caza, type MonitorRule, type AlertRule, type Grupo } from "../api/client";
 import PageTransition from "../components/PageTransition";
 import AlertRuleEditor from "../components/AlertRuleEditor";
 import KPIDashboard from "../components/KPIDashboard";
@@ -9,7 +8,7 @@ import Seasonality from "../components/Seasonality";
 
 import {
   ResponsiveContainer,
-  PieChart, Pie, Cell,
+  PieChart, Pie, Cell, Tooltip,
 } from "recharts";
 
 type RiskColor = "⚪" | "🔴" | "🟠" | "🟡" | "🟢";
@@ -36,10 +35,8 @@ const RIESGO_LABEL: Record<RiskColor, string> = {
 const COLORS = { verde: "#22c55e", amarillo: "#eab308", naranja: "#f97316", rojo: "#ef4444", gris: "#6b7280" };
 
 export default function MonitorPage() {
-  const { toast } = useToast();
   const [cazas, setCazas] = useState<Caza[]>([]);
   const [rules, setRules] = useState<MonitorRule[]>([]);
-  const [infracciones, setInfracciones] = useState<Infraccion[]>([]);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [relaciones, setRelaciones] = useState<Record<number, number>>({});
   const [latestPrices, setLatestPrices] = useState<Record<string, { price: number; checked_at: string }>>({});
@@ -47,25 +44,19 @@ export default function MonitorPage() {
   const [loading, setLoading] = useState(true);
   const [selectedProducto, setSelectedProducto] = useState<string | null>(null);
   const [mode, setMode] = useState<"id" | "grupo">("id");
-  const [viewMode, setViewMode] = useState<"table" | "heatmap">("table");
   const [chartTab, setChartTab] = useState<"general" | "historico" | "alertas" | "ranking" | "estacionalidad">("general");
   const [evidenciaModal, setEvidenciaModal] = useState<string | null>(null);
-  const [assigningGroup, setAssigningGroup] = useState<number | null>(null);
-  const [showReportMenu, setShowReportMenu] = useState(false);
-  const [generating, setGenerating] = useState<string | null>(null);
-  const [alertConfig, setAlertConfig] = useState<{id:string;type:string;threshold:number;channel:string;cooldown:number;enabled:boolean}[]>([]);
-  const [saveVersion, setSaveVersion] = useState(0);
+  const [alertConfig, setAlertConfig] = useState<AlertRule[]>([]);
 
   const loadData = async () => {
     setLoading(true);
-    const [cazasRes, rulesRes, infRes, gruposRes, relRes, pricesRes, histRes] = await Promise.all([
-      api.listCazas(), api.monitorRules(), api.monitorInfracciones(),
+    const [cazasRes, rulesRes, gruposRes, relRes, pricesRes, histRes] = await Promise.all([
+      api.listCazas(), api.monitorRules(),
       api.monitorGrupos(), api.monitorGrupoCazas(),
       api.monitorLatestPrices(), api.monitorAllHistory(),
     ]);
     if (cazasRes.data) setCazas(cazasRes.data.cazas);
     if (rulesRes.data) setRules(rulesRes.data.rules);
-    if (infRes.data) setInfracciones(infRes.data.infracciones);
     if (gruposRes.data) setGrupos(gruposRes.data.grupos);
     if (relRes.data) {
       const map: Record<number, number> = {};
@@ -115,7 +106,7 @@ export default function MonitorPage() {
       progreso: mP > 0 && maxP > mP ? Math.max(0, Math.min(1, (currP - mP) / (maxP - mP))) : 0,
       sparkline: hist.map(h => h.price),
     };
-  }), [cazas, rulesMap, latestPrices, relaciones, gruposMap, allHistory, saveVersion]);
+  }), [cazas, rulesMap, latestPrices, relaciones, gruposMap, allHistory]);
 
   const sorted = useMemo(() => {
     const copy = [...radarRows];

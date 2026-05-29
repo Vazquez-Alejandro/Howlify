@@ -14,7 +14,7 @@ interface Props {
 
 export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
   const { toast } = useToast();
-  const [results, setResults] = useState<{ title: string; price: number; url: string; price_error?: boolean; price_avg?: number; descuento?: number; match_descuento?: boolean; drop_pct?: number; match_grande?: boolean; precio_personalizado?: boolean; precio_alternativo?: number }[] | null>(null);
+  const [results, setResults] = useState<{ title: string; price: number; url: string; price_error?: boolean; price_avg?: number; descuento?: number; match_descuento?: boolean; drop_pct?: number; match_grande?: boolean; precio_personalizado?: boolean; precio_alternativo?: number; seller?: { seller_id: number; nickname: string; reputation: string; reputation_label: string; total_sales: number; completed_sales: number; positive_ratio: string | null; permalink: string } }[] | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [loadingResults, setLoadingResults] = useState(false);
   const [showEdit, setShowEdit] = useState(false);

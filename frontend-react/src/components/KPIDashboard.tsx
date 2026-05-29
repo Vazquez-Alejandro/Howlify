@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api/client";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+// recharts imports removed – KPIDashboard only renders cards, no charts
 
 export default function KPIDashboard() {
   const [kpi, setKpi] = useState<Record<string, number> | null>(null);
