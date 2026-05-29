@@ -9,6 +9,8 @@ import Seasonality from "../components/Seasonality";
 import {
   ResponsiveContainer,
   PieChart, Pie, Cell, Tooltip,
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  BarChart, Bar,
 } from "recharts";
 
 type RiskColor = "⚪" | "🔴" | "🟠" | "🟡" | "🟢";
@@ -248,11 +250,12 @@ export default function MonitorPage() {
             <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6" style={{ border: "1px solid rgba(107,114,128,0.4)" }}>
               <div className="flex gap-1 bg-gray-800/40 rounded-lg p-1 mb-5 w-fit overflow-x-auto flex-nowrap">
                 {(["general", "historico", "alertas", "ranking", "estacionalidad"] as const).map((t) => (
-                  <button key={t} onClick={() => setChartTab(t)} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${chartTab === t ? "bg-red-500/20 text-red-400" : "text-gray-500 hover:text-gray-300"}`}>
+                  <button key={t} onClick={() => setChartTab(t)} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all capitalize ${chartTab === t ? "bg-red-500/20 text-red-400" : "text-gray-500 hover:text-gray-300"}`}>
                     {t}
                   </button>
                 ))}
               </div>
+
               {chartTab === "general" && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
@@ -281,9 +284,98 @@ export default function MonitorPage() {
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
+                  <KPIDashboard />
                 </div>
               )}
-              {chartTab === "alertas" && <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div><AlertHistory /></div></div>}
+
+              {chartTab === "historico" && (() => {
+                const histData = selectedRow
+                  ? allHistory.filter(h => {
+                      const caza = cazas.find(c => c.id === h.caza_id);
+                      return caza && (caza.producto || caza.keyword) === selectedProducto;
+                    })
+                  : allHistory;
+                const grouped = new Map<number, { date: string; price: number }[]>();
+                for (const h of histData) {
+                  const key = h.caza_id;
+                  if (!grouped.has(key)) grouped.set(key, []);
+                  grouped.get(key)!.push({ date: new Date(h.checked_at).toLocaleDateString("es-AR", { day: "2-digit", month: "short" }), price: h.price });
+                }
+                const chartData = histData.length > 0 ? (() => {
+                  const dateMap = new Map<string, Record<string, number>>();
+                  for (const h of histData) {
+                    const d = new Date(h.checked_at).toLocaleDateString("es-AR", { day: "2-digit", month: "short" });
+                    if (!dateMap.has(d)) dateMap.set(d, {});
+                    dateMap.get(d)![String(h.caza_id)] = h.price;
+                  }
+                  return [...dateMap.entries()].map(([date, prices]) => ({ date, ...prices }));
+                })() : [];
+                const cazaIds = [...new Set(histData.map(h => h.caza_id))];
+                const LINE_COLORS = ["#ef4444", "#22c55e", "#eab308", "#3b82f6", "#a855f7", "#f97316", "#06b6d4"];
+                return (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-300 mb-4">{selectedRow ? `Historial: ${selectedProducto}` : "Historial de precios (todos los productos)"}</h4>
+                    {chartData.length > 1 ? (
+                      <ResponsiveContainer width="100%" height={280}>
+                        <LineChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                          <XAxis dataKey="date" tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                          <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                          <Tooltip contentStyle={{ backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: "8px", fontSize: "12px" }} />
+                          {cazaIds.slice(0, 7).map((cid, i) => (
+                            <Line key={cid} type="monotone" dataKey={String(cid)} stroke={LINE_COLORS[i % LINE_COLORS.length]} strokeWidth={2} dot={false} connectNulls />
+                          ))}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <p className="text-gray-500 text-sm text-center py-8">Seleccioná un producto en la tabla o esperá a que se acumulen datos</p>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {chartTab === "alertas" && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-300 mb-4">Historial de alertas</h4>
+                  <AlertHistory />
+                </div>
+              )}
+
+              {chartTab === "ranking" && (() => {
+                const ranking = [...radarRows]
+                  .filter(r => r.precio > 0)
+                  .sort((a, b) => {
+                    const diffA = a.maxP > 0 && a.minP > 0 ? Math.min(Math.abs(a.precio - a.minP), Math.abs(a.precio - a.maxP)) / (a.maxP - a.minP || 1) : 1;
+                    const diffB = b.maxP > 0 && b.minP > 0 ? Math.min(Math.abs(b.precio - b.minP), Math.abs(b.precio - b.maxP)) / (b.maxP - b.minP || 1) : 1;
+                    return diffA - diffB;
+                  });
+                return (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-300 mb-4">Ranking de cumplimiento MAP</h4>
+                    {ranking.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={Math.max(240, ranking.length * 36)}>
+                        <BarChart data={ranking.map(r => ({
+                          name: r.producto.slice(0, 25),
+                          violaciones: r.riesgo === "🔴" ? 1 : 0,
+                          alertas: r.riesgo === "🟡" || r.riesgo === "🟠" ? 1 : 0,
+                          ok: r.riesgo === "🟢" ? 1 : 0,
+                        }))} layout="vertical" margin={{ left: 10 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                          <XAxis type="number" tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                          <YAxis dataKey="name" type="category" width={130} tick={{ fill: "#9ca3af", fontSize: 10 }} />
+                          <Tooltip contentStyle={{ backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: "8px", fontSize: "12px" }} />
+                          <Bar dataKey="ok" stackId="a" fill={COLORS.verde} name="OK" />
+                          <Bar dataKey="alertas" stackId="a" fill={COLORS.amarillo} name="Alerta" />
+                          <Bar dataKey="violaciones" stackId="a" fill={COLORS.rojo} name="Violación" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <p className="text-gray-500 text-sm text-center py-8">No hay datos suficientes para el ranking</p>
+                    )}
+                  </div>
+                );
+              })()}
+
               {chartTab === "estacionalidad" && <Seasonality cazaId={selectedRow?.id ?? null} />}
             </div>
 
