@@ -109,7 +109,7 @@ export const api = {
 
   createCaza: (data: {
     keyword: string; url: string; precio_max: number;
-    frecuencia?: string; tipo?: string;
+    frecuencia?: string; tipo?: string; source?: string; etiqueta?: string;
   }) => request<{ message: string }>("/api/cazas", {
     method: "POST", body: JSON.stringify(data),
   }),
@@ -124,6 +124,10 @@ export const api = {
   deleteCaza: (id: number) => request<{ message: string }>(`/api/cazas/${id}`, { method: "DELETE" }),
 
   hunt: (id: number) => request<{ message: string; results: { title: string; price: number; url: string; source: string }[]; personalized_price_warning?: string }>(
+    `/api/hunt/${id}`, { method: "POST" }
+  ),
+
+  huntSingle: (id: number) => request<{ message: string; results: { title: string; price: number; url: string; source: string }[]; personalized_price_warning?: string }>(
     `/api/hunt/${id}`, { method: "POST" }
   ),
 
@@ -189,7 +193,7 @@ export const api = {
 
   monitorGrupoCazas: () => request<{ relaciones: { caza_id: number; grupo_id: number }[] }>("/api/monitor/grupo-cazas"),
 
-  assignMonitorGrupo: (caza_id: number, grupo_id: number) =>
+  assignMonitorGrupo: (caza_id: number, grupo_id: number | null) =>
     request<{ message: string }>("/api/monitor/grupo-cazas", {
       method: "PUT", body: JSON.stringify({ caza_id, grupo_id }),
     }),
@@ -234,6 +238,16 @@ export interface HuntResult {
   score?: number;
   price_error?: boolean;
   price_avg?: number;
+  seller?: {
+    seller_id: number;
+    nickname: string;
+    reputation: string;
+    reputation_label: string;
+    total_sales: number;
+    completed_sales: number;
+    positive_ratio: string | null;
+    permalink: string;
+  };
 }
 
 export interface MonitorRule {
@@ -259,6 +273,7 @@ export interface Infraccion {
   precio_detectado: number;
   fecha: string;
   status: string;
+  url_captura?: string;
 }
 
 export interface Grupo {

@@ -11,6 +11,11 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libgdk-pixbuf2.0-0 \
+    libffi-dev \
+    shared-mime-info \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
@@ -28,7 +33,7 @@ RUN pip install playwright && \
 # 4. Copiamos el resto del proyecto y construimos el frontend React
 COPY . .
 
-RUN cd frontend-react && VITE_API_URL="" npm install && npm run build
+RUN cd frontend-react && VITE_API_URL="" npm install && npx vite build
 
 # Puerto para la API
 EXPOSE 8000

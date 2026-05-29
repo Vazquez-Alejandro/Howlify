@@ -10,6 +10,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from urllib.parse import urlparse
 
+from supabase import create_client
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from scraper.scraper_pro import hunt_offers

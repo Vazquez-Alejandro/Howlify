@@ -106,4 +106,5 @@ redis==5.3.1
 # stripe eliminado — reemplazado por Mercado Pago (API REST con requests)
 pywebpush==2.3.0
 py-vapid==1.9.4
+weasyprint==68.1
 

@@ -58,7 +58,7 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
   const handleHunt = async () => {
     setResults(null);
     setLoadingResults(true);
-    const res = await api.huntSingle(caza.id);
+    const res = await api.hunt(caza.id);
     setLoadingResults(false);
     if (res.data?.results) {
       setResults(res.data.results);
@@ -222,6 +222,11 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                   <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
                     <span className="w-1.5 h-1.5 rounded-full bg-red-500/50 shrink-0" />
                     <span className="text-gray-300 text-sm truncate max-w-[140px] sm:max-w-none">{r.title?.slice(0, 65)}</span>
+                    {r.seller && (
+                      <span className="shrink-0 text-[10px] text-gray-500 flex items-center gap-0.5" title={`${r.seller.nickname} — ${r.seller.completed_sales} ventas`}>
+                        {r.seller.reputation_label?.split(" ")[0] || "⚪"} {r.seller.nickname?.slice(0, 12)}
+                      </span>
+                    )}
                     {r.price_error && (
                       <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-bold bg-yellow-500/20 text-yellow-400 rounded border border-yellow-500/30">
                         ERROR PRECIO

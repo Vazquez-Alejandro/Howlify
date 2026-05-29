@@ -413,6 +413,12 @@ def hunt_single(caza_id: int, authorization: str = Header(default="")):
                     drop_pct = int((1 - precio_r / ref) * 100) if ref > 0 else 0
                     r["drop_pct"] = drop_pct
                     r["match_grande"] = drop_pct >= 25
+    if resultados:
+        try:
+            from services.seller_service import enrich_results_with_sellers
+            enrich_results_with_sellers(resultados)
+        except Exception:
+            pass
     return {"results": resultados}
 
 @app.post("/api/hunt/all")
@@ -776,17 +782,31 @@ def get_alert_history(authorization: str = Header(default="")):
 def get_kpi_summary(authorization: str = Header(default="")):
     uid = get_user_id(authorization)
 
-    cazas = supabase.table("cazas").select("id, precio_max, last_price").eq("user_id", uid).execute()
+    cazas = supabase.table("cazas").select("id, precio_max").eq("user_id", uid).execute()
     cazas_data = cazas.data or []
     total_cazas = len(cazas_data)
     ahorro_total = 0
     productos_con_precio = 0
+
+    c_ids = [str(c["id"]) for c in cazas_data]
+    if c_ids:
+        all_hist = supabase.table("price_history").select("caza_id, price").in_("caza_id", c_ids).execute()
+        hist_map: dict[int, list[float]] = {}
+        for h in (all_hist.data or []):
+            cid = h.get("caza_id")
+            if cid:
+                hist_map.setdefault(int(cid), []).append(float(h["price"]))
+    else:
+        hist_map = {}
+
     for c in cazas_data:
-        lp = c.get("last_price")
-        pm = c.get("precio_max")
-        if lp and pm and lp < pm:
+        cid = int(c["id"])
+        pm = c.get("precio_max") or 0
+        prices = hist_map.get(cid, [])
+        lp = max(prices) if prices else 0
+        if lp > 0 and pm > 0 and lp < pm:
             ahorro_total += pm - lp
-        if lp:
+        if lp > 0:
             productos_con_precio += 1
 
     alertas = supabase.table("alertas_enviadas").select("id, created_at").eq("user_id", uid).execute()
@@ -796,12 +816,15 @@ def get_kpi_summary(authorization: str = Header(default="")):
     prices = [float(h["price"]) for h in (res_hist.data or []) if h.get("price")]
     precio_promedio = round(sum(prices) / len(prices), 2) if prices else 0
 
-    rules = supabase.table("monitor_rules").select("caza_id, alert_config").eq("user_id", uid).eq("is_active", True).execute()
-    reglas_activas = 0
-    for r in (rules.data or []):
-        ac = r.get("alert_config")
-        if ac and (isinstance(ac, list) and len(ac) > 0):
-            reglas_activas += 1
+    try:
+        rules = supabase.table("monitor_rules").select("caza_id, alert_config").eq("user_id", uid).eq("is_active", True).execute()
+        reglas_activas = 0
+        for r in (rules.data or []):
+            ac = r.get("alert_config")
+            if ac and (isinstance(ac, list) and len(ac) > 0):
+                reglas_activas += 1
+    except Exception:
+        reglas_activas = 0
 
     return {
         "total_cazas": total_cazas,
@@ -910,6 +933,57 @@ def test_alert_rule(body: dict, authorization: str = Header(default="")):
         return {"message": "Reglas evaluadas. Revisá tus notificaciones."}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": f"Error: {e}"})
+
+@app.get("/api/reports/pdf")
+def download_pdf_report(authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    try:
+        from services.pdf_service import generate_monitor_pdf
+
+        user = supabase.table("profiles").select("username, email").eq("user_id", uid).limit(1).execute()
+        user_name = (user.data or [{}])[0].get("username") or (user.data or [{}])[0].get("email") or "Usuario"
+
+        cazas = supabase.table("cazas").select("id, producto, precio_max").eq("user_id", uid).execute()
+        cazas_data = cazas.data or []
+        rules = supabase.table("monitor_rules").select("*").eq("user_id", uid).execute()
+        rules_map = {str(r["caza_id"]): r for r in (rules.data or [])}
+        price_map = {}
+        for c in cazas_data:
+            row = supabase.table("price_history").select("price").eq("caza_id", c["id"]).order("checked_at", desc=True).limit(1).execute()
+            if row.data:
+                price_map[c["id"]] = float(row.data[0]["price"])
+
+        ahorro_total = 0
+        radar_data = []
+        for c in cazas_data:
+            cid = c["id"]
+            curr = price_map.get(cid, 0)
+            pm = c.get("precio_max") or 0
+            rule = rules_map.get(str(cid))
+            mn = float(rule["min_price_allowed"]) if rule and rule.get("min_price_allowed") else 0
+            mx = float(rule["max_price_allowed"]) if rule and rule.get("max_price_allowed") else 0
+            riesgo = "⚪"
+            if mn > 0 or mx > 0:
+                if curr <= 0: riesgo = "⚪"
+                elif (mn > 0 and curr < mn - 0.01) or (mx > 0 and curr > mx + 0.01): riesgo = "🔴"
+                elif curr == mn or curr == mx: riesgo = "🟠"
+                elif (mn > 0 and curr <= mn * 1.05) or (mx > 0 and curr >= mx * 0.95): riesgo = "🟡"
+                else: riesgo = "🟢"
+            if curr < pm:
+                ahorro_total += pm - curr
+            radar_data.append({"producto": c.get("producto") or f"#{cid}", "precio": curr, "minP": mn, "maxP": mx, "riesgo": riesgo})
+
+        alertas = supabase.table("alertas_enviadas").select("id").eq("user_id", uid).execute()
+        total_alertas = len(alertas.data or [])
+        all_prices = [p["price"] for p in (supabase.table("price_history").select("price").eq("user_id", uid).execute().data or []) if p.get("price")]
+        precio_prom = round(sum(all_prices) / len(all_prices), 2) if all_prices else 0
+
+        kpi = {"total_cazas": len(cazas_data), "productos_con_precio": len(price_map), "ahorro_total": ahorro_total, "total_alertas": total_alertas, "precio_promedio": precio_prom}
+        pdf_bytes = generate_monitor_pdf(uid, user_name, radar_data, kpi)
+
+        return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=howlify_reporte_{datetime.now().strftime('%Y%m%d')}.pdf"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Error generando PDF: {e}"})
 
 # ─── Google Sheets Export ─────────────────────────────────
 

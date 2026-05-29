@@ -528,8 +528,7 @@ function NewCazaForm({ onCreated }: { onCreated: () => void }) {
     if (!form.keyword.trim()) { setFormError("Ingresá un nombre o keyword"); return; }
     if (!form.url.trim()) { setFormError("Ingresá una URL"); return; }
     setLoading(true);
-    const sourceMap: Record<CazaTipo, string> = { producto: "generic", vuelo: "despegar", alojamiento: "airbnb" };
-    const res = await api.createCaza({ ...form, tipo: alertaTipo, source: sourceMap[tipo] });
+    const res = await api.createCaza({ ...form, tipo: alertaTipo });
     setLoading(false);
     if (res.error) { setFormError(traducirError(res.error)); return; }
     setOpen(false);

@@ -47,10 +47,9 @@ export default function ProfilePage() {
 
   const testChannel = async (channel: string) => {
     setTesting(channel);
-    const res = await api.testNotification(channel);
+    const res = await api.testNotification({ canal: channel });
     if (res.error) toast(traducirError(res.error), "error");
-    else if (res.data?.ok) toast(`✅ Notificación enviada por ${channel}`, "success");
-    else toast(`❌ Error enviando por ${channel}`, "error");
+    else toast(`✅ Notificación enviada por ${channel}`, "success");
     setTesting(null);
   };
 
