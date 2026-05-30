@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED 1
 
 WORKDIR /app
 
-# 1. Instalamos solo lo mínimo indispensable para empezar: Curl y Node
+# 1. Instalamos dependencias de sistema
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
@@ -16,8 +16,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdk-pixbuf2.0-0 \
     libffi-dev \
     shared-mime-info \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Instalamos las dependencias de Python
@@ -25,15 +23,13 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# 3. LA CLAVE: Playwright instala sus propias dependencias de sistema
+# 3. Playwright (solo chromium)
 RUN pip install playwright && \
     playwright install-deps chromium && \
     playwright install chromium
 
-# 4. Copiamos el resto del proyecto y construimos el frontend React
+# 4. Copiamos el resto del proyecto
 COPY . .
-
-RUN cd frontend-react && VITE_API_URL="" npm install && npx vite build
 
 # Puerto para la API
 EXPOSE 8000
