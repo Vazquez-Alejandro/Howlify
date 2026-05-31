@@ -16,7 +16,7 @@ const STEPS: Step[] = [
   {
     icon: "🔍",
     title: "Creá una cacería",
-    description: "Presioná el botón para agregar un producto que querés monitorear. Puedes buscar por keyword o pegar un link directo de Mercado Libre.",
+    description: "Presioná el botón para agregar un producto que querés monitorear. Podes buscar por keyword o pegar un link directo de Mercado Libre.",
     tip: "+ Nueva Cacería",
   },
   {
@@ -33,7 +33,7 @@ const STEPS: Step[] = [
   {
     icon: "⚙️",
     title: "Configurá tu perfil",
-    description: "En Configuración podés cambiar contraseña, email y preferencias de notificación. También podés ver tu plan en Facturación.",
+    description: "En Configuración podes cambiar contraseña, email y preferencias de notificación. También podes ver tu plan en Facturación.",
   },
 ];
 
@@ -91,13 +91,14 @@ export default function OnboardingTour() {
   return (
     <>
       <div
-        className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm transition-opacity"
+        className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm"
         onClick={finish}
       />
 
-      <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[10000] flex items-center justify-center p-5">
         <div
-          className="bg-gray-900 rounded-3xl shadow-2xl w-full max-w-[400px] pointer-events-auto overflow-hidden border border-gray-700/40"
+          className="bg-gray-900 rounded-2xl shadow-2xl pointer-events-auto overflow-hidden border border-gray-700/40"
+          style={{ width: "380px" }}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Top progress bar */}
@@ -108,54 +109,59 @@ export default function OnboardingTour() {
             />
           </div>
 
-          <div className="px-8 pt-8 pb-7">
-            {/* Step indicator */}
-            {!isWelcome && (
-              <div className="mb-6">
-                <StepIndicator total={STEPS.length - 1} current={step - 1} />
-              </div>
-            )}
-
-            {/* Icon */}
-            <div className="flex justify-center mb-5">
-              <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/15 flex items-center justify-center">
-                <span className="text-2xl">{s.icon}</span>
-              </div>
-            </div>
-
-            {/* Title + description */}
-            <div className="text-center mb-7">
-              <h2 className="text-lg font-bold text-white mb-2">{s.title}</h2>
-              <p className="text-sm text-gray-400 leading-relaxed">{s.description}</p>
-              {s.tip && (
-                <div className="inline-block mt-3 px-4 py-1.5 bg-red-500/10 border border-red-500/20 rounded-lg">
-                  <span className="text-sm font-semibold text-red-400">{s.tip}</span>
+          {/* Content wrapper with fixed height */}
+          <div className="flex flex-col" style={{ minHeight: "340px" }}>
+            <div className="flex-1 flex flex-col justify-between p-7">
+              {/* Step indicator */}
+              {!isWelcome && (
+                <div className="mb-5">
+                  <StepIndicator total={STEPS.length - 1} current={step - 1} />
                 </div>
               )}
+
+              {/* Icon */}
+              <div className="flex justify-center mb-5">
+                <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/15 flex items-center justify-center">
+                  <span className="text-2xl">{s.icon}</span>
+                </div>
+              </div>
+
+              {/* Title + description */}
+              <div className="text-center flex-1">
+                <h2 className="text-lg font-bold text-white mb-2">{s.title}</h2>
+                <p className="text-sm text-gray-400 leading-relaxed">{s.description}</p>
+                {s.tip && (
+                  <div className="inline-block mt-3 px-4 py-1.5 bg-red-500/10 border border-red-500/20 rounded-lg">
+                    <span className="text-sm font-semibold text-red-400">{s.tip}</span>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Buttons */}
-            <div className="flex items-center gap-3">
-              {!isWelcome && (
+            {/* Buttons - always at bottom */}
+            <div className="px-7 pb-7">
+              <div className="flex items-center gap-2 pt-4 border-t border-gray-800/50">
+                {!isWelcome && (
+                  <button
+                    onClick={handlePrev}
+                    className="px-3 py-2.5 bg-gray-800/60 text-gray-400 rounded-xl text-xs font-medium hover:bg-gray-700/60 hover:text-gray-200 transition-all border border-gray-700/40 whitespace-nowrap"
+                  >
+                    Atrás
+                  </button>
+                )}
                 <button
-                  onClick={handlePrev}
-                  className="px-4 py-2.5 bg-gray-800/60 text-gray-400 rounded-xl text-sm font-medium hover:bg-gray-700/60 hover:text-gray-200 transition-all border border-gray-700/40"
+                  onClick={finish}
+                  className="px-3 py-2.5 text-gray-500 hover:text-gray-300 text-xs transition-colors whitespace-nowrap"
                 >
-                  ← Atrás
+                  Saltar
                 </button>
-              )}
-              <button
-                onClick={finish}
-                className="px-4 py-2.5 text-gray-500 hover:text-gray-300 text-sm transition-colors"
-              >
-                Saltar tour
-              </button>
-              <button
-                onClick={isLast ? finish : handleNext}
-                className="flex-1 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl text-sm font-semibold hover:from-red-600 hover:to-red-700 transition-all shadow-lg shadow-red-500/20 active:scale-[0.98]"
-              >
-                {isWelcome ? "Empezar" : isLast ? "¡Listo! 🚀" : "Siguiente →"}
-              </button>
+                <button
+                  onClick={isLast ? finish : handleNext}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl text-xs font-semibold hover:from-red-600 hover:to-red-700 transition-all shadow-lg shadow-red-500/20 active:scale-[0.98]"
+                >
+                  {isWelcome ? "Empezar" : isLast ? "Listo" : "Siguiente"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
