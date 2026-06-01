@@ -601,16 +601,18 @@ def get_monitor_rules(authorization: str = Header(default="")):
 def upsert_monitor_rule(caza_id: int, body: dict, authorization: str = Header(default="")):
     try:
         uid = get_user_id(authorization)
+        existing = supabase.table("monitor_rules").select("*").eq("user_id", uid).eq("caza_id", caza_id).limit(1).execute()
+        prev = existing.data[0] if existing.data else {}
         payload = {
             "user_id": uid,
             "caza_id": caza_id,
-            "product_name": body.get("product_name", "").strip(),
-            "product_url": body.get("product_url", "").strip(),
-            "source": body.get("source", "generic").strip().lower(),
-            "target_price": int(body.get("target_price", 0)),
-            "min_price_allowed": int(body.get("min_price_allowed", 0)),
-            "max_price_allowed": int(body.get("max_price_allowed", 0)),
-            "alert_config": body.get("alert_config", []),
+            "product_name": body.get("product_name") or prev.get("product_name", ""),
+            "product_url": body.get("product_url") or prev.get("product_url", ""),
+            "source": body.get("source") or prev.get("source", "generic"),
+            "target_price": body.get("target_price") if body.get("target_price") is not None else prev.get("target_price", 0),
+            "min_price_allowed": body.get("min_price_allowed") if body.get("min_price_allowed") is not None else prev.get("min_price_allowed", 0),
+            "max_price_allowed": body.get("max_price_allowed") if body.get("max_price_allowed") is not None else prev.get("max_price_allowed", 0),
+            "alert_config": body.get("alert_config", prev.get("alert_config", [])),
             "is_active": True,
         }
         supabase.table("monitor_rules").upsert(payload, on_conflict="caza_id").execute()

@@ -88,15 +88,12 @@ export default function MonitorPage() {
 
   const saveAlertConfig = useCallback(async (cazaId: number, config: AlertRule[]) => {
     const existing = rulesMap.get(cazaId);
-    await api.upsertMonitorRule(cazaId, {
-      product_name: existing?.product_name || "",
-      product_url: existing?.product_url || "",
-      source: existing?.source || "generic",
-      target_price: existing?.target_price || 0,
+    const payload: Record<string, unknown> = {
       min_price_allowed: existing?.min_price_allowed || 0,
       max_price_allowed: existing?.max_price_allowed || 0,
       alert_config: config,
-    });
+    };
+    await api.upsertMonitorRule(cazaId, payload);
     setRules(prev => prev.map(r => r.caza_id === cazaId ? { ...r, alert_config: config } : r));
   }, [rulesMap]);
   const gruposMap = useMemo(() => new Map(grupos.map(g => [g.id, g])), [grupos]);
