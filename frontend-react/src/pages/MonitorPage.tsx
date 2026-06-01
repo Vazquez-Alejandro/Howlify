@@ -284,7 +284,6 @@ export default function MonitorPage() {
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  <KPIDashboard />
                 </div>
               )}
 
