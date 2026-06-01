@@ -264,6 +264,7 @@ class ProfileUpdate(BaseModel):
     username: str | None = None
     telegram_id: str | None = None
     whatsapp_number: str | None = None
+    email_notifications: bool | None = None
     report_enabled: bool | None = None
     report_time: str | None = None
     report_days: list[int] | None = None

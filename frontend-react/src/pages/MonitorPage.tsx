@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { api, type Caza, type MonitorRule, type AlertRule, type Grupo } from "../api/client";
 import PageTransition from "../components/PageTransition";
 import AlertRuleEditor from "../components/AlertRuleEditor";
@@ -73,6 +73,32 @@ export default function MonitorPage() {
   useEffect(() => { loadData(); }, []);
 
   const rulesMap = useMemo(() => new Map(rules.map(r => [r.caza_id, r])), [rules]);
+
+  useEffect(() => {
+    if (!selectedProducto) { setAlertConfig([]); return; }
+    const row = cazas.find(b => (b.producto || b.keyword || "").toUpperCase() === selectedProducto);
+    if (!row) { setAlertConfig([]); return; }
+    const rule = rulesMap.get(row.id);
+    if (rule?.alert_config && Array.isArray(rule.alert_config)) {
+      setAlertConfig(rule.alert_config);
+    } else {
+      setAlertConfig([]);
+    }
+  }, [selectedProducto, cazas, rulesMap]);
+
+  const saveAlertConfig = useCallback(async (cazaId: number, config: AlertRule[]) => {
+    const existing = rulesMap.get(cazaId);
+    await api.upsertMonitorRule(cazaId, {
+      product_name: existing?.product_name || "",
+      product_url: existing?.product_url || "",
+      source: existing?.source || "generic",
+      target_price: existing?.target_price || 0,
+      min_price_allowed: existing?.min_price_allowed || 0,
+      max_price_allowed: existing?.max_price_allowed || 0,
+      alert_config: config,
+    });
+    setRules(prev => prev.map(r => r.caza_id === cazaId ? { ...r, alert_config: config } : r));
+  }, [rulesMap]);
   const gruposMap = useMemo(() => new Map(grupos.map(g => [g.id, g])), [grupos]);
 
   const radarRows = useMemo(() => cazas.map((b) => {
@@ -226,30 +252,36 @@ export default function MonitorPage() {
                   {radarRows.map((r) => <option key={r.id} value={r.producto}>{r.producto}</option>)}
                 </select>
                 {selectedRow && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        { label: "Precio Actual", value: `$${selectedRow.precio.toLocaleString()}` },
-                        { label: "Estado", value: selectedRow.riesgo },
-                        { label: "MAP Mín", value: `$${selectedRow.minP.toLocaleString()}` },
-                        { label: "MAP Máx", value: `$${selectedRow.maxP.toLocaleString()}` },
-                      ].map((s) => (
-                        <div key={s.label} className="bg-gray-800/30 rounded-xl p-3 text-center">
-                          <p className="text-[10px] text-gray-500 uppercase">{s.label}</p>
-                          <p className="text-sm font-bold text-white">{s.value}</p>
-                        </div>
-                      ))}
-                    </div>
-                    <AlertRuleEditor rules={alertConfig} onChange={setAlertConfig} />
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: "Precio Actual", value: `$${selectedRow.precio.toLocaleString()}` },
+                      { label: "Estado", value: selectedRow.riesgo },
+                      { label: "MAP Mín", value: `$${selectedRow.minP.toLocaleString()}` },
+                      { label: "MAP Máx", value: `$${selectedRow.maxP.toLocaleString()}` },
+                    ].map((s) => (
+                      <div key={s.label} className="bg-gray-800/30 rounded-xl p-3 text-center">
+                        <p className="text-[10px] text-gray-500 uppercase">{s.label}</p>
+                        <p className="text-sm font-bold text-white">{s.value}</p>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
-              <KPIDashboard />
+              <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6" style={{ border: "1px solid rgba(107,114,128,0.4)" }}>
+                <h3 className="text-sm font-semibold text-gray-300 mb-4">Configurar alertas</h3>
+                {selectedRow ? (
+                  <AlertRuleEditor rules={alertConfig} onChange={(newConfig) => { setAlertConfig(newConfig); saveAlertConfig(selectedRow.id, newConfig); }} />
+                ) : (
+                  <p className="text-sm text-gray-500">Seleccioná un producto para configurar alertas</p>
+                )}
+              </div>
             </div>
+
+            <KPIDashboard />
 
             <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6" style={{ border: "1px solid rgba(107,114,128,0.4)" }}>
               <div className="flex gap-1 bg-gray-800/40 rounded-lg p-1 mb-5 w-fit overflow-x-auto flex-nowrap">
-                {(["general", "historico", "alertas", "ranking", "estacionalidad"] as const).map((t) => (
+                {(["general", "historico", "ranking", "estacionalidad"] as const).map((t) => (
                   <button key={t} onClick={() => setChartTab(t)} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all capitalize ${chartTab === t ? "bg-red-500/20 text-red-400" : "text-gray-500 hover:text-gray-300"}`}>
                     {t}
                   </button>
@@ -284,6 +316,25 @@ export default function MonitorPage() {
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-300 mb-4">Distribución de precios</h4>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart data={radarRows.filter(r => r.precio > 0).map(r => ({
+                        name: r.producto.slice(0, 15),
+                        precio: r.precio,
+                        min: r.minP,
+                        max: r.maxP,
+                      }))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                        <XAxis dataKey="name" tick={{ fill: "#9ca3af", fontSize: 9 }} angle={-30} textAnchor="end" height={60} />
+                        <YAxis tick={{ fill: "#9ca3af", fontSize: 10 }} />
+                        <Tooltip contentStyle={{ backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: "8px", fontSize: "12px" }} />
+                        <Bar dataKey="min" fill={COLORS.rojo} name="MAP Mín" radius={[2, 2, 0, 0]} />
+                        <Bar dataKey="precio" fill={COLORS.verde} name="Precio Actual" radius={[2, 2, 0, 0]} />
+                        <Bar dataKey="max" fill={COLORS.amarillo} name="MAP Máx" radius={[2, 2, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               )}
 
@@ -294,12 +345,6 @@ export default function MonitorPage() {
                       return caza && (caza.producto || caza.keyword) === selectedProducto;
                     })
                   : allHistory;
-                const grouped = new Map<number, { date: string; price: number }[]>();
-                for (const h of histData) {
-                  const key = h.caza_id;
-                  if (!grouped.has(key)) grouped.set(key, []);
-                  grouped.get(key)!.push({ date: new Date(h.checked_at).toLocaleDateString("es-AR", { day: "2-digit", month: "short" }), price: h.price });
-                }
                 const chartData = histData.length > 0 ? (() => {
                   const dateMap = new Map<string, Record<string, number>>();
                   for (const h of histData) {
@@ -332,13 +377,6 @@ export default function MonitorPage() {
                   </div>
                 );
               })()}
-
-              {chartTab === "alertas" && (
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-300 mb-4">Historial de alertas</h4>
-                  <AlertHistory />
-                </div>
-              )}
 
               {chartTab === "ranking" && (() => {
                 const ranking = [...radarRows]
@@ -376,6 +414,11 @@ export default function MonitorPage() {
               })()}
 
               {chartTab === "estacionalidad" && <Seasonality cazaId={selectedRow?.id ?? null} />}
+            </div>
+
+            <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6" style={{ border: "1px solid rgba(107,114,128,0.4)" }}>
+              <h3 className="text-sm font-semibold text-gray-300 mb-4">📋 Historial de alertas</h3>
+              <AlertHistory />
             </div>
 
             <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 bg-gray-900/40 rounded-xl px-5 py-3" style={{ border: "1px solid rgba(107,114,128,0.4)" }}>
