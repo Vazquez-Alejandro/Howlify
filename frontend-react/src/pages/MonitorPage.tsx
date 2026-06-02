@@ -50,6 +50,7 @@ export default function MonitorPage() {
   const [evidenciaModal, setEvidenciaModal] = useState<string | null>(null);
   const [alertConfig, setAlertConfig] = useState<AlertRule[]>([]);
   const [showAllProducts, setShowAllProducts] = useState(false);
+  const [alertHistoryOpen, setAlertHistoryOpen] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -425,9 +426,16 @@ export default function MonitorPage() {
               {chartTab === "estacionalidad" && <Seasonality cazaId={selectedRow?.id ?? null} />}
             </div>
 
-            <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6" style={{ border: "1px solid rgba(107,114,128,0.4)" }}>
-              <h3 className="text-sm font-semibold text-gray-300 mb-4">📋 Historial de alertas</h3>
-              <AlertHistory />
+            <div className="bg-gray-900/60 rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(107,114,128,0.4)" }}>
+              <button onClick={() => setAlertHistoryOpen(!alertHistoryOpen)} className="w-full flex items-center justify-between px-4 md:px-6 py-4 text-left hover:bg-gray-800/20 transition-colors">
+                <h3 className="text-sm font-semibold text-gray-300">Historial de alertas</h3>
+                <span className="text-gray-500 text-xs">{alertHistoryOpen ? "▾" : "▸"}</span>
+              </button>
+              {alertHistoryOpen && (
+                <div className="px-4 md:px-6 pb-4 md:pb-6">
+                  <AlertHistory />
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 bg-gray-900/40 rounded-xl px-5 py-3" style={{ border: "1px solid rgba(107,114,128,0.4)" }}>
