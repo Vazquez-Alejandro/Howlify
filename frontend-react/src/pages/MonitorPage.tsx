@@ -49,6 +49,7 @@ export default function MonitorPage() {
   const [chartTab, setChartTab] = useState<"general" | "historico" | "alertas" | "ranking" | "estacionalidad">("general");
   const [evidenciaModal, setEvidenciaModal] = useState<string | null>(null);
   const [alertConfig, setAlertConfig] = useState<AlertRule[]>([]);
+  const [showAllProducts, setShowAllProducts] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -140,6 +141,9 @@ export default function MonitorPage() {
       : copy.sort((a, b) => a.id - b.id);
   }, [radarRows, mode]);
 
+  const PAGE_SIZE = 10;
+  const displayedProducts = showAllProducts ? sorted : sorted.slice(0, PAGE_SIZE);
+
   const selectedRow = radarRows.find(r => r.producto === selectedProducto);
 
   const stats = useMemo(() => {
@@ -211,10 +215,10 @@ export default function MonitorPage() {
                   </div>
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: showAllProducts ? "none" : "440px" }}>
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-gray-500 text-xs uppercase border-b border-gray-800/50">
+                    <tr className="text-gray-500 text-xs uppercase border-b border-gray-800/50 sticky top-0 bg-gray-900/60">
                       <th className="py-3 pr-4">Riesgo</th>
                       <th className="py-3 pr-4">ID</th>
                       <th className="py-3 pr-4 text-left">Producto</th>
@@ -225,7 +229,7 @@ export default function MonitorPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sorted.map((row) => (
+                    {displayedProducts.map((row) => (
                       <tr key={row.id} onClick={() => setSelectedProducto(row.producto)} className={`border-b border-gray-800/30 text-gray-300 hover:bg-gray-800/20 cursor-pointer ${selectedProducto === row.producto ? "bg-red-500/5" : ""}`}>
                         <td className="py-3 pr-4 text-lg">{row.riesgo}</td>
                         <td className="py-3 pr-4 text-gray-500 text-xs">{row.id}</td>
@@ -239,6 +243,14 @@ export default function MonitorPage() {
                   </tbody>
                 </table>
               </div>
+              {sorted.length > PAGE_SIZE && (
+                <button
+                  onClick={() => setShowAllProducts(!showAllProducts)}
+                  className="w-full py-2.5 text-sm text-gray-400 hover:text-white transition-colors"
+                >
+                  {showAllProducts ? "Mostrar menos" : `Mostrar todos (${sorted.length})`}
+                </button>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
