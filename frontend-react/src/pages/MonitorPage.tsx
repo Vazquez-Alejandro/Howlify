@@ -46,7 +46,7 @@ export default function MonitorPage() {
   const [loading, setLoading] = useState(true);
   const [selectedProducto, setSelectedProducto] = useState<string | null>(null);
   const [mode, setMode] = useState<"id" | "grupo">("id");
-  const [chartTab, setChartTab] = useState<"general" | "historico" | "alertas" | "ranking" | "estacionalidad">("general");
+  const [chartTab, setChartTab] = useState<"general" | "historico" | "ranking" | "estacionalidad">("general");
   const [evidenciaModal, setEvidenciaModal] = useState<string | null>(null);
   const [alertConfig, setAlertConfig] = useState<AlertRule[]>([]);
   const [showAllProducts, setShowAllProducts] = useState(false);
