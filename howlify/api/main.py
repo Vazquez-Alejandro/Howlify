@@ -701,8 +701,17 @@ def get_infracciones(authorization: str = Header(default="")):
     return {"infracciones": inf.data or []}
 
 @app.get("/api/monitor/grupos")
-def get_grupos():
-    res = supabase.table("grupos").select("*").execute()
+def get_grupos(authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    user_cazas = supabase.table("cazas").select("id").eq("user_id", uid).execute()
+    caza_ids = [c["id"] for c in (user_cazas.data or [])]
+    if not caza_ids:
+        return {"grupos": []}
+    rels = supabase.table("grupo_cazas").select("grupo_id").in_("caza_id", caza_ids).execute()
+    grupo_ids = list({r["grupo_id"] for r in (rels.data or [])})
+    if not grupo_ids:
+        return {"grupos": []}
+    res = supabase.table("grupos").select("*").in_("id", grupo_ids).execute()
     return {"grupos": res.data or []}
 
 @app.post("/api/monitor/grupos")
@@ -716,14 +725,26 @@ def create_grupo(body: dict, authorization: str = Header(default="")):
 
 @app.delete("/api/monitor/grupos/{grupo_id}")
 def delete_grupo(grupo_id: int, authorization: str = Header(default="")):
-    get_user_id(authorization)
+    uid = get_user_id(authorization)
+    user_cazas = supabase.table("cazas").select("id").eq("user_id", uid).execute()
+    caza_ids = [c["id"] for c in (user_cazas.data or [])]
+    if not caza_ids:
+        raise HTTPException(status_code=404, detail="Grupo no encontrado")
+    rels = supabase.table("grupo_cazas").select("caza_id").eq("grupo_id", grupo_id).in_("caza_id", caza_ids).limit(1).execute()
+    if not rels.data:
+        raise HTTPException(status_code=404, detail="Grupo no encontrado")
     supabase.table("grupo_cazas").delete().eq("grupo_id", grupo_id).execute()
     supabase.table("grupos").delete().eq("id", grupo_id).execute()
     return {"message": "Grupo eliminado"}
 
 @app.get("/api/monitor/grupo-cazas")
-def get_grupo_cazas():
-    res = supabase.table("grupo_cazas").select("*").execute()
+def get_grupo_cazas(authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    user_cazas = supabase.table("cazas").select("id").eq("user_id", uid).execute()
+    caza_ids = [c["id"] for c in (user_cazas.data or [])]
+    if not caza_ids:
+        return {"relaciones": []}
+    res = supabase.table("grupo_cazas").select("*").in_("caza_id", caza_ids).execute()
     return {"relaciones": res.data or []}
 
 @app.put("/api/monitor/grupo-cazas")

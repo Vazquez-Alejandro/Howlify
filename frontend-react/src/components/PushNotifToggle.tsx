@@ -19,8 +19,8 @@ export default function PushNotifToggle() {
     if ("serviceWorker" in navigator && "PushManager" in window) {
       setSupported(true);
       navigator.serviceWorker.ready.then(reg => {
-        reg.pushManager.getSubscription().then(sub => setSubscribed(!!sub));
-      });
+        reg.pushManager.getSubscription().then(sub => setSubscribed(!!sub)).catch(() => {});
+      }).catch(() => {});
     }
   }, []);
 

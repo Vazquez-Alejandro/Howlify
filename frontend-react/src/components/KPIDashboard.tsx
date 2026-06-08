@@ -22,12 +22,12 @@ export default function KPIDashboard() {
   if (loading || !kpi) return null;
 
   const cards = [
-    { label: "Cacerías activas", value: kpi.total_cazas, icon: "📦", color: "text-white" },
-    { label: "Con precio", value: kpi.productos_con_precio, icon: "💰", color: "text-green-400" },
-    { label: "Ahorro total", value: `$${kpi.ahorro_total.toLocaleString()}`, icon: "💵", color: "text-emerald-400" },
-    { label: "Alertas enviadas", value: kpi.total_alertas, icon: "🔔", color: "text-yellow-400" },
-    { label: "Precio promedio", value: `$${kpi.precio_promedio.toLocaleString()}`, icon: "📊", color: "text-blue-400" },
-    { label: "Reglas activas", value: kpi.reglas_activas, icon: "⚙️", color: "text-purple-400" },
+    { label: "Cacerías activas", value: kpi.total_cazas ?? 0, icon: "📦", color: "text-white" },
+    { label: "Con precio", value: kpi.productos_con_precio ?? 0, icon: "💰", color: "text-green-400" },
+    { label: "Ahorro total", value: `$${(kpi.ahorro_total ?? 0).toLocaleString()}`, icon: "💵", color: "text-emerald-400" },
+    { label: "Alertas enviadas", value: kpi.total_alertas ?? 0, icon: "🔔", color: "text-yellow-400" },
+    { label: "Precio promedio", value: `$${(kpi.precio_promedio ?? 0).toLocaleString()}`, icon: "📊", color: "text-blue-400" },
+    { label: "Reglas activas", value: kpi.reglas_activas ?? 0, icon: "⚙️", color: "text-purple-400" },
   ];
 
   return (

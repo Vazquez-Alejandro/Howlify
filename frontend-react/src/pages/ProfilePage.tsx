@@ -42,30 +42,40 @@ export default function ProfilePage() {
         setReportDays(Array.isArray(p.report_days) ? p.report_days : [1, 2, 3, 4, 5]);
       }
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, []);
 
   const saveProfile = async () => {
     setSaving(true);
-    const res = await api.updateProfile({
-      telegram_id: telegramId || null,
-      whatsapp_number: whatsapp || null,
-      email_notifications: emailNotifications,
-      report_enabled: reportEnabled,
-      report_time: reportTime,
-      report_days: reportDays,
-    });
-    if (res.error) toast(traducirError(res.error), "error");
-    else toast("Perfil actualizado", "success");
-    setSaving(false);
+    try {
+      const res = await api.updateProfile({
+        telegram_id: telegramId || null,
+        whatsapp_number: whatsapp || null,
+        email_notifications: emailNotifications,
+        report_enabled: reportEnabled,
+        report_time: reportTime,
+        report_days: reportDays,
+      });
+      if (res.error) toast(traducirError(res.error), "error");
+      else toast("Perfil actualizado", "success");
+    } catch {
+      toast("Error de red", "error");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const testChannel = async (channel: string) => {
     setTesting(channel);
-    const res = await api.testNotification({ canal: channel });
-    if (res.error) toast(traducirError(res.error), "error");
-    else toast(`Notificación enviada por ${channel}`, "success");
-    setTesting(null);
+    try {
+      const res = await api.testNotification({ canal: channel });
+      if (res.error) toast(traducirError(res.error), "error");
+      else toast(`Notificación enviada por ${channel}`, "success");
+    } catch {
+      toast("Error de red", "error");
+    } finally {
+      setTesting(null);
+    }
   };
 
   const toggleDay = (day: number) => {

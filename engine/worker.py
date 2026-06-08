@@ -134,14 +134,10 @@ def main():
                                 except Exception as e:
                                     print(f"❌ Error buscando perfil: {e}")
 
-                            # 🛠️ PUENTE DE RESPALDO (Hardcodeado para Alejandro)
+                            # Si no hay perfil, skip
                             if not user_profile:
-                                print(f"🛠️ Usando perfil de respaldo manual para {caza.get('user_id')}")
-                                user_profile = {
-                                    "email": "howlify.app@gmail.com",
-                                    "telegram_id": "8091046688",
-                                    "plan": "business_monitor"
-                                }
+                                print(f"⚠️ No se encontró perfil para {caza.get('user_id')}, saltando")
+                                continue
 
                             if user_profile and isinstance(user_profile, dict) and user_profile.get('email'):
                                 print(f"📣 ¡GATILLO! Enviando notificación {estado} a {user_profile.get('email')}")

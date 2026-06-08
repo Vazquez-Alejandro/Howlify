@@ -21,7 +21,7 @@ export default function AlertHistory() {
       {alerts.map((a, i) => {
         const date = a.created_at ? new Date(a.created_at).toLocaleDateString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
         return (
-          <div key={a.id || i} className="flex items-start gap-2.5 bg-gray-800/30 rounded-lg px-3 py-2 border border-gray-800/50">
+          <div key={a.id ?? i} className="flex items-start gap-2.5 bg-gray-800/30 rounded-lg px-3 py-2 border border-gray-800/50">
             <span className="text-sm shrink-0 mt-0.5">{a.canal === "whatsapp" ? "💬" : a.canal === "push" ? "🔔" : a.canal === "telegram" ? "✈️" : "📧"}</span>
             <div className="min-w-0 flex-1">
               <p className="text-xs text-gray-200 truncate">{a.oferta_titulo || `Producto #${a.caza_id}`}</p>

@@ -17,8 +17,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(localStorage.getItem("token"));
   const [refresh_token, setRefreshToken] = useState<string | null>(localStorage.getItem("refresh_token"));
   const [user, setUser] = useState<{ id: string; email: string } | null>(() => {
-    const u = localStorage.getItem("user");
-    return u ? JSON.parse(u) : null;
+    try {
+      const u = localStorage.getItem("user");
+      return u ? JSON.parse(u) : null;
+    } catch {
+      localStorage.removeItem("user");
+      return null;
+    }
   });
 
   useEffect(() => {

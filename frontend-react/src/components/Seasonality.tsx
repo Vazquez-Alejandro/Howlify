@@ -15,10 +15,10 @@ export default function Seasonality({ cazaId }: { cazaId: number | null }) {
   useEffect(() => {
     if (!cazaId) return;
     setLoading(true);
+    setData({});
     api.get<{ seasonality: typeof data }>(`/api/kpi/seasonality/${cazaId}`).then(res => {
       if (res.data) setData(res.data.seasonality);
-      setLoading(false);
-    });
+    }).catch(() => {}).finally(() => setLoading(false));
   }, [cazaId]);
 
   const chartData = DAY_ORDER.filter(d => data[d]).map(d => ({

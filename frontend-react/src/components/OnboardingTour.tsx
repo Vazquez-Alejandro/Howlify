@@ -60,7 +60,8 @@ export default function OnboardingTour() {
   useEffect(() => {
     const done = localStorage.getItem(STORAGE_KEY);
     if (!done) {
-      setTimeout(() => setStep(0), 600);
+      const timer = setTimeout(() => setStep(0), 600);
+      return () => clearTimeout(timer);
     }
   }, []);
 

@@ -90,7 +90,7 @@ def enviar_whatsapp(numero, mensaje):
 # 🐺 EL DESPACHADOR
 # ==========================================
 def despachar_alertas_jauria(user_data, producto, estado, precio_nuevo, variacion):
-    plan = user_data.get('plan_id', 'starter').lower()
+    plan = user_data.get('plan', 'starter').lower()
     t_id = user_data.get('telegram_id')
     email = user_data.get('email')
     whatsapp_num = user_data.get('whatsapp_number')

@@ -78,15 +78,12 @@ export default function DashboardPage() {
     api.getProfile().then((res) => {
       if (res.data?.profile) {
         setProfile(res.data.profile);
-      } else if (res.error) {
-        console.warn("[profile] error:", res.error);
       }
     });
   }, []);
 
   const adminEmails = (import.meta.env.VITE_ADMIN_EMAILS || "howlify.app@gmail.com").split(",").map((e: string) => e.trim().toLowerCase());
   const isAdmin = profile?.role === "admin" || (!!user?.email && adminEmails.includes(user.email.toLowerCase()));
-  console.log("[render] isAdmin:", isAdmin, "profile:", profile, "user:", user?.email);
 
   const loadUsers = async () => {
     const res = await api.adminUsers();

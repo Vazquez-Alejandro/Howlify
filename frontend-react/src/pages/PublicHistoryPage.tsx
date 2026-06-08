@@ -20,7 +20,7 @@ export default function PublicHistoryPage() {
     if (!cazaId) return;
     fetch(`${API_BASE}/api/public/history/${cazaId}`)
       .then(r => r.json())
-      .then(d => { setData(d); setLoading(false); })
+      .then(d => { if (d.error || !d.producto) { setData(null); } else { setData(d); } setLoading(false); })
       .catch(() => setLoading(false));
   }, [cazaId]);
 

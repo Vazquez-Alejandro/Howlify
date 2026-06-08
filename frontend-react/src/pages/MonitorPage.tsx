@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { api, type Caza, type MonitorRule, type AlertRule, type Grupo } from "../api/client";
 import PageTransition from "../components/PageTransition";
 import AlertRuleEditor from "../components/AlertRuleEditor";
@@ -54,22 +54,27 @@ export default function MonitorPage() {
 
   const loadData = async () => {
     setLoading(true);
-    const [cazasRes, rulesRes, gruposRes, relRes, pricesRes, histRes] = await Promise.all([
-      api.listCazas(), api.monitorRules(),
-      api.monitorGrupos(), api.monitorGrupoCazas(),
-      api.monitorLatestPrices(), api.monitorAllHistory(),
-    ]);
-    if (cazasRes.data) setCazas(cazasRes.data.cazas);
-    if (rulesRes.data) setRules(rulesRes.data.rules);
-    if (gruposRes.data) setGrupos(gruposRes.data.grupos);
-    if (relRes.data) {
-      const map: Record<number, number> = {};
-      for (const r of relRes.data.relaciones) map[r.caza_id] = r.grupo_id;
-      setRelaciones(map);
+    try {
+      const [cazasRes, rulesRes, gruposRes, relRes, pricesRes, histRes] = await Promise.all([
+        api.listCazas(), api.monitorRules(),
+        api.monitorGrupos(), api.monitorGrupoCazas(),
+        api.monitorLatestPrices(), api.monitorAllHistory(),
+      ]);
+      if (cazasRes.data) setCazas(cazasRes.data.cazas);
+      if (rulesRes.data) setRules(rulesRes.data.rules);
+      if (gruposRes.data) setGrupos(gruposRes.data.grupos);
+      if (relRes.data) {
+        const map: Record<number, number> = {};
+        for (const r of relRes.data.relaciones) map[r.caza_id] = r.grupo_id;
+        setRelaciones(map);
+      }
+      if (pricesRes.data) setLatestPrices(pricesRes.data.prices);
+      if (histRes.data) setAllHistory(histRes.data.history);
+    } catch {
+      // Error silently handled — partial data still renders
+    } finally {
+      setLoading(false);
     }
-    if (pricesRes.data) setLatestPrices(pricesRes.data.prices);
-    if (histRes.data) setAllHistory(histRes.data.history);
-    setLoading(false);
   };
 
   useEffect(() => { loadData(); }, []);
@@ -95,16 +100,24 @@ export default function MonitorPage() {
       max_price_allowed: existing?.max_price_allowed || 0,
       alert_config: config,
     };
-    await api.upsertMonitorRule(cazaId, payload);
-    setRules(prev => prev.map(r => r.caza_id === cazaId ? { ...r, alert_config: config } : r));
+    const res = await api.upsertMonitorRule(cazaId, payload);
+    if (!res.error) {
+      setRules(prev => prev.map(r => r.caza_id === cazaId ? { ...r, alert_config: config } : r));
+    }
   }, [rulesMap]);
+
+  const saveAlertTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedSaveAlert = useCallback((cazaId: number, config: AlertRule[]) => {
+    if (saveAlertTimer.current) clearTimeout(saveAlertTimer.current);
+    saveAlertTimer.current = setTimeout(() => saveAlertConfig(cazaId, config), 800);
+  }, [saveAlertConfig]);
   const gruposMap = useMemo(() => new Map(grupos.map(g => [g.id, g])), [grupos]);
 
   const radarRows = useMemo(() => cazas.map((b) => {
     const bid = b.id;
     const rule = rulesMap.get(bid);
     const lp = latestPrices[String(bid)];
-    const currP = lp?.price || 0;
+    const currP = lp?.price ?? 0;
     const mP = rule?.min_price_allowed || 0;
     const maxP = rule?.max_price_allowed || 0;
     const hist = allHistory.filter(h => h.caza_id === bid).slice(-20);
@@ -280,7 +293,7 @@ export default function MonitorPage() {
               <div className="bg-gray-900/60 rounded-2xl p-4 md:p-6" style={{ border: "1px solid rgba(107,114,128,0.4)" }}>
                 <h3 className="text-sm font-semibold text-gray-300 mb-4">Configurar alertas</h3>
                 {selectedRow ? (
-                  <AlertRuleEditor rules={alertConfig} onChange={(newConfig) => { setAlertConfig(newConfig); saveAlertConfig(selectedRow.id, newConfig); }} />
+                  <AlertRuleEditor rules={alertConfig} onChange={(newConfig) => { setAlertConfig(newConfig); debouncedSaveAlert(selectedRow.id, newConfig); }} />
                 ) : (
                   <p className="text-sm text-gray-500">Seleccioná un producto para configurar alertas</p>
                 )}
