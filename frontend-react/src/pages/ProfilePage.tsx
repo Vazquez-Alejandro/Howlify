@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../components/Toast";
 import { traducirError } from "../utils/errors";
 import PageTransition from "../components/PageTransition";
+import TermsModal from "../components/TermsModal";
 
 const PLAN_LABELS: Record<string, string> = {
   starter: "Starter",
@@ -28,6 +29,7 @@ export default function ProfilePage() {
   const [reportEnabled, setReportEnabled] = useState(false);
   const [reportTime, setReportTime] = useState("09:00");
   const [reportDays, setReportDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [showTerms, setShowTerms] = useState(false);
 
   useEffect(() => {
     api.getProfile().then((res) => {
@@ -268,7 +270,24 @@ export default function ProfilePage() {
             </>
           )}
         </section>
+
+        {/* Legal */}
+        <section className="bg-gray-900/60 rounded-2xl p-6 space-y-4" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
+          <h2 className="text-lg font-semibold text-white">Documentos legales</h2>
+          <div className="flex flex-wrap gap-3">
+            <button onClick={() => setShowTerms(true)} className="text-sm text-gray-400 hover:text-white transition-colors underline underline-offset-2">
+              Términos y Condiciones
+            </button>
+            <Link to="/privacy" className="text-sm text-gray-400 hover:text-white transition-colors underline underline-offset-2">
+              Política de Privacidad
+            </Link>
+            <Link to="/aviso-legal" className="text-sm text-gray-400 hover:text-white transition-colors underline underline-offset-2">
+              Aviso sobre scraping
+            </Link>
+          </div>
+        </section>
       </div>
+      {showTerms && <TermsModal readonly onAccept={() => setShowTerms(false)} />}
     </PageTransition>
   );
 }

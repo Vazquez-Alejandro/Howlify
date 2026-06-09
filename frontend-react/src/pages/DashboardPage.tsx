@@ -11,6 +11,7 @@ import Logo from "../components/Logo";
 import MonitorPage from "./MonitorPage";
 import BillingPage from "./BillingPage";
 import OnboardingTour from "../components/OnboardingTour";
+import TermsModal from "../components/TermsModal";
 import { useRates } from "../hooks/useRates";
 import PushNotifToggle from "../components/PushNotifToggle";
 
@@ -32,8 +33,9 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const [view, setView] = useState<View>("rastreadores");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [profile, setProfile] = useState<{ role?: string; plan?: string } | null>(null);
+  const [profile, setProfile] = useState<{ role?: string; plan?: string; terms_accepted?: boolean } | null>(null);
   const [simulatedPlan, setSimulatedPlan] = useState("starter");
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const [users, setUsers] = useState<Record<string, unknown>[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"fecha" | "nombre" | "precio">("fecha");
@@ -78,12 +80,23 @@ export default function DashboardPage() {
     api.getProfile().then((res) => {
       if (res.data?.profile) {
         setProfile(res.data.profile);
+        if (!res.data.profile.terms_accepted) {
+          setShowTermsModal(true);
+        }
       }
     });
   }, []);
 
   const adminEmails = (import.meta.env.VITE_ADMIN_EMAILS || "howlify.app@gmail.com").split(",").map((e: string) => e.trim().toLowerCase());
   const isAdmin = profile?.role === "admin" || (!!user?.email && adminEmails.includes(user.email.toLowerCase()));
+
+  const acceptTerms = async () => {
+    const res = await api.updateProfile({ terms_accepted: true });
+    if (!res.error) {
+      setProfile(prev => prev ? { ...prev, terms_accepted: true } : prev);
+      setShowTermsModal(false);
+    }
+  };
 
   const loadUsers = async () => {
     const res = await api.adminUsers();
@@ -131,6 +144,7 @@ export default function DashboardPage() {
 
   return (
     <PageTransition>
+      {showTermsModal && <TermsModal onAccept={acceptTerms} />}
       <OnboardingTour />
       <div className="min-h-screen bg-gray-950 flex">
         {/* Mobile overlay */}
