@@ -40,13 +40,13 @@ def rate_limit_hunt(uid: str):
 app = FastAPI(title="Howlify API", version="1.0.0")
 
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse as _JSONResponse
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+_cors_origins = os.getenv("CORS_ORIGINS", "https://howlify.vercel.app,http://localhost:5173").split(",")
+app.add_middleware(CORSMiddleware, allow_origins=_cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     print(f"[UNHANDLED] {request.method} {request.url.path}: {exc}")
-    return _JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})
+    return JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})
 
 REACT_DIST = Path(__file__).resolve().parents[2] / "frontend-react" / "dist"
 _HAS_REACT = REACT_DIST.exists() and (REACT_DIST / "index.html").exists()
@@ -115,6 +115,39 @@ class CazaCreate(BaseModel):
     tipo: str = "piso"
     source: str = "generic"
     etiqueta: str = ""
+
+class UpsertMonitorRuleRequest(BaseModel):
+    product_name: str = ""
+    product_url: str = ""
+    source: str = "generic"
+    target_price: int = 0
+    min_price_allowed: int = 0
+    max_price_allowed: int = 0
+    alert_config: list = []
+
+class CreateGrupoRequest(BaseModel):
+    nombre: str
+    color: str = "📁"
+
+class AssignGrupoCazaRequest(BaseModel):
+    caza_id: int
+    grupo_id: int | None = None
+
+class GenerateReportRequest(BaseModel):
+    type: str = "daily"
+
+class TestAlertRuleRequest(BaseModel):
+    caza_id: int
+
+class ExportSheetsRequest(BaseModel):
+    rows: list = []
+    sheet_name: str = ""
+
+class PushSubscribeRequest(BaseModel):
+    subscription: dict
+
+class CreatePreferenceRequest(BaseModel):
+    plan: str = "pro"
 
 # ─── Helpers ────────────────────────────────────────────
 
@@ -598,7 +631,7 @@ def get_monitor_rules(authorization: str = Header(default="")):
     return {"rules": res.data or []}
 
 @app.put("/api/monitor/rules/{caza_id}")
-def upsert_monitor_rule(caza_id: int, body: dict, authorization: str = Header(default="")):
+def upsert_monitor_rule(caza_id: int, body: UpsertMonitorRuleRequest, authorization: str = Header(default="")):
     try:
         uid = get_user_id(authorization)
         existing = supabase.table("monitor_rules").select("*").eq("user_id", uid).eq("caza_id", caza_id).limit(1).execute()
@@ -606,13 +639,13 @@ def upsert_monitor_rule(caza_id: int, body: dict, authorization: str = Header(de
         payload = {
             "user_id": uid,
             "caza_id": caza_id,
-            "product_name": body.get("product_name") or prev.get("product_name", ""),
-            "product_url": body.get("product_url") or prev.get("product_url", ""),
-            "source": body.get("source") or prev.get("source", "generic"),
-            "target_price": body.get("target_price") if body.get("target_price") is not None else prev.get("target_price", 0),
-            "min_price_allowed": body.get("min_price_allowed") if body.get("min_price_allowed") is not None else prev.get("min_price_allowed", 0),
-            "max_price_allowed": body.get("max_price_allowed") if body.get("max_price_allowed") is not None else prev.get("max_price_allowed", 0),
-            "alert_config": body.get("alert_config", prev.get("alert_config", [])),
+            "product_name": body.product_name or prev.get("product_name", ""),
+            "product_url": body.product_url or prev.get("product_url", ""),
+            "source": body.source or prev.get("source", "generic"),
+            "target_price": body.target_price if body.target_price else prev.get("target_price", 0),
+            "min_price_allowed": body.min_price_allowed if body.min_price_allowed else prev.get("min_price_allowed", 0),
+            "max_price_allowed": body.max_price_allowed if body.max_price_allowed else prev.get("max_price_allowed", 0),
+            "alert_config": body.alert_config if body.alert_config else prev.get("alert_config", []),
             "is_active": True,
         }
         supabase.table("monitor_rules").upsert(payload, on_conflict="caza_id").execute()
@@ -715,10 +748,10 @@ def get_grupos(authorization: str = Header(default="")):
     return {"grupos": res.data or []}
 
 @app.post("/api/monitor/grupos")
-def create_grupo(body: dict, authorization: str = Header(default="")):
-    get_user_id(authorization)
-    nombre = body.get("nombre", "").strip()
-    color = body.get("color", "📁")
+def create_grupo(body: CreateGrupoRequest, authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    nombre = body.nombre.strip()
+    color = body.color
     if nombre:
         supabase.table("grupos").insert({"nombre": nombre, "color": color}).execute()
     return {"message": "Grupo creado"}
@@ -748,11 +781,11 @@ def get_grupo_cazas(authorization: str = Header(default="")):
     return {"relaciones": res.data or []}
 
 @app.put("/api/monitor/grupo-cazas")
-def assign_grupo_caza(body: dict, authorization: str = Header(default="")):
+def assign_grupo_caza(body: AssignGrupoCazaRequest, authorization: str = Header(default="")):
     try:
-        get_user_id(authorization)
-        caza_id = body.get("caza_id")
-        grupo_id = body.get("grupo_id")
+        uid = get_user_id(authorization)
+        caza_id = body.caza_id
+        grupo_id = body.grupo_id
         supabase.table("grupo_cazas").delete().eq("caza_id", caza_id).execute()
         if grupo_id:
             supabase.table("grupo_cazas").insert({"caza_id": caza_id, "grupo_id": grupo_id}).execute()
@@ -936,9 +969,9 @@ def get_inflated_prices(authorization: str = Header(default="")):
 # ─── Reportes ────────────────────────────────────────────
 
 @app.post("/api/reports/generate")
-def generate_report(body: dict, authorization: str = Header(default="")):
+def generate_report(body: GenerateReportRequest, authorization: str = Header(default="")):
     uid = get_user_id(authorization)
-    tipo = body.get("type", "daily")
+    tipo = body.type
     try:
         from services.database_service import ejecutar_reporte_diario_total, ejecutar_reporte_semanal
         if tipo == "daily":
@@ -952,9 +985,9 @@ def generate_report(body: dict, authorization: str = Header(default="")):
         return JSONResponse(status_code=500, content={"detail": f"Error generando reporte: {e}"})
 
 @app.post("/api/reports/test-alert")
-def test_alert_rule(body: dict, authorization: str = Header(default="")):
+def test_alert_rule(body: TestAlertRuleRequest, authorization: str = Header(default="")):
     uid = get_user_id(authorization)
-    caza_id = body.get("caza_id")
+    caza_id = body.caza_id
     if not caza_id:
         raise HTTPException(400, "Falta caza_id")
     try:
@@ -1018,15 +1051,15 @@ def download_pdf_report(authorization: str = Header(default="")):
 # ─── Google Sheets Export ─────────────────────────────────
 
 @app.post("/api/export/sheets")
-def export_to_sheets(data: dict, authorization: str = Header(default="")):
+def export_to_sheets(data: ExportSheetsRequest, authorization: str = Header(default="")):
     uid = get_user_id(authorization)
     try:
         import pandas as pd
         from utils.logic import exportar_a_sheets
-        df = pd.DataFrame(data.get("rows", []))
+        df = pd.DataFrame(data.rows)
         if df.empty:
             raise HTTPException(status_code=400, detail="Sin datos para exportar")
-        ok, info = exportar_a_sheets(df, nombre_hoja=data.get("sheet_name", f"Howlify Export {uid[:8]}"))
+        ok, info = exportar_a_sheets(df, nombre_hoja=data.sheet_name or f"Howlify Export {uid[:8]}")
         if not ok:
             raise HTTPException(status_code=500, detail=info)
         return {"ok": True, "url": f"https://docs.google.com/spreadsheets/d/{info}"}
@@ -1100,9 +1133,9 @@ def push_notify_user(uid: str, title: str, body: str, url: str = ""):
             pass
 
 @app.post("/api/push/subscribe")
-def push_subscribe(data: dict, authorization: str = Header(default="")):
+def push_subscribe(data: PushSubscribeRequest, authorization: str = Header(default="")):
     uid = get_user_id(authorization)
-    sub = data.get("subscription", {})
+    sub = data.subscription
     if not sub.get("endpoint"):
         raise HTTPException(400, "Falta endpoint")
     supabase.table("push_subscriptions").upsert({
@@ -1138,9 +1171,9 @@ MP_PRICES = {
 MP_DURATION_DAYS = 30  # días de acceso por pago
 
 @app.post("/api/mp/create-preference")
-def mp_create_preference(data: dict, authorization: str = Header(default="")):
+def mp_create_preference(data: CreatePreferenceRequest, authorization: str = Header(default="")):
     uid = get_user_id(authorization)
-    plan = data.get("plan", "pro")
+    plan = data.plan
     if plan not in MP_PRICES:
         raise HTTPException(status_code=400, detail=f"Plan inválido: {plan}")
 
