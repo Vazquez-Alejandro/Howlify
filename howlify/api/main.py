@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 from dotenv import load_dotenv
+import jwt
 
 load_dotenv()
 
@@ -66,18 +67,26 @@ if _HAS_REACT:
 
 # ─── Auth ───────────────────────────────────────────────
 
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
+
 def get_user_id(authorization: str = "") -> str:
     token = authorization.replace("Bearer ", "").strip()
     if not token:
         raise HTTPException(status_code=401, detail="Token requerido")
+    if not SUPABASE_JWT_SECRET:
+        raise HTTPException(status_code=500, detail="SUPABASE_JWT_SECRET no configurado")
     try:
-        payload_b64 = token.split(".")[1]
-        padded = payload_b64 + "=" * (4 - len(payload_b64) % 4)
-        decoded = json.loads(base64.urlsafe_b64decode(padded))
-        uid = decoded.get("sub")
+        payload = jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
+        uid = payload.get("sub")
         if not uid:
             raise HTTPException(status_code=401, detail="Token inválido: sin sub")
         return uid
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expirado")
+    except jwt.InvalidSignatureError:
+        raise HTTPException(status_code=401, detail="Token inválido: firma incorrecta")
+    except jwt.DecodeError:
+        raise HTTPException(status_code=401, detail="Token inválido: no se pudo decodificar")
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Token inválido: {e}")
 
