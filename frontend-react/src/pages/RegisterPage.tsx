@@ -219,6 +219,8 @@ export default function RegisterPage() {
                 <Link to="/terms" className="text-gray-500 hover:text-red-400 transition-colors underline underline-offset-2">Términos</Link>
                 {" y "}
                 <Link to="/privacy" className="text-gray-500 hover:text-red-400 transition-colors underline underline-offset-2">Política de Privacidad</Link>
+                {" · "}
+                <Link to="/aviso-legal" className="text-gray-500 hover:text-red-400 transition-colors underline underline-offset-2">Aviso legal</Link>
               </p>
             </div>
           </form>

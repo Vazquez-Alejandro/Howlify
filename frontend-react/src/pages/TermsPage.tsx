@@ -6,13 +6,13 @@ export default function TermsPage() {
     <PageTransition>
       <div className="min-h-screen bg-gray-950 px-4 py-12">
         <div className="max-w-2xl mx-auto">
-          <Link to="/register" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-400 transition-colors mb-8">
+          <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-400 transition-colors mb-8">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
             Volver
           </Link>
           <div className="bg-gray-900/60 rounded-2xl p-8 md:p-10 border border-gray-800/50">
-            <h1 className="text-2xl font-bold text-white mb-6">Términos y Condiciones</h1>
-            <p className="text-sm text-gray-500 mb-6">Última actualización: mayo 2026</p>
+            <h1 className="text-2xl font-bold text-white mb-2">Términos y Condiciones</h1>
+            <p className="text-sm text-gray-500 mb-6">Última actualización: junio 2026</p>
 
             <div className="space-y-6 text-sm text-gray-400 leading-relaxed">
               <section>
@@ -32,12 +32,12 @@ export default function TermsPage() {
 
               <section>
                 <h2 className="text-base font-semibold text-white mb-2">4. Planes y facturación</h2>
-                <p>Howlify ofrece planes gratuitos (con límite de prueba) y planes pagos. Los precios y características están detallados en la sección de Facturación. Podés cancelar tu suscripción en cualquier momento desde el portal de facturación. Los reembolsos se gestionan caso por caso.</p>
+                <p>Howlify ofrece planes gratuitos y planes pagos con diferentes niveles de acceso. Los precios y características están detallados en la sección de Facturación. Podés cancelar tu suscripción en cualquier momento. Los reembolsos se gestionan caso por caso.</p>
               </section>
 
               <section>
                 <h2 className="text-base font-semibold text-white mb-2">5. Uso aceptable</h2>
-                <p>No debes:</p>
+                <p>No debés:</p>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
                   <li>Realizar solicitudes excesivas que degraden el servicio</li>
                   <li>Usar la Plataforma para monitorear precios con fines ilegales</li>
@@ -48,17 +48,23 @@ export default function TermsPage() {
 
               <section>
                 <h2 className="text-base font-semibold text-white mb-2">6. Limitación de responsabilidad</h2>
-                <p>Howlify no garantiza la exactitud, integridad o actualidad de los precios mostrados. La información se proporciona "tal cual" y puede contener errores. No nos hacemos responsables por decisiones comerciales basadas en los datos de la Plataforma.</p>
+                <p>Howlify no garantiza la exactitud, integridad o actualidad de los precios mostrados. La información se proporciona "tal cual" y puede contener errores. Los datos provienen de fuentes públicas de terceros y pueden no estar actualizados en tiempo real. No nos hacemos responsables por decisiones comerciales o financieras basadas en los datos de la Plataforma.</p>
               </section>
 
               <section>
-                <h2 className="text-base font-semibold text-white mb-2">7. Modificaciones</h2>
+                <h2 className="text-base font-semibold text-white mb-2">7. Propiedad intelectual</h2>
+                <p>El código, diseño, marca y contenido de Howlify son propiedad de Alejandro Vázquez. Queda prohibida su reproducción total o parcial sin autorización.</p>
+              </section>
+
+              <section>
+                <h2 className="text-base font-semibold text-white mb-2">8. Modificaciones</h2>
                 <p>Nos reservamos el derecho de modificar estos términos en cualquier momento. Los cambios serán notificados por email y/o mediante un aviso en la Plataforma. El uso continuado del servicio después de los cambios constituye la aceptación de los nuevos términos.</p>
               </section>
 
               <section>
-                <h2 className="text-base font-semibold text-white mb-2">8. Contacto</h2>
-                <p>Para consultas sobre estos términos, contactanos a <a href="mailto:soporte@howlify.app" className="text-red-400 hover:text-red-300 underline underline-offset-2">soporte@howlify.app</a>.</p>
+                <h2 className="text-base font-semibold text-white mb-2">9. Contacto</h2>
+                <p>Titular: Alejandro Vázquez (CUIT 20-29479657-7)</p>
+                <p>Para consultas sobre estos términos, contactanos a <a href="mailto:howlify.app@gmail.com" className="text-red-400 hover:text-red-300 underline underline-offset-2">howlify.app@gmail.com</a>.</p>
               </section>
             </div>
           </div>

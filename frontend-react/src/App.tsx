@@ -14,6 +14,7 @@ import NotFoundPage from "./pages/NotFoundPage";
 import ErrorPage from "./pages/ErrorPage";
 import TermsPage from "./pages/TermsPage";
 import PrivacyPage from "./pages/PrivacyPage";
+import ScrapingDisclaimerPage from "./pages/ScrapingDisclaimerPage";
 import PublicHistoryPage from "./pages/PublicHistoryPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -41,6 +42,7 @@ function AnimatedRoutes() {
         <Route path="/error" element={<ErrorPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/aviso-legal" element={<ScrapingDisclaimerPage />} />
         <Route path="/p/:cazaId" element={<PublicHistoryPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

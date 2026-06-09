@@ -23,20 +23,37 @@ from auth.supabase_client import supabase
 
 from pywebpush import webpush, WebPushException
 
-# ─── Rate limiter ────────────────────────────────────────
-_hunt_limits: dict[str, list[float]] = {}
+# ─── Rate limiter (file-based) ──────────────────────────
+import tempfile
+_rate_limit_file = os.path.join(tempfile.gettempdir(), "howlify_rate_limits.json")
+
+def _load_limits() -> dict:
+    try:
+        with open(_rate_limit_file, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+def _save_limits(data: dict):
+    try:
+        with open(_rate_limit_file, "w") as f:
+            json.dump(data, f)
+    except OSError:
+        pass
 
 def rate_limit_hunt(uid: str):
     now = time.time()
     window = 30.0
     max_requests = 2
-    timestamps = _hunt_limits.get(uid, [])
+    limits = _load_limits()
+    timestamps = limits.get(uid, [])
     timestamps = [t for t in timestamps if now - t < window]
     if len(timestamps) >= max_requests:
         retry_after = int(window - (now - timestamps[0]))
         raise HTTPException(status_code=429, detail=f"Demasiadas solicitudes. Esperá {retry_after}s.")
     timestamps.append(now)
-    _hunt_limits[uid] = timestamps
+    limits[uid] = timestamps
+    _save_limits(limits)
 
 app = FastAPI(title="Howlify API", version="1.0.0")
 
@@ -63,7 +80,19 @@ if _HAS_REACT:
                 return FileResponse(str(REACT_DIST / "index.html"))
             return response
 
+    class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            response = await call_next(request)
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["X-XSS-Protection"] = "1; mode=block"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            if request.url.path.startswith("/api/"):
+                response.headers["Cache-Control"] = "no-store"
+            return response
+
     app.add_middleware(SPAFallbackMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
 
 # ─── Auth ───────────────────────────────────────────────
 
