@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import PageTransition from "./PageTransition";
 
 interface Props {
   onAccept?: () => void;
