@@ -6,11 +6,19 @@ export default function AlertHistory() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
     (async () => {
-      const res = await api.get<{ alerts: any[] }>("/api/alerts/history");
-      if (res.data) setAlerts(res.data.alerts);
-      setLoading(false);
+      try {
+        const res = await api.get<{ alerts: any[] }>("/api/alerts/history");
+        if (!mounted) return;
+        if (res.data) setAlerts(res.data.alerts);
+      } catch {
+        // Silently handle
+      } finally {
+        if (mounted) setLoading(false);
+      }
     })();
+    return () => { mounted = false; };
   }, []);
 
   if (loading) return <div className="text-xs text-gray-500 py-4 text-center">Cargando historial...</div>;

@@ -128,7 +128,7 @@ export default function DashboardPage() {
     return acc;
   }, 0);
 
-  const effectivePlan = isAdmin ? simulatedPlan : (profile?.plan || "starter");
+  const effectivePlan = isAdmin ? simulatedPlan : (profile?.plan ?? "starter");
   const planInfo = PLAN_INFO[effectivePlan] || PLAN_INFO.starter;
   const maxCazas = planInfo.max;
   const planName = planInfo.label;
@@ -209,7 +209,7 @@ export default function DashboardPage() {
           <header className="sticky top-0 z-30 bg-gray-950/80 backdrop-blur-xl border-b border border-gray-800/50">
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-3">
-                <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-gray-400 hover:text-white">
+                <button aria-label="Abrir menú" onClick={() => setSidebarOpen(true)} className="lg:hidden text-gray-400 hover:text-white">
                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
                 </button>
                 <h1 className="text-lg font-bold text-white">
@@ -309,7 +309,7 @@ export default function DashboardPage() {
                 <div className="relative mb-4">
                   <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                   <input
-                    type="text" placeholder="Buscar cacerías..." value={searchQuery}
+                    type="text" placeholder="Buscar cacerías..." aria-label="Buscar cacerías" value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-xl text-white text-sm placeholder-gray-600 focus:outline-none focus:border-red-500/50 transition-all"
                   />
@@ -497,8 +497,8 @@ export default function DashboardPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {users.slice(0, 30).map((u: any, i) => (
-                          <tr key={i} className="border-b border-gray-800/30 text-gray-300">
+                        {users.slice(0, 30).map((u: any) => (
+                          <tr key={u.user_id ?? u.email ?? Math.random()} className="border-b border-gray-800/30 text-gray-300">
                             <td className="py-2 pr-3 truncate max-w-[200px]">{u.email || "-"}</td>
                             <td className="py-2 pr-3">{u.plan || "-"}</td>
                             <td className="py-2 pr-3">{u.role || "user"}</td>

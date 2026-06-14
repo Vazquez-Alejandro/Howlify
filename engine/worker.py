@@ -1,7 +1,8 @@
 import time
 import signal
 import sys
-import os 
+import os
+import hashlib
 from datetime import datetime, timedelta, timezone
 from services.database_service import ejecutar_reporte_diario_total
 
@@ -140,7 +141,8 @@ def main():
                                 continue
 
                             if user_profile and isinstance(user_profile, dict) and user_profile.get('email'):
-                                print(f"📣 ¡GATILLO! Enviando notificación {estado} a {user_profile.get('email')}")
+                                email_hash = hashlib.sha256(user_profile['email'].encode()).hexdigest()[:12]
+                                print(f"📣 ¡GATILLO! Enviando notificación {estado} a {email_hash}")
                                 despachar_alertas_jauria(
                                     user_data=user_profile,
                                     producto=caza['producto'],

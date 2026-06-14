@@ -55,7 +55,7 @@ export default function PushNotifToggle() {
   if (!supported) return null;
 
   return (
-    <button onClick={subscribed ? unsubscribe : subscribe}
+    <button aria-pressed={subscribed} aria-label="Notificaciones push" onClick={subscribed ? unsubscribe : subscribe}
       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border flex items-center gap-1.5 ${subscribed ? "bg-green-500/15 text-green-400 border-green-500/30" : "bg-gray-800/50 text-gray-400 border-gray-700/50"}`}>
       {subscribed ? "🔔 Push activado" : "🔕 Activar push"}
     </button>

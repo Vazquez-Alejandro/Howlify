@@ -25,7 +25,7 @@ def enviar_mensaje(chat_id, texto):
     url = f"{API_URL}/sendMessage"
     payload = {"chat_id": chat_id, "text": texto, "parse_mode": "Markdown"}
     try:
-        requests.post(url, json=payload)
+        requests.post(url, json=payload, timeout=10)
     except Exception as e:
         print(f"❌ Error enviando mensaje: {e}")
 
@@ -41,7 +41,7 @@ def main():
         try:
             url = f"{API_URL}/getUpdates"
             params = {"timeout": 20, "offset": offset}
-            res = requests.get(url, params=params).json()
+            res = requests.get(url, params=params, timeout=25).json()
 
             if "result" in res:
                 for update in res["result"]:
@@ -57,21 +57,25 @@ def main():
                             partes = texto_recibido.split()
                             
                             if len(partes) > 1:
-                                supabase_user_id = partes[1].strip()
-                                print(f"🔍 Intentando vincular chat_id {chat_id} con user_id {supabase_user_id}")
+                                bind_token = partes[1].strip()
+                                print(f"🔍 Intentando vincular chat_id {chat_id} con token {bind_token[:8]}...")
                                 
                                 try:
-                                    # USAMOS 'user_id' que es la columna de tu captura
-                                    resultado = supabase.table("profiles").update({
-                                        "telegram_id": str(chat_id)
-                                    }).eq("user_id", supabase_user_id).execute()
+                                    # Verify token against stored telegram_bind_token
+                                    profile = supabase.table("profiles").select("user_id, telegram_bind_token").eq("telegram_bind_token", bind_token).limit(1).execute()
                                     
-                                    if len(resultado.data) > 0:
-                                        print(f"✅ Éxito: Perfil actualizado para {supabase_user_id}")
+                                    if profile.data and len(profile.data) > 0:
+                                        user_id = profile.data[0]["user_id"]
+                                        resultado = supabase.table("profiles").update({
+                                            "telegram_id": str(chat_id),
+                                            "telegram_bind_token": None,
+                                        }).eq("user_id", user_id).execute()
+                                        
+                                        print(f"✅ Éxito: Perfil actualizado para {user_id}")
                                         respuesta = f"¡Hola {user_name}! 🐺\n\n✅ **Cuenta vinculada con éxito.**"
                                     else:
-                                        print(f"⚠️ No se encontró la fila para el user_id: {supabase_user_id}")
-                                        respuesta = "❌ No pudimos encontrar tu perfil. Registrate en la web primero."
+                                        print(f"⚠️ Token inválido: {bind_token[:8]}...")
+                                        respuesta = "❌ Token inválido o expirado. Generá uno nuevo desde la web."
                                         
                                 except Exception as e:
                                     print(f"❌ Error en Supabase: {e}")

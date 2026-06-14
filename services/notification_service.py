@@ -26,8 +26,8 @@ def enviar_email(destinatario, asunto, cuerpo_html):
     }
     
     try:
-        r = requests.post(url, json=payload, headers=headers)
-        print(f"DEBUG MAIL: {r.status_code} - {r.text}")
+        r = requests.post(url, json=payload, headers=headers, timeout=15)
+        print(f"DEBUG MAIL: {r.status_code} - {r.text[:200]}")
         return r.status_code in [200, 201]
     except Exception as e:
         print(f"❌ Error Email: {e}")
@@ -49,7 +49,7 @@ def enviar_telegram(chat_id, mensaje):
         "parse_mode": "Markdown"
     }
     try:
-        r = requests.post(url, json=payload)
+        r = requests.post(url, json=payload, timeout=10)
         return r.status_code == 200
     except Exception as e:
         print(f"❌ Error Telegram: {e}")
@@ -79,8 +79,8 @@ def enviar_whatsapp(numero, mensaje):
     }
     
     try:
-        response = requests.post(url, json=payload, headers=headers)
-        print(f"DEBUG WHATSAPP: {response.status_code} - {response.text}")
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        print(f"DEBUG WHATSAPP: {response.status_code} - {response.text[:200]}")
         return response.status_code in [200, 201]
     except Exception as e:
         print(f"❌ Error WhatsApp: {e}")

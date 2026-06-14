@@ -51,6 +51,13 @@ export default function MonitorPage() {
   const [alertConfig, setAlertConfig] = useState<AlertRule[]>([]);
   const [showAllProducts, setShowAllProducts] = useState(false);
   const [alertHistoryOpen, setAlertHistoryOpen] = useState(false);
+  const [evidenciaBlob, setEvidenciaBlob] = useState<string | null>(null);
+
+  const mounted = useRef(true);
+  useEffect(() => { return () => {
+    mounted.current = false;
+    if (saveAlertTimer.current) clearTimeout(saveAlertTimer.current);
+  }; }, []);
 
   const loadData = async () => {
     setLoading(true);
@@ -60,12 +67,13 @@ export default function MonitorPage() {
         api.monitorGrupos(), api.monitorGrupoCazas(),
         api.monitorLatestPrices(), api.monitorAllHistory(),
       ]);
+      if (!mounted.current) return;
       if (cazasRes.data) setCazas(cazasRes.data.cazas);
       if (rulesRes.data) setRules(rulesRes.data.rules);
       if (gruposRes.data) setGrupos(gruposRes.data.grupos);
       if (relRes.data) {
         const map: Record<number, number> = {};
-        for (const r of relRes.data.relaciones) map[r.caza_id] = r.grupo_id;
+        for (const r of (relRes.data.relaciones || [])) map[r.caza_id] = r.grupo_id;
         setRelaciones(map);
       }
       if (pricesRes.data) setLatestPrices(pricesRes.data.prices);
@@ -73,7 +81,7 @@ export default function MonitorPage() {
     } catch {
       // Error silently handled — partial data still renders
     } finally {
-      setLoading(false);
+      if (mounted.current) setLoading(false);
     }
   };
 
@@ -96,8 +104,8 @@ export default function MonitorPage() {
   const saveAlertConfig = useCallback(async (cazaId: number, config: AlertRule[]) => {
     const existing = rulesMap.get(cazaId);
     const payload: Record<string, unknown> = {
-      min_price_allowed: existing?.min_price_allowed || 0,
-      max_price_allowed: existing?.max_price_allowed || 0,
+      min_price_allowed: existing?.min_price_allowed ?? 0,
+      max_price_allowed: existing?.max_price_allowed ?? 0,
       alert_config: config,
     };
     const res = await api.upsertMonitorRule(cazaId, payload);
@@ -105,6 +113,24 @@ export default function MonitorPage() {
       setRules(prev => prev.map(r => r.caza_id === cazaId ? { ...r, alert_config: config } : r));
     }
   }, [rulesMap]);
+
+  const evidenciaBlobRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (evidenciaBlobRef.current) { URL.revokeObjectURL(evidenciaBlobRef.current); evidenciaBlobRef.current = null; }
+    if (!evidenciaModal) { setEvidenciaBlob(null); return; }
+    const token = localStorage.getItem("token");
+    const url = `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/monitor/evidencia/${evidenciaModal}`;
+    fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then(r => r.blob())
+      .then(blob => {
+        if (mounted.current) {
+          const blobUrl = URL.createObjectURL(blob);
+          evidenciaBlobRef.current = blobUrl;
+          setEvidenciaBlob(blobUrl);
+        }
+      })
+      .catch(() => { if (mounted.current) setEvidenciaBlob(null); });
+  }, [evidenciaModal]);
 
   const saveAlertTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debouncedSaveAlert = useCallback((cazaId: number, config: AlertRule[]) => {
@@ -233,13 +259,13 @@ export default function MonitorPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-gray-500 text-xs uppercase border-b border-gray-800/50 sticky top-0 bg-gray-900/60">
-                      <th className="py-3 pr-4">Riesgo</th>
-                      <th className="py-3 pr-4">ID</th>
-                      <th className="py-3 pr-4 text-left">Producto</th>
-                      <th className="py-3 pr-4 text-right">Precio</th>
-                      <th className="py-3 pr-4 text-right">MAP Mín</th>
-                      <th className="py-3 pr-4 text-right">MAP Máx</th>
-                      <th className="py-3 pr-4 text-center">Tendencia</th>
+                      <th scope="col" className="py-3 pr-4">Riesgo</th>
+                      <th scope="col" className="py-3 pr-4">ID</th>
+                      <th scope="col" className="py-3 pr-4 text-left">Producto</th>
+                      <th scope="col" className="py-3 pr-4 text-right">Precio</th>
+                      <th scope="col" className="py-3 pr-4 text-right">MAP Mín</th>
+                      <th scope="col" className="py-3 pr-4 text-right">MAP Máx</th>
+                      <th scope="col" className="py-3 pr-4 text-center">Tendencia</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -464,7 +490,7 @@ export default function MonitorPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={() => setEvidenciaModal(null)}>
             <div className="relative max-w-3xl max-h-[90vh] mx-4" onClick={(e) => e.stopPropagation()}>
               <button onClick={() => setEvidenciaModal(null)} className="absolute top-2 right-2 w-8 h-8 bg-gray-900 rounded-full border border-gray-700 text-gray-400 hover:text-white flex items-center justify-center z-10">✕</button>
-              <img src={`${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/monitor/evidencia/${evidenciaModal}?token=${localStorage.getItem("token") || ""}`} alt="Evidencia" className="max-w-full max-h-[90vh] rounded-2xl border border-gray-700/50 shadow-2xl" />
+              {evidenciaBlob ? <img src={evidenciaBlob} alt="Evidencia" className="max-w-full max-h-[90vh] rounded-2xl border border-gray-700/50 shadow-2xl" /> : <p className="text-gray-500 p-8">Cargando imagen...</p>}
             </div>
           </div>
         )}

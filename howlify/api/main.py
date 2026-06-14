@@ -2,10 +2,12 @@ import os
 import re
 import time
 import json
-import base64
+import hashlib
+import hmac
+import logging
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 import jwt
@@ -17,53 +19,48 @@ import requests
 from fastapi import FastAPI, HTTPException, Header, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from auth.supabase_client import supabase
 
 from pywebpush import webpush, WebPushException
 
-# ─── Rate limiter (file-based) ──────────────────────────
-import tempfile
-_rate_limit_file = os.path.join(tempfile.gettempdir(), "howlify_rate_limits.json")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("howlify")
 
-def _load_limits() -> dict:
-    try:
-        with open(_rate_limit_file, "r") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
-
-def _save_limits(data: dict):
-    try:
-        with open(_rate_limit_file, "w") as f:
-            json.dump(data, f)
-    except OSError:
-        pass
+# ─── Rate limiter (in-memory) ───────────────────────────
+_rate_limit_lock = threading.Lock()
+_rate_limit_store: dict[str, list[float]] = {}
+_RATE_WINDOW = float(os.getenv("RATE_WINDOW_SECONDS", "30"))
+_RATE_MAX = int(os.getenv("RATE_MAX_REQUESTS", "2"))
 
 def rate_limit_hunt(uid: str):
     now = time.time()
-    window = 30.0
-    max_requests = 2
-    limits = _load_limits()
-    timestamps = limits.get(uid, [])
-    timestamps = [t for t in timestamps if now - t < window]
-    if len(timestamps) >= max_requests:
-        retry_after = int(window - (now - timestamps[0]))
-        raise HTTPException(status_code=429, detail=f"Demasiadas solicitudes. Esperá {retry_after}s.")
-    timestamps.append(now)
-    limits[uid] = timestamps
-    _save_limits(limits)
+    with _rate_limit_lock:
+        timestamps = _rate_limit_store.get(uid, [])
+        timestamps = [t for t in timestamps if now - t < _RATE_WINDOW]
+        if len(timestamps) >= _RATE_MAX:
+            retry_after = int(_RATE_WINDOW - (now - timestamps[0]))
+            raise HTTPException(status_code=429, detail=f"Demasiadas solicitudes. Esperá {retry_after}s.")
+        timestamps.append(now)
+        _rate_limit_store[uid] = timestamps
 
 app = FastAPI(title="Howlify API", version="1.0.0")
 
 from fastapi.middleware.cors import CORSMiddleware
-_cors_origins = os.getenv("CORS_ORIGINS", "https://howlify.vercel.app,http://localhost:5173").split(",")
+_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "https://howlify.vercel.app,http://localhost:5173").split(",")]
 app.add_middleware(CORSMiddleware, allow_origins=_cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+@app.middleware("http")
+async def vary_origin_middleware(request: Request, call_next):
+    response = await call_next(request)
+    if "origin" in request.headers:
+        response.headers.setdefault("Vary", "Origin")
+    return response
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
-    print(f"[UNHANDLED] {request.method} {request.url.path}: {exc}")
+    logger.exception("Unhandled exception at %s %s", request.method, request.url.path)
     return JSONResponse(status_code=500, content={"detail": "Error interno del servidor"})
 
 REACT_DIST = Path(__file__).resolve().parents[2] / "frontend-react" / "dist"
@@ -96,7 +93,9 @@ if _HAS_REACT:
 
 # ─── Auth ───────────────────────────────────────────────
 
-SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+if not SUPABASE_JWT_SECRET:
+    raise RuntimeError("SUPABASE_JWT_SECRET no está configurado en el entorno")
 
 def get_user_id(authorization: str = "") -> str:
     token = authorization.replace("Bearer ", "").strip()
@@ -220,9 +219,8 @@ def parse_price_to_int(value) -> int:
 
 def clean_ml_url(url: str) -> str:
     if not url: return url
-    cleaned = re.sub(r"#.*", "", url)
-    cleaned = re.sub(r"https?://[^/]+/.*?/", lambda m: m.group(0), cleaned)
-    return cleaned.rstrip("/?&")
+    parsed = urlparse(url)
+    return f"{parsed.scheme}://{parsed.netloc}{parsed.path}".rstrip("/")
 
 def save_price_history(user_id: str, caza_id, results: list[dict]):
     if not user_id or not results: return
@@ -240,7 +238,7 @@ def save_price_history(user_id: str, caza_id, results: list[dict]):
         })
     if not rows: return
     try: supabase.table("price_history").insert(rows).execute()
-    except Exception as e: print("[save_price_history] error:", e)
+    except Exception as e: logger.error("save_price_history error: %s", e)
 
 # ─── Endpoints ──────────────────────────────────────────
 
@@ -340,6 +338,7 @@ class ProfileUpdate(BaseModel):
     report_enabled: bool | None = None
     report_time: str | None = None
     report_days: list[int] | None = None
+    telegram_bind_token: str | None = None
 
 
 @app.put("/api/auth/profile")
@@ -358,6 +357,13 @@ def update_profile(data: ProfileUpdate, authorization: str = Header(default=""))
 class TestNotificationRequest(BaseModel):
     channel: str  # "telegram", "whatsapp", "email"
 
+
+@app.post("/api/auth/telegram-bind-token")
+def generate_telegram_bind_token(authorization: str = Header(default="")):
+    uid = get_user_id(authorization)
+    token = hashlib.sha256(f"{uid}:{time.time()}:{os.urandom(16).hex()}".encode()).hexdigest()[:16]
+    supabase.table("profiles").update({"telegram_bind_token": token}).eq("user_id", uid).execute()
+    return {"token": token, "bot_username": os.getenv("TELEGRAM_BOT_USERNAME", "HowlifyBot")}
 
 @app.post("/api/auth/test-notification")
 def test_notification(data: TestNotificationRequest, authorization: str = Header(default="")):
@@ -576,7 +582,8 @@ def hunt_all_async(authorization: str = Header(default="")):
 
 
 @app.get("/api/task/{task_id}")
-def get_task_status(task_id: str):
+def get_task_status(task_id: str, authorization: str = Header(default="")):
+    get_user_id(authorization)
     try:
         from howlify.celery_app import celery_app
         result = celery_app.AsyncResult(task_id)
@@ -792,7 +799,7 @@ def create_grupo(body: CreateGrupoRequest, authorization: str = Header(default="
     nombre = body.nombre.strip()
     color = body.color
     if nombre:
-        supabase.table("grupos").insert({"nombre": nombre, "color": color}).execute()
+        supabase.table("grupos").insert({"nombre": nombre, "color": color, "user_id": uid}).execute()
     return {"message": "Grupo creado"}
 
 @app.delete("/api/monitor/grupos/{grupo_id}")
@@ -825,10 +832,16 @@ def assign_grupo_caza(body: AssignGrupoCazaRequest, authorization: str = Header(
         uid = get_user_id(authorization)
         caza_id = body.caza_id
         grupo_id = body.grupo_id
+        # Verify user owns this caza
+        caza = supabase.table("cazas").select("id").eq("id", caza_id).eq("user_id", uid).limit(1).execute()
+        if not caza.data:
+            raise HTTPException(status_code=404, detail="Cacería no encontrada")
         supabase.table("grupo_cazas").delete().eq("caza_id", caza_id).execute()
         if grupo_id:
             supabase.table("grupo_cazas").insert({"caza_id": caza_id, "grupo_id": grupo_id}).execute()
         return {"message": "Asignación actualizada"}
+    except HTTPException:
+        raise
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": f"Error assign grupo: {e}"})
 
@@ -1135,17 +1148,17 @@ def export_csv(authorization: str = Header(default="")):
 
 @app.get("/api/rates")
 def get_rates():
-    import requests as req
     try:
-        blue = req.get("https://dolarapi.com/v1/dolares/blue", timeout=5).json()
-        tarjeta = req.get("https://dolarapi.com/v1/dolares/tarjeta", timeout=5).json()
+        blue = requests.get("https://dolarapi.com/v1/dolares/blue", timeout=5).json()
+        tarjeta = requests.get("https://dolarapi.com/v1/dolares/tarjeta", timeout=5).json()
         return {
             "blue": float(blue.get("venta", 0)),
             "tarjeta": float(tarjeta.get("venta", 0)),
-            "oficial": float(req.get("https://dolarapi.com/v1/dolares/oficial", timeout=5).json().get("venta", 0)),
+            "oficial": float(requests.get("https://dolarapi.com/v1/dolares/oficial", timeout=5).json().get("venta", 0)),
         }
-    except:
-        return {"blue": 1300, "tarjeta": 1500, "oficial": 1000}
+    except Exception as e:
+        logger.warning("Error fetching rates: %s", e)
+        raise HTTPException(status_code=503, detail="No se pudieron obtener las cotizaciones")
 
 # ─── PWA Push Notifications ──────────────────────────────
 
@@ -1156,7 +1169,7 @@ VAPID_CLAIM = os.getenv("VAPID_CLAIM_EMAIL", "mailto:howlify@example.com")
 def push_notify_user(uid: str, title: str, body: str, url: str = ""):
     if not VAPID_PRIVATE_KEY:
         return
-    subs = supabase.table("push_subscriptions").select("subscription").eq("user_id", uid).execute()
+    subs = supabase.table("push_subscriptions").select("id, subscription").eq("user_id", uid).execute()
     for row in subs.data or []:
         try:
             sub = json.loads(row["subscription"]) if isinstance(row["subscription"], str) else row["subscription"]
@@ -1167,7 +1180,7 @@ def push_notify_user(uid: str, title: str, body: str, url: str = ""):
                 vapid_claims={"sub": VAPID_CLAIM},
             )
         except WebPushException:
-            supabase.table("push_subscriptions").delete().eq("user_id", uid).execute()
+            supabase.table("push_subscriptions").delete().eq("id", row["id"]).execute()
         except Exception:
             pass
 
@@ -1199,6 +1212,7 @@ def push_test(authorization: str = Header(default="")):
 # ─── Mercado Pago / Billing ─────────────────────────────
 
 MP_ACCESS_TOKEN = os.getenv("MP_ACCESS_TOKEN", "")
+MP_WEBHOOK_SECRET = os.getenv("MP_WEBHOOK_SECRET", "")
 MP_API_BASE = "https://api.mercadopago.com"
 
 MP_PRICES = {
@@ -1207,7 +1221,7 @@ MP_PRICES = {
     "business_monitor": int(os.getenv("MP_PRICE_MONITOR_ARS", "12000")),
 }
 
-MP_DURATION_DAYS = 30  # días de acceso por pago
+MP_DURATION_DAYS = int(os.getenv("MP_DURATION_DAYS", "30"))
 
 @app.post("/api/mp/create-preference")
 def mp_create_preference(data: CreatePreferenceRequest, authorization: str = Header(default="")):
@@ -1267,25 +1281,49 @@ def mp_create_preference(data: CreatePreferenceRequest, authorization: str = Hea
 @app.post("/api/mp/webhook")
 async def mp_webhook(request: Request):
     """IPN webhook - Mercado Pago nos avisa cuando un pago se concreta."""
+    # Verify X-Signature if webhook secret is configured
+    if MP_WEBHOOK_SECRET:
+        x_signature = request.headers.get("X-Signature", "")
+        if not x_signature:
+            logger.warning("MP webhook: missing X-Signature header")
+            return JSONResponse(status_code=401, content={"error": "Missing signature"})
+        try:
+            parts = {}
+            for pair in x_signature.split(","):
+                if "=" in pair:
+                    k, v = pair.split("=", 1)
+                    parts[k.strip()] = v.strip()
+            ts = parts.get("ts", "")
+            v1 = parts.get("v1", "")
+            if not ts or not v1:
+                raise ValueError("Missing ts or v1")
+            verification_str = f"id:{request.query_params.get('data.id', '')};request-id:{request.query_params.get('data.request_id', '')};ts:{ts};"
+            expected = hmac.new(MP_WEBHOOK_SECRET.encode(), verification_str.encode(), hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(expected, v1):
+                logger.warning("MP webhook: invalid signature")
+                return JSONResponse(status_code=401, content={"error": "Invalid signature"})
+        except Exception as e:
+            logger.warning("MP webhook: signature verification error: %s", e)
+            return JSONResponse(status_code=401, content={"error": "Signature verification failed"})
+
     try:
         body = await request.json()
     except Exception:
         body = {}
 
-    # MP puede enviar el id por query o por body
     topic = request.query_params.get("topic", "") or body.get("topic", "")
-    payment_id = request.query_params.get("id", "") or body.get("id", "")
+    payment_id = request.query_params.get("id", "") or body.get("id", "") or request.query_params.get("data.id", "")
 
-    if topic == "payment" or topic == "merchant_order" or (not topic and payment_id):
+    if topic == "payment" or (not topic and payment_id):
         if not payment_id:
             return {"received": True}
         headers = {"Authorization": f"Bearer {MP_ACCESS_TOKEN}"}
         try:
-            resp = requests.get(f"{MP_API_BASE}/v1/payments/{payment_id}", headers=headers)
+            resp = requests.get(f"{MP_API_BASE}/v1/payments/{payment_id}", headers=headers, timeout=10)
             if resp.status_code != 200:
                 return JSONResponse(status_code=400, content={"error": "Cannot verify payment"})
             payment = resp.json()
-            if payment.get("status") == "approved" or payment.get("status") == "authorized":
+            if payment.get("status") in ("approved", "authorized"):
                 ext_ref = payment.get("external_reference", "")
                 if ext_ref:
                     try:
@@ -1293,17 +1331,16 @@ async def mp_webhook(request: Request):
                         user_id = ref.get("user_id", "")
                         plan = ref.get("plan", "pro")
                         if user_id:
-                            # Actualizar plan + fecha de expiración
                             expires_at = (datetime.utcnow() + timedelta(days=MP_DURATION_DAYS)).isoformat()
                             supabase.table("profiles").update({
                                 "plan": plan,
                                 "mp_plan_expires_at": expires_at,
                             }).eq("user_id", user_id).execute()
-                            print(f"✅ Plan actualizado a {plan} para user {user_id} (expira {expires_at})")
+                            logger.info("Plan actualizado a %s para user %s (expira %s)", plan, user_id, expires_at)
                     except json.JSONDecodeError:
-                        print(f"❌ Invalid external_reference: {ext_ref}")
+                        logger.error("Invalid external_reference: %s", ext_ref)
         except requests.RequestException as e:
-            print(f"❌ Error consultando pago MP: {e}")
+            logger.error("Error consultando pago MP: %s", e)
     return {"received": True}
 
 
@@ -1345,7 +1382,7 @@ def admin_users(authorization: str = Header(default="")):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[admin_users] error: {e}")
+        logger.error("admin_users error: %s", e)
         return JSONResponse(status_code=500, content={"detail": "Error al obtener usuarios"})
 
 if __name__ == "__main__":

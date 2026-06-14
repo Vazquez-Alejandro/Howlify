@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useRef, useEffect, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 type ToastType = "success" | "error" | "info";
@@ -32,22 +32,33 @@ let nextId = 0;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const timers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
   const removeToast = useCallback((id: number) => {
+    timers.current.delete(id);
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   const addToast = useCallback((message: string, type: ToastType = "info") => {
     const id = nextId++;
     setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => removeToast(id), 4500);
+    const timer = setTimeout(() => removeToast(id), 4500);
+    timers.current.set(id, timer);
   }, [removeToast]);
 
   const addToastWithAction = useCallback((message: string, action: ToastAction, type: ToastType = "info") => {
     const id = nextId++;
     setToasts((prev) => [...prev, { id, message, type, action }]);
-    setTimeout(() => removeToast(id), 8000);
+    const timer = setTimeout(() => removeToast(id), 8000);
+    timers.current.set(id, timer);
   }, [removeToast]);
+
+  useEffect(() => {
+    return () => {
+      timers.current.forEach(t => clearTimeout(t));
+      timers.current.clear();
+    };
+  }, []);
 
   const colors: Record<ToastType, string> = {
     success: "border-green-500/50 bg-green-900/40 text-green-300",

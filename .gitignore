@@ -45,3 +45,5 @@ _backups_limpieza/
 dist/
 build/
 .scraper_cache/
+.vercel
+TEST_PLAN.txt

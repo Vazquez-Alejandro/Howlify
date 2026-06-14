@@ -94,7 +94,7 @@ export default function ProfilePage() {
     );
   }
 
-  const plan = (profile.plan as string) || "starter";
+  const plan = (profile.plan as string) ?? "starter";
   const isStarter = plan === "starter";
 
   return (
@@ -114,7 +114,7 @@ export default function ProfilePage() {
             <div>
               <span className="text-red-400 font-medium">{PLAN_LABELS[plan] || plan}</span>
               <p className="text-sm text-gray-500 mt-1">
-                {profile.email as string}
+                {String(profile.email ?? "")}
               </p>
             </div>
             <span className="text-xs bg-gray-800 text-gray-400 px-3 py-1 rounded-full">
@@ -183,7 +183,7 @@ export default function ProfilePage() {
             <div className="flex items-center justify-between">
               <div>
                 <label className="text-sm font-medium text-gray-300">Email</label>
-                <p className="text-xs text-gray-500 mt-0.5">{profile.email as string}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{String(profile.email ?? "")}</p>
               </div>
               <button
                 onClick={() => testChannel("email")}
@@ -197,6 +197,7 @@ export default function ProfilePage() {
               <div className="relative">
                 <input
                   type="checkbox"
+                  aria-label="Notificaciones por email"
                   checked={emailNotifications}
                   onChange={(e) => setEmailNotifications(e.target.checked)}
                   className="sr-only peer"
