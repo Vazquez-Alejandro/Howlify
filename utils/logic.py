@@ -6,7 +6,11 @@ import requests
 from datetime import datetime, timezone
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+from urllib.parse import urlparse
 from auth.supabase_client import supabase
+from utils.logger import get_logger
+logger = get_logger("logic")
+
 
 # ==========================================================
 # 1. UTILIDADES DE LIMPIEZA Y FORMATO
@@ -23,8 +27,14 @@ def _safe_float(val, default=0.0):
     except:
         return default
 
-def parse_price_to_int(val):
-    return int(_safe_float(val))
+def parse_price_to_int(value) -> int:
+    if value is None: return 0
+    if isinstance(value, (int, float)): return int(value)
+    s = str(value).strip()
+    if not s: return 0
+    if re.fullmatch(r"\d+\.\d{1,2}", s): s = s.split(".", 1)[0]
+    digits = re.sub(r"[^\d]", "", s)
+    return int(digits) if digits else 0
 
 def _parse_dt_utc(dt_str):
     if not dt_str: return None
@@ -37,6 +47,19 @@ def _parse_dt_utc(dt_str):
 # 2. LÓGICA DE PLANES Y SCHEDULER
 # ==========================================================
 
+PLAN_ALIAS = {
+    "omega": "starter",
+    "trial": "starter",
+    "starter": "starter",
+    "beta": "pro",
+    "alfa": "pro",
+    "revendedor": "pro",
+    "empresa": "pro",
+    "pro": "pro",
+    "business_reseller": "business_reseller",
+    "business_monitor": "business_monitor",
+}
+
 PLAN_RULES = {
     "starter": {"max_cazas_activas": 5, "freq_options": ["12h", "24h"], "plan_key": "starter", "reseller_markup": 0},
     "pro": {"max_cazas_activas": 15, "freq_options": ["1h", "6h", "12h", "24h"], "plan_key": "pro", "reseller_markup": 0},
@@ -47,9 +70,7 @@ PLAN_RULES = {
 
 def normalize_plan_family(plan: str) -> str:
     raw = (plan or "starter").strip().lower()
-    if raw in ["business_reseller", "business_monitor", "business"]: return raw
-    if raw in ["pro", "beta", "alfa"]: return "pro"
-    return "starter"
+    return PLAN_ALIAS.get(raw, "starter")
 
 def get_effective_plan_rules(plan_name):
     if os.getenv("PAYMENT_ENABLED", "false").lower() != "true":
@@ -87,9 +108,20 @@ def _extract_product_id(url):
     match = re.search(r"(MLA|MLU|MLM|MLB)-?(\d+)", url, re.IGNORECASE)
     return match.group(0) if match else "generic"
 
-def _domain_from_url(url):
-    from urllib.parse import urlparse
-    return urlparse(url).netloc.replace("www.", "")
+def domain_from_url(url: str) -> str:
+    try:
+        host = urlparse(str(url)).netloc.lower().strip()
+        return host[4:] if host.startswith("www.") else host or "unknown"
+    except Exception:
+        return "unknown"
+
+def infer_source_from_url(url: str) -> str:
+    d = domain_from_url(url)
+    sources = ["mercadolibre", "fravega", "garbarino", "tiendamia", "temu", "tripstore", "carrefour", "despegar", "airbnb"]
+    for s in sources:
+        if s in d:
+            return s
+    return "unknown"
 
 def clean_ml_url(url: str) -> str:
     if not url or "mercadolibre" not in url: return url
@@ -145,7 +177,7 @@ def upsert_monitor_rule(user_id, caza_id, product_name, product_url, source, tar
         res = supabase.table("monitor_rules").upsert(data, on_conflict="caza_id").execute()
         return True if res.data else False
     except Exception as e:
-        print(f"❌ Error en upsert_monitor_rule: {e}")
+        logger.error(f"❌ Error en upsert_monitor_rule: {e}")
         return False
 
 # ==========================================================
@@ -165,21 +197,21 @@ def insertar_price_history(caza_id: int, payload: dict):
     if id_valido(caza_id):
         supabase.table("price_history").insert(payload).execute()
     else:
-        print(f"⚠️ caza_id {caza_id} no existe en cazas, se saltea")
+        logger.warning(f"⚠️ caza_id {caza_id} no existe en cazas, se saltea")
 
 def insertar_infraccion(caza_id: int, payload: dict):
     """Inserta en infracciones_log solo si el caza_id existe."""
     if id_valido(caza_id):
         supabase.table("infracciones_log").insert(payload).execute()
     else:
-        print(f"⚠️ caza_id {caza_id} no existe en cazas, se saltea")
+        logger.warning(f"⚠️ caza_id {caza_id} no existe en cazas, se saltea")
 
 def insertar_caza(payload: dict):
     """Inserta en cazas solo si el producto tiene nombre."""
     if payload.get("producto") and payload["producto"].strip():
         supabase.table("cazas").insert(payload).execute()
     else:
-        print("⚠️ Producto sin nombre, no se inserta")
+        logger.warning("⚠️ Producto sin nombre, no se inserta")
 
 # ==========================================================
 # 8. PRICE ANOMALY DETECTION
@@ -206,7 +238,7 @@ def detectar_price_error(caza_id: int, precio_actual: float, umbral: float = 0.6
             return True, round(avg, 2)
         return False, avg
     except Exception as e:
-        print(f"⚠ error detectando price error: {e}")
+        logger.error(f"⚠ error detectando price error: {e}")
         return False, None
 
 # ==========================================================
@@ -277,5 +309,5 @@ def exportar_a_sheets(df, nombre_hoja="Reporte Monitor Howlify"):
         worksheet.update([df.columns.values.tolist()] + df.values.tolist())
         return True, sheet.url if not sheet_id else sheet_id
     except Exception as e:
-        print(f"❌ Error exportando a Google Sheets: {e}")
+        logger.error(f"❌ Error exportando a Google Sheets: {e}")
         return False, str(e)

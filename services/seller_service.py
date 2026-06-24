@@ -3,6 +3,9 @@ import re
 import time
 import requests
 from urllib.parse import urlparse
+from utils.logger import get_logger
+logger = get_logger("seller")
+
 
 ML_API_BASE = "https://api.mercadolibre.com"
 
@@ -66,7 +69,7 @@ def get_seller_info(item_id: str) -> dict | None:
             "permalink": f"https://www.mercadolibre.com.ar/perfil/{seller_id}",
         }
     except Exception as e:
-        print(f"⚠ Error getting seller info for {item_id}: {e}")
+        logger.error(f"⚠ Error getting seller info for {item_id}: {e}")
         return None
 
 

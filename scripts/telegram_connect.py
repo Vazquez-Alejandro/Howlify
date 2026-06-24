@@ -4,6 +4,9 @@ import time
 import requests
 from pathlib import Path
 from dotenv import load_dotenv
+from utils.logger import get_logger
+logger = get_logger("tg")
+
 
 # --- CONFIGURACIÓN DE RUTAS ---
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -12,7 +15,7 @@ sys.path.append(str(BASE_DIR))
 try:
     from auth.supabase_client import supabase
 except ImportError:
-    print("❌ ERROR: No se pudo importar supabase_client. Revisá la estructura de carpetas.")
+    logger.error("❌ ERROR: No se pudo importar supabase_client. Revisá la estructura de carpetas.")
 
 # Carga de entorno
 env_path = BASE_DIR / ".env"
@@ -27,14 +30,14 @@ def enviar_mensaje(chat_id, texto):
     try:
         requests.post(url, json=payload, timeout=10)
     except Exception as e:
-        print(f"❌ Error enviando mensaje: {e}")
+        logger.error(f"❌ Error enviando mensaje: {e}")
 
 def main():
     if not TOKEN:
-        print("❌ ERROR: No se encontró TELEGRAM_TOKEN")
+        logger.error("❌ ERROR: No se encontró TELEGRAM_TOKEN")
         return
 
-    print("🐺 Lobo a la escucha en Telegram (Modo Auto-Vinculación)...")
+    logger.info("🐺 Lobo a la escucha en Telegram (Modo Auto-Vinculación)...")
     offset = None
     
     while True:
@@ -58,7 +61,7 @@ def main():
                             
                             if len(partes) > 1:
                                 bind_token = partes[1].strip()
-                                print(f"🔍 Intentando vincular chat_id {chat_id} con token {bind_token[:8]}...")
+                                logger.info(f"🔍 Intentando vincular chat_id {chat_id} con token {bind_token[:8]}...")
                                 
                                 try:
                                     # Verify token against stored telegram_bind_token
@@ -71,14 +74,14 @@ def main():
                                             "telegram_bind_token": None,
                                         }).eq("user_id", user_id).execute()
                                         
-                                        print(f"✅ Éxito: Perfil actualizado para {user_id}")
+                                        logger.info(f"✅ Éxito: Perfil actualizado para {user_id}")
                                         respuesta = f"¡Hola {user_name}! 🐺\n\n✅ **Cuenta vinculada con éxito.**"
                                     else:
-                                        print(f"⚠️ Token inválido: {bind_token[:8]}...")
+                                        logger.warning(f"⚠️ Token inválido: {bind_token[:8]}...")
                                         respuesta = "❌ Token inválido o expirado. Generá uno nuevo desde la web."
                                         
                                 except Exception as e:
-                                    print(f"❌ Error en Supabase: {e}")
+                                    logger.error(f"❌ Error en Supabase: {e}")
                                     respuesta = "❌ Error técnico al guardar en la base de datos."
                             else:
                                 respuesta = f"¡Hola {user_name}! 🐺\nUsá el link de la web para vincular tu cuenta."
@@ -86,7 +89,7 @@ def main():
                             enviar_mensaje(chat_id, respuesta)
 
         except Exception as e:
-            print(f"❌ Error en el bucle: {e}")
+            logger.error(f"❌ Error en el bucle: {e}")
         
         time.sleep(1)
 

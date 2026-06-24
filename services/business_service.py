@@ -51,7 +51,7 @@ def guardar_oportunidad_business(
         ).execute()
 
     except Exception as e:
-        print("⚠ error guardando oportunidad business:", e)
+        logger.error("⚠ error guardando oportunidad business:", e)
 
 
 def obtener_top_oportunidades(limit=20):
@@ -70,5 +70,5 @@ def obtener_top_oportunidades(limit=20):
         return res.data or []
 
     except Exception as e:
-        print("⚠ error obteniendo oportunidades:", e)
+        logger.error("⚠ error obteniendo oportunidades:", e)
         return []

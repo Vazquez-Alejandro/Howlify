@@ -7,6 +7,9 @@ import time
 from pathlib import Path
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
+from utils.logger import get_logger
+logger = get_logger("generic")
+
 
 CACHE_DIR = Path(__file__).resolve().parents[1] / ".scraper_cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -192,7 +195,7 @@ def _playwright_get(url: str) -> str:
                 html = page.content() if page.content() else ""
             browser.close()
     except Exception as e:
-        print(f"❌ Playwright error: {e}")
+        logger.error(f"❌ Playwright error: {e}")
     return html
 
 

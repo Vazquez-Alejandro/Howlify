@@ -6,6 +6,9 @@ from supabase import create_client
 # Importamos las herramientas ninja que arreglamos ayer
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from utils.logic import get_random_user_agent, apply_human_jitter
+from utils.logger import get_logger
+logger = get_logger("ml_monitor")
+
 
 # CONFIGURACIÓN
 URL = os.getenv("SUPABASE_URL", "")
@@ -14,13 +17,13 @@ KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 supabase = create_client(URL, KEY)
 
 def ejecutar_monitor():
-    print("🐺 [DEBUG] LOBO INICIADO")
+    logger.info("🐺 [DEBUG] LOBO INICIADO")
     try:
         res = supabase.table("monitor_rules").select("*").execute()
         reglas = res.data
 
         if not reglas:
-            print("🌕 Radar vacío.")
+            logger.info("🌕 Radar vacío.")
             return
 
         from playwright.sync_api import sync_playwright
@@ -31,7 +34,7 @@ def ejecutar_monitor():
                 caza_id = regla.get("caza_id")
                 url = regla.get("product_url")
 
-                print(f"🎯 Procesando Caza ID: {caza_id}...")
+                logger.info(f"🎯 Procesando Caza ID: {caza_id}...")
 
                 # Validar que el caza_id exista en cazas
                 exists = supabase.table("cazas").select("id").eq("id", caza_id).execute()
@@ -42,7 +45,7 @@ def ejecutar_monitor():
                         "user_id": regla.get("user_id"),
                         "link": url
                     }).execute()
-                    print(f"📝 Insertado nuevo registro en cazas con ID {caza_id}")
+                    logger.info(f"📝 Insertado nuevo registro en cazas con ID {caza_id}")
 
                 context = browser.new_context(user_agent=get_random_user_agent())
                 page = context.new_page()
@@ -57,16 +60,16 @@ def ejecutar_monitor():
                         if titulo:
                             supabase.table("cazas").update({"producto": titulo}).eq("id", caza_id).execute()
                     except Exception as e_titulo:
-                        print(f"⚠️ No se pudo extraer título: {e_titulo}")
+                        logger.warning(f"⚠️ No se pudo extraer título: {e_titulo}")
 
                     # 📊 Scraping del precio actual
                     precio_real = 0
                     try:
                         precio_text = page.query_selector("span.andes-money-amount__fraction").inner_text()
                         precio_real = int(precio_text.replace(".", "").replace(",", "").strip())
-                        print(f"💰 Precio detectado: {precio_real}")
+                        logger.info(f"💰 Precio detectado: {precio_real}")
                     except Exception as e_precio:
-                        print(f"⚠️ No se pudo extraer precio: {e_precio}")
+                        logger.warning(f"⚠️ No se pudo extraer precio: {e_precio}")
 
                     # Guardar historial de precios
                     if precio_real > 0:
@@ -76,7 +79,7 @@ def ejecutar_monitor():
                             "price": precio_real,
                             "checked_at": time.strftime("%Y-%m-%d %H:%M:%S")
                         }).execute()
-                        print(f"📈 price_history actualizado para ID {caza_id}")
+                        logger.info(f"📈 price_history actualizado para ID {caza_id}")
 
                     # Captura de pantalla
                     os.makedirs("evidence", exist_ok=True)
@@ -85,12 +88,12 @@ def ejecutar_monitor():
 
                     size = os.path.getsize(ruta)
                     if size < 2000:
-                        print(f"⚠️ Captura sospechosa ({size} bytes). Puede ser login/captcha.")
+                        logger.warning(f"⚠️ Captura sospechosa ({size} bytes). Puede ser login/captcha.")
                         status = "screenshot_failed"
                         ruta_final = None
                         error_msg = "Captura sospechosa (archivo muy pequeño)"
                     else:
-                        print(f"📸 Captura guardada: {ruta} ({size} bytes)")
+                        logger.info(f"📸 Captura guardada: {ruta} ({size} bytes)")
                         status = "detected"
                         ruta_final = ruta
                         error_msg = None
@@ -103,10 +106,10 @@ def ejecutar_monitor():
                         "status": status,
                         "error": error_msg
                     }).execute()
-                    print(f"✅ DB Actualizada para ID: {caza_id} con estado {status}")
+                    logger.info(f"✅ DB Actualizada para ID: {caza_id} con estado {status}")
 
                 except Exception as e_page:
-                    print(f"❌ Error en página {caza_id}: {e_page}")
+                    logger.error(f"❌ Error en página {caza_id}: {e_page}")
                     supabase.table("infracciones_log").insert({
                         "caza_id": caza_id,
                         "url_captura": None,
@@ -121,7 +124,7 @@ def ejecutar_monitor():
             browser.close()
 
     except Exception as e:
-        print(f"❌ Error crítico: {e}")
+        logger.error(f"❌ Error crítico: {e}")
 
 if __name__ == "__main__":
     ejecutar_monitor()

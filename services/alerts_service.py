@@ -7,22 +7,14 @@ load_dotenv()
 
 from supabase import create_client
 from services.notification_service import enviar_whatsapp as send_whatsapp, enviar_email as send_email
-from utils.logic import _parse_dt_utc, _safe_float
+from utils.logic import _parse_dt_utc, _safe_float, normalize_plan_family
+from utils.logger import get_logger
+logger = get_logger("alerts")
+
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY else None
-
-PLAN_ALIAS = {
-    "omega": "starter", "trial": "starter", "starter": "starter",
-    "beta": "pro", "alfa": "pro", "revendedor": "pro", "empresa": "pro", "pro": "pro",
-    "business_reseller": "business_reseller", "business_monitor": "business_monitor",
-}
-
-
-def normalize_plan_family(plan: str) -> str:
-    return PLAN_ALIAS.get((plan or "starter").strip().lower(), "starter")
-
 
 def plan_allows_whatsapp(plan: str) -> bool:
     return normalize_plan_family(plan) in {"pro", "business_reseller", "business_monitor"}
@@ -54,7 +46,7 @@ def obtener_ultima_alerta(caza_id):
         rows = res.data or []
         return rows[0] if rows else None
     except Exception as e:
-        print("⚠ error consultando última alerta:", e)
+        logger.error("⚠ error consultando última alerta:", e)
         return None
 
 
@@ -73,7 +65,7 @@ def guardar_alerta(caza_id, user_id, oferta):
             })
         )
     except Exception as e:
-        print("⚠ error guardando alerta:", e)
+        logger.error("⚠ error guardando alerta:", e)
 
 
 def too_soon(prev_alert, minutes=30):
@@ -98,7 +90,7 @@ def obtener_contacto_usuario(user_id):
         rows = res.data or []
         return rows[0] if rows else {}
     except Exception as e:
-        print("⚠ error obteniendo contacto usuario:", e)
+        logger.error("⚠ error obteniendo contacto usuario:", e)
         return {}
 
 
@@ -122,7 +114,7 @@ def disparar_alerta_minima(caza_id, oferta, precio_max):
         precio_referencia = oferta.get("original_price") or precio
         if not es_descuento_fuerte(precio, float(precio_referencia)):
             return False
-    print(f"🚨 OFERTA ENCONTRADA | caza {caza_id} | ${precio} <= max ${precio_max} | {oferta.get('title','')[:80]}")
+    logger.warning(f"🚨 OFERTA ENCONTRADA | caza {caza_id} | ${precio} <= max ${precio_max} | {oferta.get('title','')[:80]}")
     return True
 
 

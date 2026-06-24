@@ -19,6 +19,9 @@ from services.business_service import guardar_oportunidad_business
 from services.duffel_service import buscar_ofertas_vuelos
 from services.database_service import vigilar_ofertas
 from services.notification_service import enviar_email
+from utils.logic import normalize_plan_family
+from utils.logger import get_logger
+logger = get_logger("engine")
 
 
 
@@ -30,25 +33,6 @@ supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 # ==========================================================
 # PLANES / COMPATIBILIDAD
 # ==========================================================
-
-PLAN_ALIAS = {
-    "omega": "starter",
-    "trial": "starter",
-    "starter": "starter",
-    "beta": "pro",
-    "alfa": "pro",
-    "revendedor": "pro",
-    "empresa": "pro",
-    "pro": "pro",
-    "business_reseller": "business_reseller",
-    "business_monitor": "business_monitor",
-}
-
-
-def normalize_plan_family(plan: str) -> str:
-    raw = (plan or "starter").strip().lower()
-    return PLAN_ALIAS.get(raw, "starter")
-
 
 def plan_allows_whatsapp(plan: str) -> bool:
     return normalize_plan_family(plan) in {"pro", "business_reseller", "business_monitor"}
@@ -91,7 +75,7 @@ def _execute_with_retry(builder, attempts=3, delay=1.2):
             return builder.execute()
         except Exception as e:
             last_error = e
-            print(f"⚠ intento {i+1}/{attempts} falló:", e)
+            logger.warning(f"⚠ intento {i+1}/{attempts} falló: {e}")
             if i < attempts - 1:
                 time.sleep(delay)
 
@@ -118,14 +102,14 @@ def _run_scraper(link, producto, precio_max):
     domain = _domain_from_url(link)
 
     if "despegar" in domain:
-        print(f"✈️ [Howlify-API] Consultando Duffel para: {producto}")
+        logger.info(f"✈️ [Howlify-API] Consultando Duffel para: {producto}")
         
         # 1. Llamada a la API
         resultado_raw = buscar_ofertas_vuelos("BUE", "MIA", "2026-05-20")
         
         # 2. Protección: Si Duffel no devuelve nada, salimos antes de que explote
         if not resultado_raw:
-            print("🚨 Duffel no encontró vuelos. Revisá el Token o la fecha.")
+            logger.warning("🚨 Duffel no encontró vuelos. Revisá el Token o la fecha.")
             return []
 
         # 3. Mapeo seguro (Duffel usa estructuras anidadas)
@@ -140,10 +124,10 @@ def _run_scraper(link, producto, precio_max):
                     "source": "duffel"
                 })
             except Exception as e:
-                print(f"⚠️ Error procesando una oferta individual: {e}")
+                logger.error(f"⚠️ Error procesando una oferta individual: {e}")
                 continue
         
-        print(f"✅ Se procesaron {len(ofertas_limpias)} ofertas de Duffel.")
+        logger.info(f"✅ Se procesaron {len(ofertas_limpias)} ofertas de Duffel.")
         return ofertas_limpias
 
     if "mercadolibre" in domain:
@@ -218,7 +202,7 @@ def obtener_ultima_alerta(caza_id):
         return rows[0] if rows else None
 
     except Exception as e:
-        print("⚠ error consultando última alerta:", e)
+        logger.error("⚠ error consultando última alerta:", e)
         return None
 
 
@@ -237,7 +221,7 @@ def guardar_alerta(caza_id, user_id, oferta):
             )
         )
     except Exception as e:
-        print("⚠ error guardando alerta:", e)
+        logger.error("⚠ error guardando alerta:", e)
 
 def too_soon(prev_alert, minutes=30):
     if not prev_alert:
@@ -268,7 +252,7 @@ def obtener_contacto_usuario(user_id):
         return rows[0]
 
     except Exception as e:
-        print("⚠ error obteniendo contacto usuario:", e)
+        logger.error("⚠ error obteniendo contacto usuario:", e)
         return {}
 
 
@@ -370,7 +354,7 @@ def guardar_historial(caza_id, resultados, user_id): # <-- Agregamos user_id aqu
             supabase.table("price_history").insert(rows)
         )
     except Exception as e:
-        print("⚠ error guardando historial:", e)
+        logger.error("⚠ error guardando historial:", e)
 
 # ==========================================================
 # ALERTA MINIMA
@@ -400,7 +384,7 @@ def _obtener_precio_referencia(caza_id):
         if prices:
             return sum(prices) / len(prices)
     except Exception as e:
-        print(f"⚠ error obteniendo precio referencia para caza {caza_id}: {e}")
+        logger.error(f"⚠ error obteniendo precio referencia para caza {caza_id}: {e}")
     return None
 
 
@@ -529,7 +513,7 @@ def evaluar_reglas_alerta(caza_id, user_id):
                     if email:
                         enviar_email(email, title, body)
     except Exception as e:
-        print(f"⚠ error evaluando reglas alerta caza {caza_id}: {e}")
+        logger.error(f"⚠ error evaluando reglas alerta caza {caza_id}: {e}")
 
 # ==========================================================
 # ENVIO POR CANAL (AHORA CENTRALIZADO)
@@ -578,10 +562,10 @@ def enviar_alerta_por_canal(user_contact, oferta, caza_nombre=""):
 def start_engine(run_once=False):
     global _scheduler
 
-    print("🔥 start_engine() fue llamado")
+    logger.info("🔥 start_engine() fue llamado")
 
     if run_once:
-        print("⚡ Ejecutando vigilar_ofertas() manualmente")
+        logger.info("⚡ Ejecutando vigilar_ofertas() manualmente")
         vigilar_ofertas()
 
     if _scheduler is not None:
@@ -598,7 +582,7 @@ def start_engine(run_once=False):
     )
     _scheduler.start()
 
-    print("🚀 Motor Howlify iniciado (tick 1 min)")
+    logger.info("🚀 Motor Howlify iniciado (tick 1 min)")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,9 @@ load_dotenv()
 from playwright.sync_api import sync_playwright
 from duffel_api import Duffel
 from utils.logic import obtener_dolar_tarjeta
+from utils.logger import get_logger
+logger = get_logger("despegar")
+
 
 get_dolar_tarjeta = obtener_dolar_tarjeta
 
@@ -45,7 +48,7 @@ def generar_fechas_busqueda(meses_adelante=12):
 
 def hunt_vuelos_api(dest_iata: str, max_price: int = 0, url: str = ""):
     if not DUFFEL_TOKEN:
-        print("⚠️ [Duffel] No se encontró DUFFEL_ACCESS_TOKEN en el .env")
+        logger.warning("⚠️ [Duffel] No se encontró DUFFEL_ACCESS_TOKEN en el .env")
         return []
 
     headers = {
@@ -55,12 +58,12 @@ def hunt_vuelos_api(dest_iata: str, max_price: int = 0, url: str = ""):
     }
 
     try:
-        print(f"🚀 [API] Buscando vuelos EZE -> {dest_iata} para los próximos 12 meses...")
+        logger.info(f"🚀 [API] Buscando vuelos EZE -> {dest_iata} para los próximos 12 meses...")
         ventanas = generar_fechas_busqueda(12)
         all_results = []
         
         cotizacion = get_dolar_tarjeta()
-        print(f"💵 Cotización Dólar Tarjeta: ${cotizacion}")
+        logger.info(f"💵 Cotización Dólar Tarjeta: ${cotizacion}")
 
         for ida, vuelta in ventanas:
             payload = {
@@ -113,13 +116,13 @@ def hunt_vuelos_api(dest_iata: str, max_price: int = 0, url: str = ""):
         return sorted(all_results, key=lambda x: x["price"])[:10]
 
     except Exception as e:
-        print(f"❌ Error fatal en Duffel: {e}")
+        logger.error(f"❌ Error fatal en Duffel: {e}")
         return []
 
 # --- FUNCIONES DE SOPORTE ---
 
 def _scrape_monthly_matrix(url, max_price=0):
-    print("👀 MODO HUMANO: Buscando precios con espera inteligente...")
+    logger.info("👀 MODO HUMANO: Buscando precios con espera inteligente...")
     mejores_ofertas = []
     
     with sync_playwright() as p:
@@ -155,10 +158,10 @@ def _scrape_monthly_matrix(url, max_price=0):
                             "source": "visual_hunt"
                         })
 
-            print(f"✅ El Lobo detectó {len(mejores_ofertas)} precios en pantalla.")
+            logger.info(f"✅ El Lobo detectó {len(mejores_ofertas)} precios en pantalla.")
 
         except Exception as e:
-            print(f"❌ Error en Modo Humano: {e}")
+            logger.error(f"❌ Error en Modo Humano: {e}")
         finally:
             browser.close()
             
@@ -197,7 +200,7 @@ def hunt_despegar_vuelos(url, keyword="", max_price=0, es_pro=False, headless=Tr
         return res
     
     # --- SCRAPER FALLBACK ---
-    print(f"🕵️ Iniciando Scraper de respaldo...")
+    logger.info(f"🕵️ Iniciando Scraper de respaldo...")
     presas = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -217,7 +220,7 @@ def hunt_despegar_vuelos(url, keyword="", max_price=0, es_pro=False, headless=Tr
                         "price": price, "url": url, "source": "scraper_vuelo"
                     })
         except Exception as e:
-            print(f"❌ Error Scraper: {e}")
+            logger.error(f"❌ Error Scraper: {e}")
         finally:
             browser.close()
     return presas

@@ -5,6 +5,9 @@ import random
 import time
 import requests
 from typing import Optional
+from utils.logger import get_logger
+logger = get_logger("proxy")
+
 
 
 PROXY_BACKEND = os.getenv("PROXY_BACKEND", "direct")
@@ -32,9 +35,9 @@ def _fetch_free_proxies() -> list[dict]:
                 {"http": f"http://{p}", "https": f"http://{p}"}
                 for p in lines[:50]
             ]
-            print(f"[proxy] Cargados {len(FREE_PROXIES)} proxies libres")
+            logger.info(f"[proxy] Cargados {len(FREE_PROXIES)} proxies libres")
     except Exception as e:
-        print(f"[proxy] Error fetching free proxies: {e}")
+        logger.error(f"[proxy] Error fetching free proxies: {e}")
     return FREE_PROXIES
 
 
@@ -81,7 +84,7 @@ def fetch_via_scraperapi(url: str, *, render: bool = True, premium: bool = True,
         if resp.status_code == 200:
             return resp.text
     except Exception as e:
-        print(f"[proxy] ScraperAPI error: {e}")
+        logger.error(f"[proxy] ScraperAPI error: {e}")
     return None
 
 
@@ -127,5 +130,5 @@ def requests_get(url: str, *, timeout: int = 30, retries: int = 3, headers: Opti
             last_error = e
         if attempt < retries:
             time.sleep(1.5 * attempt)
-    print(f"[proxy] GET failed after {retries} retries: {last_error}")
+    logger.error(f"[proxy] GET failed after {retries} retries: {last_error}")
     return None

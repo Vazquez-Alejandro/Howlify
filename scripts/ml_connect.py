@@ -1,6 +1,9 @@
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+from utils.logger import get_logger
+logger = get_logger("ml_connect")
+
 
 BASE_DIR = Path(__file__).resolve().parents[1]  # .../howlify
 PROFILE_PATH = BASE_DIR / "sessions" / "ml_profile"
@@ -39,14 +42,14 @@ def main():
         except Exception:
             pass
 
-        print("\n✅ Se abrió MercadoLibre con perfil persistente.")
-        print("1) Si aparece CAPTCHA, resolvelo en la ventana.")
-        print("2) Si te pide login, logueate.")
-        print("3) Navegá un poco por MercadoLibre para dejar la sesión 'caliente'.")
+        logger.info("\n✅ Se abrió MercadoLibre con perfil persistente.")
+        logger.info("1)
+        logger.info("2)
+        logger.info("3)
         input("\nCuando termines, apretá ENTER acá para cerrar y guardar el perfil... ")
 
         context.close()
-        print(f"💾 Perfil persistente listo en: {PROFILE_PATH}")
+        logger.info(f"💾 Perfil persistente listo en: {PROFILE_PATH}")
 
 
 if __name__ == "__main__":

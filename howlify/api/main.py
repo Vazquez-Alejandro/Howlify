@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
 
 from auth.supabase_client import supabase
+from utils.logic import domain_from_url, infer_source_from_url, parse_price_to_int, clean_ml_url
 
 from pywebpush import webpush, WebPushException
 
@@ -187,40 +188,6 @@ class CreatePreferenceRequest(BaseModel):
     plan: str = "pro"
 
 # ─── Helpers ────────────────────────────────────────────
-
-def domain_from_url(url: str) -> str:
-    try:
-        host = urlparse(str(url)).netloc.lower().strip()
-        return host[4:] if host.startswith("www.") else host or "unknown"
-    except Exception:
-        return "unknown"
-
-def infer_source_from_url(url: str) -> str:
-    d = domain_from_url(url)
-    if "mercadolibre" in d: return "mercadolibre"
-    if "fravega" in d: return "fravega"
-    if "garbarino" in d: return "garbarino"
-    if "tiendamia" in d: return "tiendamia"
-    if "temu" in d: return "temu"
-    if "tripstore" in d: return "tripstore"
-    if "carrefour" in d: return "carrefour"
-    if "despegar" in d: return "despegar"
-    if "airbnb" in d: return "airbnb"
-    return "unknown"
-
-def parse_price_to_int(value) -> int:
-    if value is None: return 0
-    if isinstance(value, (int, float)): return int(value)
-    s = str(value).strip()
-    if not s: return 0
-    if re.fullmatch(r"\d+\.\d{1,2}", s): s = s.split(".", 1)[0]
-    digits = re.sub(r"[^\d]", "", s)
-    return int(digits) if digits else 0
-
-def clean_ml_url(url: str) -> str:
-    if not url: return url
-    parsed = urlparse(url)
-    return f"{parsed.scheme}://{parsed.netloc}{parsed.path}".rstrip("/")
 
 def save_price_history(user_id: str, caza_id, results: list[dict]):
     if not user_id or not results: return

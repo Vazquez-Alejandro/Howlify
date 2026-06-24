@@ -1,6 +1,9 @@
 import os
 import requests
 from dotenv import load_dotenv
+from utils.logger import get_logger
+logger = get_logger("duffel")
+
 
 load_dotenv()
 
@@ -11,7 +14,7 @@ def buscar_ofertas_vuelos(origen, destino, fecha):
     Consulta directa usando la versión v2 que ya sabemos que funciona.
     """
     if not DUFFEL_TOKEN:
-        print("❌ Error: No se encontró DUFFEL_ACCESS_TOKEN")
+        logger.error("❌ Error: No se encontró DUFFEL_ACCESS_TOKEN")
         return None
 
     url = "https://api.duffel.com/air/offer_requests"
@@ -43,13 +46,13 @@ def buscar_ofertas_vuelos(origen, destino, fecha):
     }
 
     try:
-        print(f"🚀 [API-v2] Consultando: {ori} -> {des} para el {fecha}...")
+        logger.info(f"🚀 [API-v2] Consultando: {ori} -> {des} para el {fecha}...")
         
         response = requests.post(url, json=payload, headers=headers, timeout=20)
         
         if response.status_code != 201:
             # Si vuelve a fallar, este print nos va a decir exactamente POR QUÉ
-            print(f"❌ Error API Duffel v2 ({response.status_code}): {response.text}")
+            logger.error(f"❌ Error API Duffel v2 ({response.status_code}): {response.text}")
             return []
 
         data = response.json()
@@ -61,9 +64,9 @@ def buscar_ofertas_vuelos(origen, destino, fecha):
                 self.total_amount = float(raw_offer.get("total_amount", 0))
                 self.destination = type('obj', (object,), {'name': des})
 
-        print(f"✅ [Duffel v2] ¡ÉXITO! Se encontraron {len(offers)} ofertas.")
+        logger.info(f"✅ [Duffel v2] ¡ÉXITO! Se encontraron {len(offers)} ofertas.")
         return [SimpleOffer(o) for o in offers]
 
     except Exception as e:
-        print(f"❌ Error en la conexión v2: {e}")
+        logger.error(f"❌ Error en la conexión v2: {e}")
         return []

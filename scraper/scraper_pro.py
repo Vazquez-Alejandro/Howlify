@@ -11,6 +11,9 @@ from bs4 import BeautifulSoup
 from .despegar import hunt_despegar_vuelos
 from .generic import hunt_generic, extract_price_from_text
 from utils.logic import get_random_user_agent, apply_human_jitter
+from utils.logger import get_logger
+logger = get_logger("scraper")
+
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 EVIDENCE_PATH = BASE_DIR / "evidence"
@@ -125,14 +128,14 @@ def _verificar_precio_personalizado(url: str, precio_original: int | None) -> di
         )
 
         if es_personalizado:
-            print(f"🎭 Precio personalizado detectado: ${precio_original} vs ${precio_alt}")
+            logger.info(f"🎭 Precio personalizado detectado: ${precio_original} vs ${precio_alt}")
 
         return {
             "precio_personalizado": es_personalizado,
             "precio_alternativo": precio_alt,
         }
     except Exception as e:
-        print(f"⚠️ Error verificando precio personalizado: {e}")
+        logger.error(f"⚠️ Error verificando precio personalizado: {e}")
         return {"precio_personalizado": False, "precio_alternativo": None}
 
 
@@ -141,7 +144,7 @@ def hunt_offers(url: str, keyword: str, max_price: int, es_pro: bool = False, he
     apply_human_jitter()
 
     host = _domain(url)
-    print(f"🔍 Host: {host} | URL: {url[:40]}...")
+    logger.info(f"🔍 Host: {host} | URL: {url[:40]}...")
 
     vuelos_sites = ["despegar", "almundo", "turismocity", "avantrip", "smiles"]
     if any(site in host for site in vuelos_sites):

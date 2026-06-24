@@ -13,6 +13,9 @@ from auth.auth_supabase import supa_refresh_session
 
 # 🐺 IMPORTACIÓN CENTRALIZADA DE NOTIFICACIONES
 from services.notification_service import enviar_telegram, enviar_email, enviar_whatsapp
+from utils.logger import get_logger
+logger = get_logger("db_service")
+
 
 # ==========================================================
 # CONEXIONES SUPABASE
@@ -99,7 +102,7 @@ def guardar_caza_supabase(
         # contar cazas activas
         activas, err = contar_cazas_activas(user_id, refresh_token)
         if err:
-            print(f"⚠️ [guardar_caza_supabase] error al contar cazas: {err}")
+            logger.error(f"⚠️ [guardar_caza_supabase] error al contar cazas: {err}")
             return False
         if activas >= max_cazas:
             return "limite"
@@ -123,10 +126,10 @@ def guardar_caza_supabase(
         }
 
         # === DEBUG LOG ===
-        print("-----------------------------------------")
-        print(f"🚀 INTENTANDO INSERCIÓN DIRECTA:")
-        print(f"Payload: {payload}")
-        print("-----------------------------------------")
+        logger.info("-----------------------------------------")
+        logger.info(f"🚀 INTENTANDO INSERCIÓN DIRECTA:")
+        logger.info(f"Payload: {payload}")
+        logger.info("-----------------------------------------")
 
         # Inserción directa usando el cliente global de supabase
         # Esto evita el error 'col' de safe_query
@@ -134,19 +137,19 @@ def guardar_caza_supabase(
             res = supabase.table("cazas").insert(payload).execute()
             
             if res.data:
-                print("✅ [guardar_caza_supabase] Inserción exitosa.")
+                logger.info("✅ [guardar_caza_supabase] Inserción exitosa.")
                 return True
             else:
-                print(f"⚠️ [guardar_caza_supabase] No se devolvieron datos: {res}")
+                logger.warning(f"⚠️ [guardar_caza_supabase] No se devolvieron datos: {res}")
                 return False
 
         except Exception as db_err:
             # Si el error es por una columna inexistente, acá te va a decir el nombre
-            print(f"❌ [guardar_caza_supabase] Error de base de datos: {db_err}")
+            logger.error(f"❌ [guardar_caza_supabase] Error de base de datos: {db_err}")
             return False
 
     except Exception as e:
-        print(f"❌ [guardar_caza_supabase] error fatal: {e}")
+        logger.error(f"❌ [guardar_caza_supabase] error fatal: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -185,7 +188,7 @@ def vigilar_ofertas(refresh_token=None):
         guardar_alerta,
     )
 
-    print("🐺 Vigilando ofertas...")
+    logger.info("🐺 Vigilando ofertas...")
     now = datetime.now(timezone.utc)
     valor_dolar_hoy = obtener_dolar_tarjeta()
 
@@ -193,7 +196,7 @@ def vigilar_ofertas(refresh_token=None):
         # ✅ usa safe_query para cazas de usuario
         cazas = safe_query("cazas", [], refresh_token) or []
     except Exception as e:
-        print("⚠ error consultando cazas:", e)
+        logger.error("⚠ error consultando cazas:", e)
         return
 
     force_run = os.getenv("FORCE_RUN", "0") == "1"
@@ -214,7 +217,7 @@ def vigilar_ofertas(refresh_token=None):
         mins = _effective_minutes(c.get("plan"), frecuencia)
         last_dt = _parse_dt_utc(last_check)
         if (not force_run) and last_dt and (now - last_dt) < timedelta(minutes=mins):
-            print(f"⏭️ Saltando caza {caza_id} ({producto}) por frecuencia {frecuencia}")
+            logger.info(f"⏭️ Saltando caza {caza_id} ({producto}) por frecuencia {frecuencia}")
             continue
 
         precio_limite_final = precio_max_db
@@ -268,7 +271,7 @@ def vigilar_ofertas(refresh_token=None):
                 pass
 
         except Exception as e:
-            print(f"⚠ error en caza {caza_id}: {e}")
+            logger.error(f"⚠ error en caza {caza_id}: {e}")
         finally:
             # ✅ actualización con safe_query: ahora incluye last_check
             safe_query(
@@ -369,7 +372,7 @@ def ejecutar_reporte_diario_total(force=False):
     hora_minuto = now.strftime("%H:%M")
 
     try:
-        print(f"🕒 [{now.strftime('%H:%M:%S')}] Chequeando reportes para {dia_actual} {hora_minuto} (Force={force})...")
+        logger.info(f"🕒 [{now.strftime('%H:%M:%S')}] Chequeando reportes para {dia_actual} {hora_minuto} (Force={force})...")
 
         query = (supabase.table("profiles")
             .select("user_id, username, plan, telegram_id, whatsapp_number, report_days, report_time")
@@ -389,21 +392,21 @@ def ejecutar_reporte_diario_total(force=False):
             cazas = res_cazas.data or []
 
             if not cazas:
-                print(f"ℹ️ {username} no tiene cacerías activas para reportar.")
+                logger.info(f"ℹ️ {username} no tiene cacerías activas para reportar.")
                 continue
 
             mensaje = armar_texto_reporte(uid, cazas, u.get("plan", "starter"), username)
 
             if u.get("telegram_id"):
                 enviar_telegram(u["telegram_id"], mensaje)
-                print(f"✅ Reporte Telegram enviado a {username}")
+                logger.info(f"✅ Reporte Telegram enviado a {username}")
 
             if u.get("whatsapp_number"):
                 enviar_whatsapp(u["whatsapp_number"], mensaje)
-                print(f"✅ Reporte WhatsApp enviado a {username}")
+                logger.info(f"✅ Reporte WhatsApp enviado a {username}")
 
     except Exception as e:
-        print(f"❌ Error crítico en reporte diario: {e}")
+        logger.error(f"❌ Error crítico en reporte diario: {e}")
 
 
 def ejecutar_reporte_semanal(force=False):
@@ -415,11 +418,11 @@ def ejecutar_reporte_semanal(force=False):
     tz = pytz.timezone('America/Argentina/Buenos_Aires')
     now = datetime.now(tz)
     if not force and now.weekday() != 6:
-        print("⏭️ No es domingo, saltando reporte semanal")
+        logger.info("⏭️ No es domingo, saltando reporte semanal")
         return
 
     try:
-        print(f"📅 Reporte semanal {now.strftime('%d/%m/%Y')}...")
+        logger.info(f"📅 Reporte semanal {now.strftime('%d/%m/%Y')}...")
         res = supabase.table("profiles").select("user_id, username, telegram_id, whatsapp_number").eq("report_enabled", True).execute()
         for u in (res.data or []):
             uid = u["user_id"]
@@ -449,10 +452,10 @@ def ejecutar_reporte_semanal(force=False):
                 enviar_telegram(u["telegram_id"], mensaje)
             if u.get("whatsapp_number"):
                 enviar_whatsapp(u["whatsapp_number"], mensaje)
-            print(f"✅ Reporte semanal enviado a {username}")
+            logger.info(f"✅ Reporte semanal enviado a {username}")
 
     except Exception as e:
-        print(f"❌ Error en reporte semanal: {e}")
+        logger.error(f"❌ Error en reporte semanal: {e}")
 
 
 def guardar_config_reporte(user_id, enabled, hora, dias):
@@ -497,4 +500,4 @@ def notificar_presa(caza, precio_anterior, precio_nuevo, telegram_id):
     try:
         enviar_telegram(telegram_id, mensaje)
     except Exception as e:
-        print(f"❌ Error al notificar presa: {e}")
+        logger.error(f"❌ Error al notificar presa: {e}")

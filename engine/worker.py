@@ -14,6 +14,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from auth.supabase_client import supabase  
 from scraper.scraper_pro import hunt_offers 
 from services.notification_service import despachar_alertas_jauria
+from utils.logger import get_logger
+logger = get_logger("worker")
+
 
 
 # ---------------------------------------
@@ -58,17 +61,17 @@ def obtener_cazas_pendientes():
 
     return pendientes
 def main():
-    print("🐺 LOBO GUARDIÁN: Iniciando sistema de vigilancia pro...")
+    logger.info("🐺 LOBO GUARDIÁN: Iniciando sistema de vigilancia pro...")
     
     while True:
         try:
-            print(f"🕒 [{datetime.now().strftime('%H:%M:%S')}] Escaneando agenda en Supabase...")
+            logger.info(f"🕒 [{datetime.now().strftime('%H:%M:%S')}] Escaneando agenda en Supabase...")
             cazas = obtener_cazas_pendientes() 
             
             if cazas:
-                print(f"🎯 Encontradas {len(cazas)} cacerías vencidas. Lanzando jauría...")
+                logger.info(f"🎯 Encontradas {len(cazas)} cacerías vencidas. Lanzando jauría...")
                 for caza in cazas:
-                    print(f"🔎 Procesando: {caza['producto']} (ID: {caza['id']})")
+                    logger.info(f"🔎 Procesando: {caza['producto']} (ID: {caza['id']})")
                     
                     precio_anterior = caza.get("ultimo_precio_detectado") 
                     precio_objetivo = caza.get("precio_max")
@@ -92,7 +95,7 @@ def main():
 
                     if resultados:
                         precio_actual = resultados[0].get("price")
-                        print(f"✅ Presa detectada para '{caza['producto']}'. Precio actual: ${precio_actual}")
+                        logger.info(f"✅ Presa detectada para '{caza['producto']}'. Precio actual: ${precio_actual}")
                         
                         # --- 🐺 LÓGICA DE SEMÁFORO INTELIGENTE ---
                         estado = "🟢" 
@@ -117,7 +120,7 @@ def main():
                                 if ahora_utc - last_alert_dt < timedelta(minutes=30):
                                     puedo_alertar = False
                             except Exception as e:
-                                print(f"⚠ Error parseando last_alert_at: {e}")
+                                logger.error(f"⚠ Error parseando last_alert_at: {e}")
 
                         # --- 🚀 DESPACHO DE NOTIFICACIONES ---
                         if estado in ["🟡", "🔴"] and puedo_alertar:
@@ -128,21 +131,21 @@ def main():
                             
                             if not user_profile:
                                 try:
-                                    print(f"⚠️ Buscando perfil de emergencia en DB para: {caza.get('user_id')}")
+                                    logger.warning(f"⚠️ Buscando perfil de emergencia en DB para: {caza.get('user_id')}")
                                     res_perfil = supabase.table("profiles").select("*").eq("user_id", caza.get("user_id")).execute()
                                     if res_perfil.data and len(res_perfil.data) > 0:
                                         user_profile = res_perfil.data[0]
                                 except Exception as e:
-                                    print(f"❌ Error buscando perfil: {e}")
+                                    logger.error(f"❌ Error buscando perfil: {e}")
 
                             # Si no hay perfil, skip
                             if not user_profile:
-                                print(f"⚠️ No se encontró perfil para {caza.get('user_id')}, saltando")
+                                logger.warning(f"⚠️ No se encontró perfil para {caza.get('user_id')}, saltando")
                                 continue
 
                             if user_profile and isinstance(user_profile, dict) and user_profile.get('email'):
                                 email_hash = hashlib.sha256(user_profile['email'].encode()).hexdigest()[:12]
-                                print(f"📣 ¡GATILLO! Enviando notificación {estado} a {email_hash}")
+                                logger.info(f"📣 ¡GATILLO! Enviando notificación {estado} a {email_hash}")
                                 despachar_alertas_jauria(
                                     user_data=user_profile,
                                     producto=caza['producto'],
@@ -153,32 +156,32 @@ def main():
                                 update_data["last_alert_at"] = ahora_utc.isoformat()
                                 update_data["last_alert_price"] = precio_actual
                             else:
-                                print(f"❌ No se pudo recuperar data del usuario {caza.get('user_id')}")
+                                logger.error(f"❌ No se pudo recuperar data del usuario {caza.get('user_id')}")
 
                         update_data["ultimo_precio_detectado"] = precio_actual
                     else:
-                        print(f"💨 Sin novedades para '{caza['producto']}'.")
+                        logger.info(f"💨 Sin novedades para '{caza['producto']}'.")
 
                     # Actualizamos Supabase con los resultados del ciclo
                     supabase.table("cazas").update(update_data).eq("id", caza["id"]).execute()  
                     
             else:
-                print("💤 Nada que cazar por ahora. Todo bajo control.")
+                logger.info("💤 Nada que cazar por ahora. Todo bajo control.")
 
             # --- 🐺 REPORTE DIARIO AUTOMÁTICO ---
             # Se ejecuta una vez por cada vuelta del loop (cada minuto)
             try:
                 ejecutar_reporte_diario_total()
             except Exception as e:
-                print(f"❌ Error en despacho de reporte diario: {e}")
+                logger.error(f"❌ Error en despacho de reporte diario: {e}")
 
         except Exception as e:
-            print(f"❌ Error crítico en el ciclo del Worker: {e}")
+            logger.error(f"❌ Error crítico en el ciclo del Worker: {e}")
 
         time.sleep(60)
 
 def _handle_exit(signum, frame):
-    print(f"\n🛑 Apagando el Lobo Guardián de forma segura... [Signal {signum}]")
+    logger.info(f"\n🛑 Apagando el Lobo Guardián de forma segura... [Signal {signum}]")
     sys.exit(0)
 
 if __name__ == "__main__":

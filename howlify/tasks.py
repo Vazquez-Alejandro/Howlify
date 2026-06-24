@@ -14,6 +14,9 @@ from utils.logic import (
     parse_price_to_int, _extract_product_id, _domain_from_url, normalize_plan_family,
 )
 from services.business_service import guardar_oportunidad_business
+from utils.logger import get_logger
+logger = get_logger("tasks")
+
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
@@ -50,7 +53,7 @@ def _save_price_history(caza_id: int, user_id: str, results: list[dict]):
         try:
             supabase.table("price_history").insert(rows).execute()
         except Exception as e:
-            print(f"[tasks] error saving price history: {e}")
+            logger.error(f"[tasks] error saving price history: {e}")
 
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=30)
@@ -98,13 +101,13 @@ def hunt_all_user_task(self, user_id: str):
 def vigilar_ofertas_task():
     if not supabase:
         return {"error": "Supabase no configurado"}
-    print("[celery] vigilar_ofertas_task ejecutando...")
+    logger.info("[celery] vigilar_ofertas_task ejecutando...")
     now = datetime.now(timezone.utc)
     valor_dolar = obtener_dolar_tarjeta()
     try:
         cazas = supabase.table("cazas").select("*").eq("estado", "activa").execute()
     except Exception as e:
-        print(f"[celery] error consultando cazas: {e}")
+        logger.error(f"[celery] error consultando cazas: {e}")
         return {"error": str(e)}
     for c in cazas.data or []:
         caza_id = c.get("id")
@@ -166,7 +169,7 @@ def vigilar_ofertas_task():
             _save_price_history(caza_id, user_id, resultados)
             supabase.table("cazas").update({"last_check": now.isoformat()}).eq("id", caza_id).execute()
         except Exception as e:
-            print(f"[celery] error caza {caza_id}: {e}")
+            logger.error(f"[celery] error caza {caza_id}: {e}")
     return {"status": "ok"}
 
 
@@ -184,19 +187,19 @@ def _enviar_alerta(profile: dict, producto: str, oferta: dict, precio: float):
         try:
             enviar_telegram(t_id, mensaje)
         except Exception as e:
-            print(f"[tasks] error telegram: {e}")
+            logger.error(f"[tasks] error telegram: {e}")
     if email:
         try:
             enviar_email(email, f"🐺 Oferta: {titulo}", mensaje)
         except Exception as e:
-            print(f"[tasks] error email: {e}")
+            logger.error(f"[tasks] error email: {e}")
     if _norm_plan(profile.get("plan", "")) != "starter":
         wapp = profile.get("whatsapp_number")
         if wapp:
             try:
                 enviar_whatsapp(wapp, mensaje.replace("*", ""))
             except Exception as e:
-                print(f"[tasks] error whatsapp: {e}")
+                logger.error(f"[tasks] error whatsapp: {e}")
 
 
 @celery_app.task

@@ -2,6 +2,9 @@ import re
 import time
 from playwright.sync_api import sync_playwright
 from utils.logic import obtener_dolar_tarjeta
+from utils.logger import get_logger
+logger = get_logger("airbnb")
+
 
 get_dolar_tarjeta = obtener_dolar_tarjeta
 
@@ -41,7 +44,7 @@ def _detect_currency(text: str, cotizacion: float) -> tuple[int, str]:
 
 
 def hunt_airbnb(url, max_price=0):
-    print(f"🏠 [Airbnb] Iniciando rastreo Pro en: {url}")
+    logger.info(f"🏠 [Airbnb] Iniciando rastreo Pro en: {url}")
     results = []
     cotizacion = get_dolar_tarjeta()
 
@@ -79,7 +82,7 @@ def hunt_airbnb(url, max_price=0):
                     })
 
         except Exception as e:
-            print(f"❌ [Airbnb] Error en la cacería: {e}")
+            logger.error(f"❌ [Airbnb] Error en la cacería: {e}")
         finally:
             browser.close()
 

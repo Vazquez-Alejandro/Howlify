@@ -1,6 +1,9 @@
 import os
 import requests
 from datetime import datetime
+from utils.logger import get_logger
+logger = get_logger("notif")
+
 
 # ==========================================
 # 📧 CANAL EMAIL (Vía Resend - Más estable)
@@ -10,7 +13,7 @@ def enviar_email(destinatario, asunto, cuerpo_html):
     from_email = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
     
     if not api_key:
-        print("❌ Resend: API Key no configurada en Render.")
+        logger.error("❌ Resend: API Key no configurada en Render.")
         return False
 
     url = "https://api.resend.com/emails"
@@ -27,10 +30,10 @@ def enviar_email(destinatario, asunto, cuerpo_html):
     
     try:
         r = requests.post(url, json=payload, headers=headers, timeout=15)
-        print(f"DEBUG MAIL: {r.status_code} - {r.text[:200]}")
+        logger.info(f"DEBUG MAIL: {r.status_code} - {r.text[:200]}")
         return r.status_code in [200, 201]
     except Exception as e:
-        print(f"❌ Error Email: {e}")
+        logger.error(f"❌ Error Email: {e}")
         return False
 
 # ==========================================
@@ -39,7 +42,7 @@ def enviar_email(destinatario, asunto, cuerpo_html):
 def enviar_telegram(chat_id, mensaje):
     token = os.getenv("TELEGRAM_TOKEN")
     if not token:
-        print("❌ Telegram: Token no configurado.")
+        logger.error("❌ Telegram: Token no configurado.")
         return False
     
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -52,7 +55,7 @@ def enviar_telegram(chat_id, mensaje):
         r = requests.post(url, json=payload, timeout=10)
         return r.status_code == 200
     except Exception as e:
-        print(f"❌ Error Telegram: {e}")
+        logger.error(f"❌ Error Telegram: {e}")
         return False
 
 # ==========================================
@@ -62,7 +65,7 @@ def enviar_whatsapp(numero, mensaje):
     token = os.getenv("WHATSAPP_TOKEN")
     
     if not token or not numero:
-        print("❌ WhatsApp: Token o número no configurados.")
+        logger.error("❌ WhatsApp: Token o número no configurados.")
         return False
         
     num_clean = "".join(filter(str.isdigit, str(numero)))
@@ -80,10 +83,10 @@ def enviar_whatsapp(numero, mensaje):
     
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=10)
-        print(f"DEBUG WHATSAPP: {response.status_code} - {response.text[:200]}")
+        logger.info(f"DEBUG WHATSAPP: {response.status_code} - {response.text[:200]}")
         return response.status_code in [200, 201]
     except Exception as e:
-        print(f"❌ Error WhatsApp: {e}")
+        logger.error(f"❌ Error WhatsApp: {e}")
         return False
 
 # ==========================================
