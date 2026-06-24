@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from supabase import create_client
+from auth.supabase_client import supabase
 from howlify.celery_app import celery_app
 from scraper.scraper_pro import hunt_offers
 from services.notification_service import enviar_telegram, enviar_email, enviar_whatsapp
@@ -17,10 +17,6 @@ from services.business_service import guardar_oportunidad_business
 from utils.logger import get_logger
 logger = get_logger("tasks")
 
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY else None
 
 ALERT_COOLDOWN_MINUTES = int(os.getenv("ALERT_COOLDOWN_MINUTES", "30") or 30)
 PLAN_ALIAS = {

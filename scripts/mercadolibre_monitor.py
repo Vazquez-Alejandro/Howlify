@@ -2,19 +2,11 @@ import os
 import sys
 import time
 import random
-from supabase import create_client
-# Importamos las herramientas ninja que arreglamos ayer
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from auth.supabase_client import supabase
 from utils.logic import get_random_user_agent, apply_human_jitter
 from utils.logger import get_logger
 logger = get_logger("ml_monitor")
-
-
-# CONFIGURACIÓN
-URL = os.getenv("SUPABASE_URL", "")
-KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-
-supabase = create_client(URL, KEY)
 
 def ejecutar_monitor():
     logger.info("🐺 [DEBUG] LOBO INICIADO")

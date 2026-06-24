@@ -1,5 +1,4 @@
 import os
-import re
 import time
 import json
 import hashlib
@@ -8,7 +7,6 @@ import logging
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
-from urllib.parse import urlparse
 from dotenv import load_dotenv
 import jwt
 
@@ -22,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
 
 from auth.supabase_client import supabase
-from utils.logic import domain_from_url, infer_source_from_url, parse_price_to_int, clean_ml_url
+from utils.logic import infer_source_from_url, parse_price_to_int, clean_ml_url
 
 from pywebpush import webpush, WebPushException
 
@@ -194,7 +192,7 @@ def save_price_history(user_id: str, caza_id, results: list[dict]):
     rows = []
     for r in results:
         try: price = int(r.get("price") or r.get("precio") or 0)
-        except: price = 0
+        except Exception: price = 0
         if price <= 0: continue
         rows.append({
             "caza_id": caza_id, "user_id": user_id,
@@ -928,7 +926,7 @@ def get_seasonality(caza_id: int, authorization: str = Header(default="")):
         try:
             dt = datetime.fromisoformat(h["checked_at"].replace("Z", "+00:00"))
             day_map[dt.strftime("%A")].append(float(h["price"]))
-        except:
+        except Exception:
             pass
     seasonality = {}
     for day, prices in day_map.items():

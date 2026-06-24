@@ -5,16 +5,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from supabase import create_client
+from auth.supabase_client import supabase
 from services.notification_service import enviar_whatsapp as send_whatsapp, enviar_email as send_email
 from utils.logic import _parse_dt_utc, _safe_float, normalize_plan_family
 from utils.logger import get_logger
 logger = get_logger("alerts")
 
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY else None
 
 def plan_allows_whatsapp(plan: str) -> bool:
     return normalize_plan_family(plan) in {"pro", "business_reseller", "business_monitor"}

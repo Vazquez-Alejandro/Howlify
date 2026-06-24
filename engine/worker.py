@@ -37,7 +37,7 @@ def obtener_cazas_pendientes():
         # Extraemos el número de la frecuencia (ej: "15 min" -> 15)
         try:
             frecuencia_min = int(caza["frecuencia"].split()[0])
-        except:
+        except Exception:
             frecuencia_min = 15 # Default por seguridad
 
         # --- 🐺 LÓGICA DE SINCRONIZACIÓN ---

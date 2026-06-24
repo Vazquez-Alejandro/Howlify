@@ -2,11 +2,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-from supabase import create_client
-
-url = os.getenv("SUPABASE_URL")
-key = os.getenv("SUPABASE_ANON_KEY")
-supabase = create_client(url, key)
+from auth.supabase_client import supabase
 
 res = supabase.table("infracciones_log") \
     .select("caza_id, status, error, url_captura, fecha") \

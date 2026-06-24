@@ -24,7 +24,7 @@ def _safe_float(val, default=0.0):
         if isinstance(val, str):
             val = val.replace("$", "").replace(" ", "").replace(".", "").replace(",", ".").strip()
         return float(val)
-    except:
+    except Exception:
         return default
 
 def parse_price_to_int(value) -> int:
@@ -40,7 +40,7 @@ def _parse_dt_utc(dt_str):
     if not dt_str: return None
     try:
         return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-    except:
+    except Exception:
         return None
 
 # ==========================================================
@@ -96,7 +96,7 @@ def contar_cazas_activas(user_id):
     try:
         res = supabase.table("cazas").select("id", count="exact").eq("user_id", user_id).eq("estado", "activa").execute()
         return res.count if res.count is not None else 0
-    except:
+    except Exception:
         return 0
 
 # ==========================================================
@@ -164,7 +164,7 @@ def obtener_dolar_tarjeta():
         url = "https://dolarapi.com/v1/dolares/tarjeta"
         response = requests.get(url, timeout=10)
         return float(response.json()['venta']) 
-    except:
+    except Exception:
         return 1860.0
 
 def upsert_monitor_rule(user_id, caza_id, product_name, product_url, source, target_price, min_price_allowed, max_price_allowed):
@@ -189,7 +189,7 @@ def id_valido(caza_id: int) -> bool:
     try:
         res = supabase.table("cazas").select("id").eq("id", caza_id).execute()
         return len(res.data) > 0
-    except:
+    except Exception:
         return False
 
 def insertar_price_history(caza_id: int, payload: dict):

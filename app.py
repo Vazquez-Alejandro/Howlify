@@ -66,7 +66,6 @@ from utils.logic import (
     normalize_plan_family,
     parse_price_to_int,
     infer_source_from_url,
-    domain_from_url,
     save_price_history,
 )
 from app_data import (
@@ -2003,7 +2002,7 @@ if st.session_state.get("busquedas"):
                     if resultados: 
                         encontro_total = True
                         save_price_history(user_id, b.get("id"), resultados)
-                except: continue
+                except Exception: continue
             if encontro_total and st.session_state.get("sound_enabled", True):
                 st.session_state["play_sound"] = True
             bar.empty(); st.rerun()

@@ -6,7 +6,6 @@ import os
 import time
 import re
 import base64
-import subprocess
 import pandas as pd
 from datetime import datetime, timedelta
 
@@ -14,11 +13,6 @@ from auth.supabase_client import supabase
 from utils.logic import (
     normalize_plan_family,
     parse_price_to_int,
-    infer_source_from_url,
-    domain_from_url,
-    clean_ml_url,
-    exportar_a_sheets,
-    save_price_history,
 )
 from utils.logger import get_logger
 logger = get_logger("app_data")

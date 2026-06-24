@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timezone, timedelta, time as dt_time
 import pytz
-from supabase import create_client
+from auth.supabase_client import supabase as supabase_admin, supabase_user
 
 from utils.logic import (
     obtener_dolar_tarjeta, _safe_float, _parse_dt_utc, _effective_minutes,
@@ -17,20 +17,6 @@ from utils.logger import get_logger
 logger = get_logger("db_service")
 
 
-# ==========================================================
-# CONEXIONES SUPABASE
-# ==========================================================
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")              # para usuarios (requiere refresh)
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # para panel admin (no expira)
-
-# Cliente para usuarios (login, cazas, perfiles)
-supabase_user = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-
-# Cliente para panel admin (usuarios, métricas, reportes globales)
-supabase_admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-
-# Alias temporal para compatibilidad con código existente
 supabase = supabase_admin
 
 DEFAULT_SOURCE = "mercadolibre"
@@ -480,13 +466,13 @@ def subir_evidencia_storage(file_path, file_name):
         with open(file_path, 'rb') as f:
             supabase.storage.from_("evidencia-lobos").upload(path=file_name, file=f, file_options={"content-type": "image/jpeg"})
             return supabase.storage.from_("evidencia-lobos").get_public_url(file_name)
-    except: return None
+    except Exception: return None
 
     
 def notificar_presa(caza, precio_anterior, precio_nuevo, telegram_id):
     try:
         porcentaje = int((1 - precio_nuevo / precio_anterior) * 100)
-    except: porcentaje = 0
+    except Exception: porcentaje = 0
 
     mensaje = (
         f"🚨 <b>¡PRESA DETECTADA!</b> 🐺\n"

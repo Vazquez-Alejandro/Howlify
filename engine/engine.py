@@ -3,14 +3,10 @@ import json
 from dotenv import load_dotenv
 load_dotenv()
 import time
-import re
-#import smtplib
 from datetime import datetime, timedelta, timezone
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from urllib.parse import urlparse
 
-from supabase import create_client
+from auth.supabase_client import supabase
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from scraper.scraper_pro import hunt_offers
@@ -23,11 +19,6 @@ from utils.logger import get_logger
 logger = get_logger("engine")
 
 
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-
-supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 # ==========================================================
 # PLANES / COMPATIBILIDAD
@@ -494,7 +485,7 @@ def evaluar_reglas_alerta(caza_id, user_id):
                         try:
                             sub = json.loads(row["subscription"]) if isinstance(row["subscription"], str) else row["subscription"]
                             webpush(subscription_info=sub, data=json.dumps({"title": title, "body": body, "url": f"/monitor?caza={caza_id}"}), vapid_private_key=VAPID_PRIVATE_KEY, vapid_claims={"sub": VAPID_CLAIM})
-                        except:
+                        except Exception:
                             supabase.table("push_subscriptions").delete().eq("user_id", user_id).execute()
                 if channel in ("whatsapp", "all"):
                     contacto = obtener_contacto_usuario(user_id)
