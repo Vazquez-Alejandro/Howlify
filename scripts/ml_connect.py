@@ -43,9 +43,9 @@ def main():
             pass
 
         logger.info("\n✅ Se abrió MercadoLibre con perfil persistente.")
-        logger.info("1)
-        logger.info("2)
-        logger.info("3)
+        logger.info("1")
+        logger.info("2")
+        logger.info("3")
         input("\nCuando termines, apretá ENTER acá para cerrar y guardar el perfil... ")
 
         context.close()

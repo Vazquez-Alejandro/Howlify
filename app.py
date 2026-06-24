@@ -387,12 +387,6 @@ def get_effective_plan_rules(plan: str) -> dict:
     }
 
 
-# ==========================================================
-# HELPERS
-# ==========================================================
-    return cleaned
-
-
 def mostrar_tarjeta_oportunidad(id_rastreo, titulo, precio_actual, precio_min_historico, precio_reventa_usuario):
     margen_bruto = precio_reventa_usuario - precio_actual
     porcentaje_ganancia = (margen_bruto / precio_actual) * 100 if precio_actual > 0 else 0
@@ -1817,8 +1811,7 @@ with st.expander("📲 Configurar Notificaciones", expanded=False):
             st.success("✅ Agenda actualizada. Los días se guardaron en orden lógico.")
             time.sleep(0.6)
             # opcional: recargar para reflejar cambios desde la DB en otras partes de la app
-            if hasattr(st, "experimental_rerun"):
-                st.experimental_rerun()
+            st.rerun()
 
 
     st.divider()

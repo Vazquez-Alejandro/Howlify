@@ -1,4 +1,7 @@
 from auth.supabase_client import supabase
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def calcular_score_oportunidad(precio_actual, precio_minimo, diff_vs_min):

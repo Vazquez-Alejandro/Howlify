@@ -14,11 +14,10 @@ from supabase import create_client
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from scraper.scraper_pro import hunt_offers
-from services.notification_service import enviar_whatsapp, enviar_telegram
+from services.notification_service import enviar_whatsapp, enviar_telegram, enviar_email
 from services.business_service import guardar_oportunidad_business
 from services.duffel_service import buscar_ofertas_vuelos
 from services.database_service import vigilar_ofertas
-from services.notification_service import enviar_email
 from utils.logic import normalize_plan_family
 from utils.logger import get_logger
 logger = get_logger("engine")
@@ -404,7 +403,7 @@ def disparar_alerta_minima(caza_id, oferta, precio_max):
         if not es_descuento_fuerte(precio, float(precio_referencia)):
             return False
 
-    print(
+    logger.info(
         f"🚨 OFERTA ENCONTRADA | caza {caza_id} | "
         f"${precio} <= max ${precio_max} | "
         f"{oferta.get('title','')[:80]}"
