@@ -5,7 +5,7 @@ interface Props {
   className?: string;
 }
 
-const sizes = { sm: 12, md: 20, lg: 28, xl: 36 };
+const sizes = { sm: 14, md: 32, lg: 40, xl: 48 };
 
 const maskStyle = {
   maskImage: "radial-gradient(circle at center, black 30%, transparent 72%)",

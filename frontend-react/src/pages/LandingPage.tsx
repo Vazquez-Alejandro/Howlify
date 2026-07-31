@@ -61,9 +61,11 @@ const ICONS: Record<string, React.ReactNode> = {
 
 const STEPS = [
   { num: "1", title: "Creá tu cacería", desc: "Pegá el link de un producto en MercadoLibre o cualquier tienda online." },
-  { num: "2", title: "Configurá alertas", desc: "Definí el precio objetivo y elegí cómo querés recibir notificaciones." },
-  { num: "3", title: "Howlify monitorea", desc: "El sistema revisa el precio automáticamente cada 15 minutos o cada hora." },
-  { num: "4", title: "Recibí la alerta", desc: "Cuando el precio baja o hay oferta, te avisamos al instante." },
+  { num: "2", title: "Definí el precio", desc: "Seteá el precio objetivo y la frecuencia de revisión que necesitás." },
+  { num: "3", title: "Elegí las alertas", desc: "Configurá si querés recibir avisos por email, Telegram o WhatsApp." },
+  { num: "4", title: "Howlify monitorea", desc: "El sistema revisa el precio automáticamente las 24 horas del día." },
+  { num: "5", title: "Detectá ofertas", desc: "Howlify identifica descuentos reales y te distingue precios personalizados." },
+  { num: "6", title: "Comprá informado", desc: "Recibí la alerta al instante y comprá en el momento justo." },
 ];
 
 const FAQ = [
@@ -151,7 +153,7 @@ export default function LandingPage() {
           <div className="landing-section-md" style={{ textAlign: "center" }}>
             <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#f87171", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.75rem" }}>Simple y automático</p>
             <h2 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: "3.5rem" }}>Cómo funciona</h2>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "2rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "2rem" }}>
               {STEPS.map((s) => (
                 <div key={s.num} style={{ textAlign: "center" }}>
                   <div style={{ width: "3rem", height: "3rem", borderRadius: "1rem", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem" }}>
