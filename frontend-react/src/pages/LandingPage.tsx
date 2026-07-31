@@ -15,18 +15,10 @@ const PLANS = [
     name: "Pro",
     price: "$15/mes",
     desc: "Para cazadores seriales",
-    features: ["15 cacerías activas", "C/15 min o más", "Alertas WhatsApp", "Exportación CSV"],
+    features: ["15 cacerías activas", "C/15 min o más", "Alertas WhatsApp", "Exportación CSV", "API MercadoLibre"],
     cta: "Probar gratis",
     href: "/register",
     popular: true,
-  },
-  {
-    name: "Business Reseller",
-    price: "$39/mes",
-    desc: "Para reventa y equipos",
-    features: ["40 cacerías activas", "Dashboard empresa", "Multi-tienda por cacería", "Reporte diario"],
-    cta: "Probar gratis",
-    href: "/register",
   },
 ];
 
@@ -103,7 +95,7 @@ export default function LandingPage() {
             <h2 className="text-3xl font-bold mb-4">Planes simples</h2>
             <p className="text-gray-400">Empezá gratis, escalá cuando lo necesites. Sin contratos ni sorpresas.</p>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
+          <div className="grid md:grid-cols-2 gap-6 items-start max-w-2xl mx-auto">
             {PLANS.map((p) => (
               <div
                 key={p.name}

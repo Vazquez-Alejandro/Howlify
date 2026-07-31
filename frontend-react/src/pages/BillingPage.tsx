@@ -3,7 +3,6 @@ import PageTransition from "../components/PageTransition";
 const PLAN_LABELS: Record<string, string> = {
   starter: "Starter",
   pro: "Pro",
-  business_reseller: "Business Reseller",
 };
 
 export default function BillingPage() {

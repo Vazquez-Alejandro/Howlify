@@ -19,7 +19,6 @@ type View = "rastreadores" | "perfil" | "admin" | "facturacion";
 const PLAN_INFO: Record<string, { label: string; max: number }> = {
   starter: { label: "Starter", max: 5 },
   pro: { label: "Pro", max: 15 },
-  business_reseller: { label: "Business Reseller", max: 40 },
 };
 
 export default function DashboardPage() {
@@ -397,7 +396,7 @@ export default function DashboardPage() {
               <div className="bg-gray-900/60 rounded-2xl p-5 mb-5" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                 <h3 className="text-sm font-semibold text-gray-300 mb-3">Simular vista de plan</h3>
                 <div className="flex flex-wrap gap-2">
-                  {["starter", "pro", "business_reseller"].map((p) => (
+                  {["starter", "pro"].map((p) => (
                     <button
                       key={p}
                       onClick={() => setSimulatedPlan(p)}

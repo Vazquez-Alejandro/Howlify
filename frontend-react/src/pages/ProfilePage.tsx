@@ -9,7 +9,6 @@ import TermsModal from "../components/TermsModal";
 const PLAN_LABELS: Record<string, string> = {
   starter: "Starter",
   pro: "Pro",
-  business_reseller: "Business Reseller",
 };
 
 const DAY_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -152,7 +151,7 @@ export default function ProfilePage() {
               <label className="text-sm font-medium text-gray-300">WhatsApp</label>
               {isStarter && (
                 <span className="text-[10px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20">
-                  Solo planes Pro y Business
+                  Solo plan Pro
                 </span>
               )}
             </div>
@@ -173,7 +172,7 @@ export default function ProfilePage() {
               </button>
             </div>
             {isStarter && (
-              <p className="text-[11px] text-gray-600">Actualizate a Pro o Business para recibir alertas por WhatsApp.</p>
+              <p className="text-[11px] text-gray-600">Actualizate a Pro para recibir alertas por WhatsApp.</p>
             )}
           </div>
 

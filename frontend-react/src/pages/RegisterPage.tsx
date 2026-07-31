@@ -6,8 +6,6 @@ import { traducirError } from "../utils/errors";
 import PageTransition from "../components/PageTransition";
 import Logo from "../components/Logo";
 
-type Category = "personal" | "business";
-
 interface Plan {
   value: string;
   label: string;
@@ -16,18 +14,12 @@ interface Plan {
   popular?: boolean;
 }
 
-const plans: Record<Category, Plan[]> = {
-  personal: [
-    { value: "starter", label: "Starter", price: "USD 9/mes", features: ["5 cacerías activas", "C/1 hora o más", "Alertas email", "Tiendas ML + genéricas"] },
-    { value: "pro", label: "Pro", price: "USD 15/mes", features: ["15 cacerías activas", "C/15 min o más", "Alertas WhatsApp", "Export CSV"], popular: true },
-  ],
-  business: [
-    { value: "business_reseller", label: "Business Reseller", price: "USD 39/mes", features: ["40 cacerías activas", "Dashboard empresa", "Multi-tienda por cacería", "Reporte diario"], popular: true },
-  ],
-};
+const plans: Plan[] = [
+  { value: "starter", label: "Starter", price: "USD 9/mes", features: ["5 cacerías activas", "C/1 hora o más", "Alertas email", "Tiendas ML + genéricas"] },
+  { value: "pro", label: "Pro", price: "USD 15/mes", features: ["15 cacerías activas", "C/15 min o más", "Alertas WhatsApp", "Export CSV"], popular: true },
+];
 
 export default function RegisterPage() {
-  const [category, setCategory] = useState<Category>("personal");
   const [form, setForm] = useState({ email: "", password: "", confirmPassword: "", username: "", plan: "starter" });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -144,24 +136,8 @@ export default function RegisterPage() {
 
             <div className="space-y-3">
               <label className="text-xs font-medium text-gray-400 uppercase tracking-wider ml-1">Plan</label>
-              <div className="flex gap-2 p-1 bg-gray-800/30 rounded-xl border border-gray-700/50">
-                {(["personal", "business"] as Category[]).map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => { setCategory(cat); setForm({ ...form, plan: plans[cat][0].value }); }}
-                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
-                      category === cat
-                        ? "bg-red-500/20 text-red-300 shadow-sm"
-                        : "text-gray-500 hover:text-gray-300"
-                    }`}
-                  >
-                    {cat === "personal" ? "Uso Personal" : "Business"}
-                  </button>
-                ))}
-              </div>
               <div className="grid grid-cols-2 gap-4">
-                {plans[category].map((p) => (
+                {plans.map((p) => (
                   <button
                     key={p.value}
                     type="button"

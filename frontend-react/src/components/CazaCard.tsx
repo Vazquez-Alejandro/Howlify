@@ -48,7 +48,7 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
 
   useEffect(() => {
     if (!caza.id) return;
-    api.monitorPriceHistory(caza.id).then((res) => {
+    api.getHistory(caza.id).then((res) => {
       if (res.data?.history && res.data.history.length >= 2) {
         setPriceHistory(res.data.history);
       }
