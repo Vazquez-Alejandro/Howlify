@@ -23,7 +23,6 @@ const plans: Record<Category, Plan[]> = {
   ],
   business: [
     { value: "business_reseller", label: "Business Reseller", price: "USD 39/mes", features: ["40 cacerías activas", "Dashboard empresa", "Multi-tienda por cacería", "Reporte diario"], popular: true },
-    { value: "business_monitor", label: "Business Monitor", price: "USD 79/mes", features: ["100 cacerías activas", "Rankings de negocio", "Dashboard empresa completo", "Soporte prioritario"] },
   ],
 };
 

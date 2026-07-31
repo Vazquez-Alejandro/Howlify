@@ -169,44 +169,6 @@ export const api = {
   getHistory: (cazaId: number) =>
     request<{ history: { price: number; checked_at: string }[] }>(`/api/history/${cazaId}`),
 
-  monitorRules: () => request<{ rules: MonitorRule[] }>("/api/monitor/rules"),
-
-  upsertMonitorRule: (caza_id: number, data: Record<string, unknown>) =>
-    request<{ message: string }>(`/api/monitor/rules/${caza_id}`, {
-      method: "PUT", body: JSON.stringify(data),
-    }),
-
-  deleteMonitorRule: (caza_id: number) =>
-    request<{ message: string }>(`/api/monitor/rules/${caza_id}`, { method: "DELETE" }),
-
-  monitorInfracciones: () => request<{ infracciones: Infraccion[] }>("/api/monitor/infracciones"),
-
-  monitorGrupos: () => request<{ grupos: Grupo[] }>("/api/monitor/grupos"),
-
-  createMonitorGrupo: (nombre: string, color: string) =>
-    request<{ message: string }>("/api/monitor/grupos", {
-      method: "POST", body: JSON.stringify({ nombre, color }),
-    }),
-
-  deleteMonitorGrupo: (id: number) =>
-    request<{ message: string }>(`/api/monitor/grupos/${id}`, { method: "DELETE" }),
-
-  monitorGrupoCazas: () => request<{ relaciones: { caza_id: number; grupo_id: number }[] }>("/api/monitor/grupo-cazas"),
-
-  assignMonitorGrupo: (caza_id: number, grupo_id: number | null) =>
-    request<{ message: string }>("/api/monitor/grupo-cazas", {
-      method: "PUT", body: JSON.stringify({ caza_id, grupo_id }),
-    }),
-
-  monitorPriceHistory: (caza_id: number) =>
-    request<{ history: { price: number; checked_at: string }[] }>(`/api/monitor/price-history/${caza_id}`),
-
-  monitorLatestPrices: () =>
-    request<{ prices: Record<string, { price: number; checked_at: string }> }>("/api/monitor/latest-prices"),
-
-  monitorAllHistory: () =>
-    request<{ history: { caza_id: number; price: number; checked_at: string }[] }>("/api/monitor/all-history"),
-
   exportSheets: (rows: Record<string, unknown>[], sheet_name: string) =>
     request<{ message: string }>("/api/export/sheets", {
       method: "POST", body: JSON.stringify({ rows, sheet_name }),
@@ -250,34 +212,4 @@ export interface HuntResult {
   };
 }
 
-export interface MonitorRule {
-  caza_id: number;
-  min_price_allowed: number;
-  max_price_allowed: number;
-  is_active: boolean;
-  alert_config?: AlertRule[];
-}
 
-export interface AlertRule {
-  id: string;
-  type: "pct_drop" | "below_price" | "above_price" | "consecutive_drop" | "velocity_drop" | "below_hist_min" | "restock";
-  threshold: number;
-  channel: "push" | "whatsapp" | "telegram" | "email" | "all";
-  cooldown: number;
-  enabled: boolean;
-}
-
-export interface Infraccion {
-  id: number;
-  caza_id: number;
-  precio_detectado: number;
-  fecha: string;
-  status: string;
-  url_captura?: string;
-}
-
-export interface Grupo {
-  id: number;
-  nombre: string;
-  color: string;
-}

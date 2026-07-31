@@ -8,20 +8,18 @@ import PageTransition from "../components/PageTransition";
 import CazaCard from "../components/CazaCard";
 import SkeletonCard from "../components/SkeletonCard";
 import Logo from "../components/Logo";
-import MonitorPage from "./MonitorPage";
 import BillingPage from "./BillingPage";
 import OnboardingTour from "../components/OnboardingTour";
 import TermsModal from "../components/TermsModal";
 import { useRates } from "../hooks/useRates";
 import PushNotifToggle from "../components/PushNotifToggle";
 
-type View = "rastreadores" | "perfil" | "admin" | "monitor" | "revender" | "facturacion";
+type View = "rastreadores" | "perfil" | "admin" | "facturacion";
 
 const PLAN_INFO: Record<string, { label: string; max: number }> = {
   starter: { label: "Starter", max: 5 },
   pro: { label: "Pro", max: 15 },
   business_reseller: { label: "Business Reseller", max: 40 },
-  business_monitor: { label: "Business Monitor", max: 100 },
 };
 
 export default function DashboardPage() {
@@ -135,8 +133,6 @@ export default function DashboardPage() {
 
   const menuItems: { key: View; label: string; icon: string; id?: string }[] = [
     { key: "rastreadores", label: "Mis Rastreadores", icon: "🐺" },
-    ...(effectivePlan === "business_monitor" || isAdmin ? [{ key: "monitor" as View, label: "Monitor", icon: "📊" }] : []),
-    ...(effectivePlan === "business_reseller" || isAdmin ? [{ key: "revender" as View, label: "Revender", icon: "💰" }] : []),
     ...(isAdmin ? [{ key: "admin" as View, label: "Panel Admin", icon: "🛠️" }] : []),
     { key: "facturacion", label: "Facturación", icon: "💳" },
     { key: "perfil", label: "Configuración", icon: "⚙️", id: "config-link" },
@@ -213,7 +209,7 @@ export default function DashboardPage() {
                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
                 </button>
                 <h1 className="text-lg font-bold text-white">
-                  {view === "rastreadores" ? "Mis Cacerías" : view === "monitor" ? "Monitor" : view === "revender" ? "Revender" : view === "admin" ? "Panel Admin" : view === "facturacion" ? "Facturación" : "Mi Perfil"}
+                  {view === "rastreadores" ? "Mis Cacerías" : view === "admin" ? "Panel Admin" : view === "facturacion" ? "Facturación" : "Mi Perfil"}
                 </h1>
               </div>
               {view === "rastreadores" && cazas.length > 0 && (
@@ -390,65 +386,6 @@ export default function DashboardPage() {
             </main>
           )}
 
-          {/* Monitor view */}
-          {view === "monitor" && <MonitorPage />}
-
-          {/* Revender view */}
-          {view === "revender" && (
-            <main className="flex-1 px-4 md:px-8 py-5 max-w-full w-full">
-              <p className="text-sm text-gray-500 mb-4">Configurá tu markup y calculá rentabilidad para cada producto.</p>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {cazas.map((c) => {
-                  const kw = c.keyword || c.producto || "Sin nombre";
-                  const precio = c.last_price || 0;
-                  const costoEnvio = 0;
-                  const comisionML = precio * 0.15;
-                  const impuestos = precio * 0.21;
-                  const markup = 0.40;
-                  const precioVenta = precio * (1 + markup);
-                  const gananciaNeta = precioVenta - precio - comisionML - costoEnvio - impuestos;
-                  const rentabilidad = precio > 0 ? (gananciaNeta / precioVenta) * 100 : 0;
-
-                  return (
-                    <div key={c.id} className="bg-gray-900/60 rounded-2xl p-5 border border-gray-800/50 space-y-3">
-                      <h3 className="font-semibold text-white text-sm truncate">{kw}</h3>
-                      <div className="space-y-1.5 text-sm">
-                        <div className="flex justify-between"><span className="text-gray-500">Costo</span><span className="text-white">${precio.toLocaleString()}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">Precio venta ({(markup * 100).toFixed(0)}%)</span><span className="text-green-400 font-medium">${precioVenta.toLocaleString()}</span></div>
-                        <hr className="border-gray-800/50" />
-                        <div className="flex justify-between"><span className="text-gray-500">Comisión ML (15%)</span><span className="text-red-400">-${comisionML.toLocaleString()}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">Envío</span><span className="text-red-400">-${costoEnvio.toLocaleString()}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">Impuestos (21%)</span><span className="text-red-400">-${impuestos.toLocaleString()}</span></div>
-                        <hr className="border-gray-800/50" />
-                        <div className="flex justify-between font-semibold">
-                          <span className="text-gray-300">Ganancia neta</span>
-                          <span className={gananciaNeta > 0 ? "text-green-400" : "text-red-400"}>${gananciaNeta.toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-gray-500">Rentabilidad</span>
-                          <span className={rentabilidad > 10 ? "text-green-400" : rentabilidad > 0 ? "text-yellow-400" : "text-red-400"}>{rentabilidad.toFixed(1)}%</span>
-                        </div>
-                      </div>
-                      <a
-                        href={`https://www.mercadolibre.com.ar/publicacion/crear`}
-                        target="_blank" rel="noopener noreferrer"
-                        className="block w-full text-center py-2 bg-blue-600/20 text-blue-400 rounded-xl text-sm font-medium hover:bg-blue-600/30 transition-all border border-blue-500/30"
-                      >
-                        Publicar en ML
-                      </a>
-                    </div>
-                  );
-                })}
-                {cazas.length === 0 && (
-                  <div className="col-span-full text-center py-16 text-gray-500">
-                    <p className="text-lg font-medium">No tenés cacerías para revender</p>
-                    <p className="text-sm mt-1">Creá cacerías desde la pestaña Mis Cacerías</p>
-                  </div>
-                )}
-              </div>
-            </main>
-          )}
-
           {/* Billing view */}
           {view === "facturacion" && <BillingPage />}
 
@@ -460,7 +397,7 @@ export default function DashboardPage() {
               <div className="bg-gray-900/60 rounded-2xl p-5 mb-5" style={{border: '1px solid rgba(107,114,128,0.4)'}}>
                 <h3 className="text-sm font-semibold text-gray-300 mb-3">Simular vista de plan</h3>
                 <div className="flex flex-wrap gap-2">
-                  {["starter", "pro", "business_reseller", "business_monitor"].map((p) => (
+                  {["starter", "pro", "business_reseller"].map((p) => (
                     <button
                       key={p}
                       onClick={() => setSimulatedPlan(p)}

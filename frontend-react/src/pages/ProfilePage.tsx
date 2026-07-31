@@ -10,7 +10,6 @@ const PLAN_LABELS: Record<string, string> = {
   starter: "Starter",
   pro: "Pro",
   business_reseller: "Business Reseller",
-  business_monitor: "Business Monitor",
 };
 
 const DAY_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -236,7 +235,7 @@ export default function ProfilePage() {
 
           {reportEnabled && (
             <>
-              <p className="text-sm text-gray-400">Recibí un resumen periódico de tus productos, alertas y violaciones MAP.</p>
+              <p className="text-sm text-gray-400">Recibí un resumen periódico de tus productos, precios y alertas.</p>
 
               {/* Horario */}
               <div className="space-y-2">

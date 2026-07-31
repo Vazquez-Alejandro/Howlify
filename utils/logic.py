@@ -3,7 +3,7 @@ import os
 import random
 import time
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from urllib.parse import urlparse
@@ -44,6 +44,23 @@ def _parse_dt_utc(dt_str):
         return None
 
 # ==========================================================
+# 1b. HELPERS DE BASE DE DATOS
+# ==========================================================
+
+def execute_with_retry(builder, attempts=3, delay=1.2):
+    """Ejecuta un builder de Supabase con reintentos."""
+    last_error = None
+    for i in range(attempts):
+        try:
+            return builder.execute()
+        except Exception as e:
+            last_error = e
+            if i < attempts - 1:
+                time.sleep(delay)
+    raise last_error
+
+
+# ==========================================================
 # 2. LÓGICA DE PLANES Y SCHEDULER
 # ==========================================================
 
@@ -56,30 +73,36 @@ PLAN_ALIAS = {
     "revendedor": "pro",
     "empresa": "pro",
     "pro": "pro",
-    "business_reseller": "business_reseller",
-    "business_monitor": "business_monitor",
 }
 
 PLAN_RULES = {
-    "starter": {"max_cazas_activas": 5, "freq_options": ["12h", "24h"], "plan_key": "starter", "reseller_markup": 0},
-    "pro": {"max_cazas_activas": 15, "freq_options": ["1h", "6h", "12h", "24h"], "plan_key": "pro", "reseller_markup": 0},
-    "business": {"max_cazas_activas": 100, "freq_options": ["15min", "1h", "6h"], "plan_key": "business", "reseller_markup": 0.40},
-    "business_monitor": {"max_cazas_activas": 100, "freq_options": ["15min", "1h", "6h"], "plan_key": "business_monitor", "reseller_markup": 0},
-    "business_reseller": {"max_cazas_activas": 100, "freq_options": ["15min", "1h", "6h"], "plan_key": "business_reseller", "reseller_markup": 0.40},
+    "starter": {"max_cazas_activas": 5, "freq_options": ["12h", "24h"], "plan_key": "starter"},
+    "pro": {"max_cazas_activas": 15, "freq_options": ["1h", "6h", "12h", "24h"], "plan_key": "pro"},
 }
 
 def normalize_plan_family(plan: str) -> str:
     raw = (plan or "starter").strip().lower()
     return PLAN_ALIAS.get(raw, "starter")
 
+
+def plan_allows_whatsapp(plan: str) -> bool:
+    return normalize_plan_family(plan) == "pro"
+
+
+def plan_min_interval(plan: str) -> int:
+    return 60 if normalize_plan_family(plan) == "starter" else 15
+
+
+def _domain_from_url(url: str) -> str:
+    """Alias de domain_from_url para compatibilidad."""
+    return domain_from_url(url)
+
 def get_effective_plan_rules(plan_name):
     if os.getenv("PAYMENT_ENABLED", "false").lower() != "true":
-        # Modo gratuito — sin límites
         return {
             "max_cazas_activas": 999,
             "freq_options": ["15min", "1h", "6h", "12h", "24h"],
-            "plan_key": "business_monitor",
-            "reseller_markup": 0.40,
+            "plan_key": "pro",
         }
     family = normalize_plan_family(plan_name)
     return PLAN_RULES.get(family, PLAN_RULES["starter"])
@@ -87,6 +110,7 @@ def get_effective_plan_rules(plan_name):
 def _effective_minutes(plan, freq_str):
     """Traduce la frecuencia a minutos reales."""
     if freq_str == "15min": return 15
+    if freq_str == "30min": return 30
     if freq_str == "1h": return 60
     if freq_str == "6h": return 360
     if freq_str == "12h": return 720
@@ -177,7 +201,7 @@ def upsert_monitor_rule(user_id, caza_id, product_name, product_url, source, tar
         res = supabase.table("monitor_rules").upsert(data, on_conflict="caza_id").execute()
         return True if res.data else False
     except Exception as e:
-        logger.error(f"❌ Error en upsert_monitor_rule: {e}")
+        logger.error(f"Error en upsert_monitor_rule: {e}")
         return False
 
 # ==========================================================

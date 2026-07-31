@@ -28,22 +28,14 @@ const PLANS = [
     cta: "Probar gratis",
     href: "/register",
   },
-  {
-    name: "Business Monitor",
-    price: "$79/mes",
-    desc: "Monitoreo profesional",
-    features: ["100 cacerías activas", "Rankings de negocio", "Dashboard empresa completo", "Soporte prioritario"],
-    cta: "Probar gratis",
-    href: "/register",
-  },
 ];
 
 const FEATURES = [
-  { icon: "🛒", title: "Multi-plataforma", desc: "Monitoreá Mercado Libre y más. Detección de violaciones MAP, precios dinámicos y cambios de stock." },
+  { icon: "🛒", title: "Multi-plataforma", desc: "Monitoreá precios en Mercado Libre, tiendas online y más. Seguí ofertas y cambios de precio en tiempo real." },
   { icon: "🎭", title: "Detección de Precio Personalizado", desc: "ML muestra precios distintos según quién mira. Howlify lo detecta automáticamente consultando con múltiples identidades y te alerta si el precio no es objetivo." },
-  { icon: "📡", title: "Alertas multicanal", desc: "Recibí notificaciones por Telegram, WhatsApp o email cuando un precio cambie o se detecte una infracción al instante." },
-  { icon: "📊", title: "Dashboard Inteligente", desc: "Visualizá rankings de riesgo, históricos de precio y métricas de cumplimiento en un solo lugar." },
-  { icon: "📤", title: "Exportación a Google Sheets", desc: "Exportá toda la data de monitoreo a tu propia planilla para análisis y reportes personalizados." },
+  { icon: "📡", title: "Alertas multicanal", desc: "Recibí notificaciones por Telegram, WhatsApp o email cuando un precio cambie o llegue a tu valor deseado." },
+  { icon: "📊", title: "Dashboard Inteligente", desc: "Visualizá históricos de precio, alertas y métricas de tus productos en un solo lugar." },
+  { icon: "📤", title: "Exportación de datos", desc: "Exportá toda la información de precios a CSV o Google Sheets para análisis personalizados." },
   { icon: "📱", title: "App PWA instalable", desc: "Instalá Howlify como app en tu celular. Funciona sin descargar de stores, ocupa casi nada y tiene la misma potencia que la web." },
   { icon: "📈", title: "Historial de precios", desc: "Evolución gráfica del precio de cada producto con tendencias, comparativas y alertas visuales de subas y bajas." },
   { icon: "🔔", title: "Alertas personalizables", desc: "Configurá alertas por precio mínimo o descuento porcentual. Recibí avisos cuando un producto llegue al valor que querés." },
@@ -69,14 +61,14 @@ export default function LandingPage() {
         <section className="relative z-10 w-full max-w-5xl px-6 pt-20 pb-16 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-red-500/10 border border-red-500/20 rounded-full text-sm text-red-400 mb-8">
             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            Price Intelligence Platform
+            Consumer Price Tracking
           </div>
           <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight leading-tight">
             Nunca más te pierdas{" "}
             <span className="bg-gradient-to-r from-red-400 to-red-600 bg-clip-text text-transparent">una oportunidad</span>
           </h1>
           <p className="mt-6 text-lg text-gray-400 text-center leading-relaxed">
-            Howlify monitorea precios 24/7, detecta violaciones de MAP y te alerta al instante.
+            Howlify monitorea precios 24/7 y te alerta al instante cuando hay ofertas.
             Tomá decisiones informadas sin pasar horas mirando pantallas.
           </p>
           <div className="mt-10 flex items-center justify-center gap-4">
@@ -91,7 +83,7 @@ export default function LandingPage() {
 
         <section className="relative z-10 w-full max-w-6xl px-6 py-16">
           <h2 className="text-3xl font-bold text-center mb-4">Todo lo que necesitás</h2>
-          <p className="text-gray-400 text-center mb-12">Monitoreo inteligente, alertas instantáneas, todo en un dashboard diseñado para cazadores de ofertas.</p>
+          <p className="text-gray-400 text-center mb-12">Monitoreo inteligente, alertas instantáneas, historial de precios. Todo diseñado para cazadores de ofertas.</p>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {FEATURES.map((f) => (
               <div key={f.title} className="h-full bg-gray-900/60 rounded-2xl p-6 text-center hover:bg-gray-900/80 transition-all flex flex-col" style={{border: '1px solid rgba(107,114,128,0.4)'}}>

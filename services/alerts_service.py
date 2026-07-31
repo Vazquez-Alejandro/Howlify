@@ -1,38 +1,30 @@
+"""
+services/alerts_service.py — Alertas, dedup y contacto de usuario.
+Funciones centralizadas para el sistema de notificaciones.
+"""
+
 import os
 import time
 from datetime import datetime, timezone, timedelta
-from dotenv import load_dotenv
-
-load_dotenv()
 
 from auth.supabase_client import supabase
 from services.notification_service import enviar_whatsapp as send_whatsapp, enviar_email as send_email
-from utils.logic import _parse_dt_utc, _safe_float, normalize_plan_family
+from utils.logic import (
+    _parse_dt_utc, _safe_float, normalize_plan_family,
+    plan_allows_whatsapp, execute_with_retry,
+)
 from utils.logger import get_logger
+
 logger = get_logger("alerts")
 
-
-def plan_allows_whatsapp(plan: str) -> bool:
-    return normalize_plan_family(plan) in {"pro", "business_reseller", "business_monitor"}
-
-
-def _execute_with_retry(builder, attempts=3, delay=1.2):
-    last_error = None
-    for i in range(attempts):
-        try:
-            return builder.execute()
-        except Exception as e:
-            last_error = e
-            if i < attempts - 1:
-                time.sleep(delay)
-    raise last_error
+ALERT_COOLDOWN_MINUTES = int(os.getenv("ALERT_COOLDOWN_MINUTES", "30") or 30)
 
 
 def obtener_ultima_alerta(caza_id):
     if not supabase:
         return None
     try:
-        res = _execute_with_retry(
+        res = execute_with_retry(
             supabase.table("alertas_enviadas")
             .select("oferta_url, oferta_titulo, oferta_precio, created_at")
             .eq("caza_id", caza_id)
@@ -50,7 +42,7 @@ def guardar_alerta(caza_id, user_id, oferta):
     if not supabase:
         return
     try:
-        _execute_with_retry(
+        execute_with_retry(
             supabase.table("alertas_enviadas").insert({
                 "caza_id": caza_id,
                 "user_id": user_id,
@@ -64,7 +56,9 @@ def guardar_alerta(caza_id, user_id, oferta):
         logger.error("⚠ error guardando alerta:", e)
 
 
-def too_soon(prev_alert, minutes=30):
+def too_soon(prev_alert, minutes=None):
+    if minutes is None:
+        minutes = ALERT_COOLDOWN_MINUTES
     if not prev_alert:
         return False
     dt = _parse_dt_utc(prev_alert.get("created_at"))
@@ -77,9 +71,9 @@ def obtener_contacto_usuario(user_id):
     if not supabase:
         return {}
     try:
-        res = _execute_with_retry(
+        res = execute_with_retry(
             supabase.table("profiles")
-            .select("whatsapp_number, email, plan")
+            .select("whatsapp_number, email, plan, telegram_id")
             .eq("user_id", user_id)
             .limit(1)
         )
@@ -110,7 +104,11 @@ def disparar_alerta_minima(caza_id, oferta, precio_max):
         precio_referencia = oferta.get("original_price") or precio
         if not es_descuento_fuerte(precio, float(precio_referencia)):
             return False
-    logger.warning(f"🚨 OFERTA ENCONTRADA | caza {caza_id} | ${precio} <= max ${precio_max} | {oferta.get('title','')[:80]}")
+    logger.warning(
+        f"🚨 OFERTA ENCONTRADA | caza {caza_id} | "
+        f"${precio} <= max ${precio_max} | "
+        f"{oferta.get('title', '')[:80]}"
+    )
     return True
 
 
@@ -134,6 +132,7 @@ def enviar_alerta_por_canal(user_contact, oferta, caza_nombre=""):
     ok_whatsapp = False
     ok_email = False
     mensaje = _format_alerta_msg(oferta, caza_nombre)
+
     if plan_allows_whatsapp(plan):
         if numero:
             oferta["_channel"] = "whatsapp"
@@ -143,6 +142,7 @@ def enviar_alerta_por_canal(user_contact, oferta, caza_nombre=""):
             asunto = f"🐺 Oferta encontrada: {caza_nombre or 'Howlify'}"
             ok_email = send_email(email, asunto, mensaje)
         return ok_whatsapp or ok_email
+
     oferta["_channel"] = "email"
     asunto = f"🐺 Oferta encontrada: {caza_nombre or 'Howlify'}"
     return send_email(email, asunto, mensaje)

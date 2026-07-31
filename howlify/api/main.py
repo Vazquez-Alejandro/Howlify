@@ -152,23 +152,6 @@ class CazaCreate(BaseModel):
     source: str = "generic"
     etiqueta: str = ""
 
-class UpsertMonitorRuleRequest(BaseModel):
-    product_name: str = ""
-    product_url: str = ""
-    source: str = "generic"
-    target_price: int = 0
-    min_price_allowed: int = 0
-    max_price_allowed: int = 0
-    alert_config: list = []
-
-class CreateGrupoRequest(BaseModel):
-    nombre: str
-    color: str = "📁"
-
-class AssignGrupoCazaRequest(BaseModel):
-    caza_id: int
-    grupo_id: int | None = None
-
 class GenerateReportRequest(BaseModel):
     type: str = "daily"
 
@@ -216,6 +199,46 @@ def root():
 @app.get("/api/health")
 def health():
     return {"status": "ok", "timestamp": datetime.now().isoformat()}
+
+@app.get("/api/health/detailed")
+def health_detailed():
+    checks = {}
+    all_ok = True
+
+    try:
+        supabase.table("cazas").select("id").limit(1).execute()
+        checks["database"] = "ok"
+    except Exception as e:
+        checks["database"] = f"error: {str(e)[:100]}"
+        all_ok = False
+
+    checks["scraper"] = "ok" if os.getenv("OH_PLAYWRIGHT") else "disabled"
+    checks["version"] = "1.0.0"
+    checks["environment"] = os.getenv("HOWLIFY_MODE", "unknown")
+
+    try:
+        from scraper.rate_limiter import rate_limiter
+        checks["rate_limiter"] = rate_limiter.get_stats()
+    except ImportError:
+        checks["rate_limiter"] = "unavailable"
+
+    return {
+        "status": "ok" if all_ok else "degraded",
+        "timestamp": datetime.now().isoformat(),
+        "checks": checks,
+    }
+
+@app.get("/api/health/scraper")
+def scraper_health():
+    from scraper.scraper_pro import _domain
+    test_url = "https://www.mercadolibre.com.ar/"
+    domain = _domain(test_url)
+    return {
+        "status": "ok",
+        "scraper_module": "loaded",
+        "test_domain": domain,
+        "playwright": os.getenv("OH_PLAYWRIGHT", "0"),
+    }
 
 # ─── Auth ───────────────────────────────────────────────
 
@@ -633,355 +656,16 @@ def predict_price(caza_id: int, authorization: str = Header(default="")):
         "ma_7": round(float(ma_7)) if ma_7 else None,
     }
 
-# ─── Monitor ────────────────────────────────────────────
 
-@app.get("/api/monitor/rules")
-def get_monitor_rules(authorization: str = Header(default="")):
-    uid = get_user_id(authorization)
-    res = supabase.table("monitor_rules").select("*").eq("user_id", uid).execute()
-    return {"rules": res.data or []}
 
-@app.put("/api/monitor/rules/{caza_id}")
-def upsert_monitor_rule(caza_id: int, body: UpsertMonitorRuleRequest, authorization: str = Header(default="")):
-    try:
-        uid = get_user_id(authorization)
-        existing = supabase.table("monitor_rules").select("*").eq("user_id", uid).eq("caza_id", caza_id).limit(1).execute()
-        prev = existing.data[0] if existing.data else {}
-        payload = {
-            "user_id": uid,
-            "caza_id": caza_id,
-            "product_name": body.product_name or prev.get("product_name", ""),
-            "product_url": body.product_url or prev.get("product_url", ""),
-            "source": body.source or prev.get("source", "generic"),
-            "target_price": body.target_price if body.target_price else prev.get("target_price", 0),
-            "min_price_allowed": body.min_price_allowed if body.min_price_allowed else prev.get("min_price_allowed", 0),
-            "max_price_allowed": body.max_price_allowed if body.max_price_allowed else prev.get("max_price_allowed", 0),
-            "alert_config": body.alert_config if body.alert_config else prev.get("alert_config", []),
-            "is_active": True,
-        }
-        supabase.table("monitor_rules").upsert(payload, on_conflict="caza_id").execute()
-        return {"message": "Regla actualizada"}
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"detail": f"Error upsert monitor rule: {e}"})
 
-@app.delete("/api/monitor/rules/{caza_id}")
-def delete_monitor_rule(caza_id: int, authorization: str = Header(default="")):
-    uid = get_user_id(authorization)
-    supabase.table("monitor_rules").update({"is_active": False}).eq("user_id", uid).eq("caza_id", caza_id).execute()
-    return {"message": "Regla desactivada"}
 
-@app.post("/api/monitor/evaluate-rules/{caza_id}")
-def evaluate_monitor_rules(caza_id: int, authorization: str = Header(default="")):
-    uid = get_user_id(authorization)
-    rules = supabase.table("monitor_rules").select("*").eq("user_id", uid).eq("caza_id", caza_id).limit(1).execute()
-    if not rules.data:
-        return {"triggered": []}
-    rule = rules.data[0]
-    if not rule.get("is_active"):
-        return {"triggered": []}
-    alert_config = rule.get("alert_config")
-    if not alert_config:
-        return {"triggered": []}
-    if isinstance(alert_config, str):
-        alert_config = json.loads(alert_config)
 
-    history = supabase.table("price_history").select("price, checked_at").eq("caza_id", caza_id).order("checked_at", desc=True).limit(10).execute()
-    prices = [float(h["price"]) for h in (history.data or []) if h.get("price")]
-    if not prices:
-        return {"triggered": []}
-    current = prices[0]
-    triggered = []
 
-    for r in alert_config:
-        if not r.get("enabled", True):
-            continue
-        rtype = r.get("type", "")
-        threshold = float(r.get("threshold", 0))
-        match = False
 
-        if rtype == "below_price":
-            match = current <= threshold
-        elif rtype == "above_price":
-            match = current >= threshold
-        elif rtype == "pct_drop" and len(prices) >= 2:
-            pct = ((prices[1] - current) / prices[1]) * 100
-            match = pct >= threshold
-        elif rtype == "consecutive_drop" and len(prices) >= int(threshold):
-            consec = 0
-            for i in range(1, len(prices)):
-                if prices[i] < prices[i-1]:
-                    consec += 1
-                else:
-                    consec = 0
-                if consec >= int(threshold) and i >= int(threshold) - 1:
-                    match = True
-                    break
-        elif rtype == "velocity_drop":
-            history24 = supabase.table("price_history").select("price").eq("caza_id", caza_id).gte("checked_at", (datetime.utcnow() - timedelta(hours=24)).isoformat()).order("checked_at").limit(2).execute()
-            hp = [float(h["price"]) for h in (history24.data or []) if h.get("price")]
-            if len(hp) >= 2 and hp[0] > 0:
-                pct = ((hp[0] - current) / hp[0]) * 100
-                match = pct >= threshold
-        elif rtype == "below_hist_min":
-            all_prices = supabase.table("price_history").select("price").eq("caza_id", caza_id).order("price").limit(1).execute()
-            if all_prices.data:
-                historical_min = float(all_prices.data[0]["price"])
-                if historical_min > 0:
-                    match = current <= historical_min * 1.01
 
-        if match:
-            triggered.append({"rule": r, "current_price": current})
 
-    return {"triggered": triggered, "current_price": current}
 
-@app.get("/api/monitor/infracciones")
-def get_infracciones(authorization: str = Header(default="")):
-    uid = get_user_id(authorization)
-    res = supabase.table("monitor_rules").select("caza_id").eq("user_id", uid).execute()
-    caza_ids = [r["caza_id"] for r in res.data if r.get("caza_id")]
-    if not caza_ids:
-        return {"infracciones": []}
-    inf = supabase.table("infracciones_log").select("*").in_("caza_id", caza_ids).order("fecha", desc=True).limit(200).execute()
-    return {"infracciones": inf.data or []}
-
-@app.get("/api/monitor/grupos")
-def get_grupos(authorization: str = Header(default="")):
-    uid = get_user_id(authorization)
-    user_cazas = supabase.table("cazas").select("id").eq("user_id", uid).execute()
-    caza_ids = [c["id"] for c in (user_cazas.data or [])]
-    if not caza_ids:
-        return {"grupos": []}
-    rels = supabase.table("grupo_cazas").select("grupo_id").in_("caza_id", caza_ids).execute()
-    grupo_ids = list({r["grupo_id"] for r in (rels.data or [])})
-    if not grupo_ids:
-        return {"grupos": []}
-    res = supabase.table("grupos").select("*").in_("id", grupo_ids).execute()
-    return {"grupos": res.data or []}
-
-@app.post("/api/monitor/grupos")
-def create_grupo(body: CreateGrupoRequest, authorization: str = Header(default="")):
-    uid = get_user_id(authorization)
-    nombre = body.nombre.strip()
-    color = body.color
-    if nombre:
-        supabase.table("grupos").insert({"nombre": nombre, "color": color, "user_id": uid}).execute()
-    return {"message": "Grupo creado"}
-
-@app.delete("/api/monitor/grupos/{grupo_id}")
-def delete_grupo(grupo_id: int, authorization: str = Header(default="")):
-    uid = get_user_id(authorization)
-    user_cazas = supabase.table("cazas").select("id").eq("user_id", uid).execute()
-    caza_ids = [c["id"] for c in (user_cazas.data or [])]
-    if not caza_ids:
-        raise HTTPException(status_code=404, detail="Grupo no encontrado")
-    rels = supabase.table("grupo_cazas").select("caza_id").eq("grupo_id", grupo_id).in_("caza_id", caza_ids).limit(1).execute()
-    if not rels.data:
-        raise HTTPException(status_code=404, detail="Grupo no encontrado")
-    supabase.table("grupo_cazas").delete().eq("grupo_id", grupo_id).execute()
-    supabase.table("grupos").delete().eq("id", grupo_id).execute()
-    return {"message": "Grupo eliminado"}
-
-@app.get("/api/monitor/grupo-cazas")
-def get_grupo_cazas(authorization: str = Header(default="")):
-    uid = get_user_id(authorization)
-    user_cazas = supabase.table("cazas").select("id").eq("user_id", uid).execute()
-    caza_ids = [c["id"] for c in (user_cazas.data or [])]
-    if not caza_ids:
-        return {"relaciones": []}
-    res = supabase.table("grupo_cazas").select("*").in_("caza_id", caza_ids).execute()
-    return {"relaciones": res.data or []}
-
-@app.put("/api/monitor/grupo-cazas")
-def assign_grupo_caza(body: AssignGrupoCazaRequest, authorization: str = Header(default="")):
-    try:
-        uid = get_user_id(authorization)
-        caza_id = body.caza_id
-        grupo_id = body.grupo_id
-        # Verify user owns this caza
-        caza = supabase.table("cazas").select("id").eq("id", caza_id).eq("user_id", uid).limit(1).execute()
-        if not caza.data:
-            raise HTTPException(status_code=404, detail="Cacería no encontrada")
-        supabase.table("grupo_cazas").delete().eq("caza_id", caza_id).execute()
-        if grupo_id:
-            supabase.table("grupo_cazas").insert({"caza_id": caza_id, "grupo_id": grupo_id}).execute()
-        return {"message": "Asignación actualizada"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"detail": f"Error assign grupo: {e}"})
-
-@app.get("/api/monitor/price-history/{caza_id}")
-def get_monitor_price_history(caza_id: int, authorization: str = Header(default="")):
-    get_user_id(authorization)
-    res = supabase.table("price_history").select("checked_at, price").eq("caza_id", caza_id).order("checked_at").limit(100).execute()
-    return {"history": res.data or []}
-
-@app.get("/api/monitor/latest-prices")
-def get_latest_prices(authorization: str = Header(default="")):
-    uid = get_user_id(authorization)
-    rules = supabase.table("monitor_rules").select("caza_id").eq("user_id", uid).execute()
-    ids = [r["caza_id"] for r in rules.data if r.get("caza_id")]
-    result = {}
-    for cid in ids:
-        row = supabase.table("price_history").select("price, checked_at").eq("caza_id", cid).order("checked_at", desc=True).limit(1).execute()
-        if row.data:
-            result[str(cid)] = {"price": row.data[0]["price"], "checked_at": row.data[0]["checked_at"]}
-    return {"prices": result}
-
-@app.get("/api/monitor/all-history")
-def get_all_history(authorization: str = Header(default="")):
-    uid = get_user_id(authorization)
-    rules = supabase.table("monitor_rules").select("caza_id").eq("user_id", uid).execute()
-    ids = [r["caza_id"] for r in rules.data if r.get("caza_id")]
-    if not ids:
-        return {"history": []}
-    res = supabase.table("price_history").select("caza_id, price, checked_at").in_("caza_id", ids).order("checked_at").limit(2000).execute()
-    return {"history": res.data or []}
-
-@app.get("/api/monitor/evidencia/{caza_id}")
-def get_evidencia(caza_id: int, authorization: str = Header(default=""), token: str = Query(default="")):
-    auth = authorization or token
-    get_user_id(auth)
-    inf = supabase.table("infracciones_log").select("url_captura").eq("caza_id", caza_id).order("fecha", desc=True).limit(1).execute()
-    if not inf.data or not inf.data[0].get("url_captura"):
-        raise HTTPException(status_code=404, detail="Evidencia no encontrada")
-    path = inf.data[0]["url_captura"]
-    if not os.path.isfile(path):
-        raise HTTPException(status_code=404, detail="Archivo no encontrado")
-    return FileResponse(path, media_type="image/png")
-
-# ─── Alert History + KPIs ─────────────────────────────────
-
-@app.get("/api/alerts/history")
-def get_alert_history(authorization: str = Header(default="")):
-    uid = get_user_id(authorization)
-    res = supabase.table("alertas_enviadas").select("*").eq("user_id", uid).order("created_at", desc=True).limit(100).execute()
-    return {"alerts": res.data or []}
-
-@app.get("/api/kpi/summary")
-def get_kpi_summary(authorization: str = Header(default="")):
-    uid = get_user_id(authorization)
-
-    cazas = supabase.table("cazas").select("id, precio_max").eq("user_id", uid).execute()
-    cazas_data = cazas.data or []
-    total_cazas = len(cazas_data)
-    ahorro_total = 0
-    productos_con_precio = 0
-
-    c_ids = [str(c["id"]) for c in cazas_data]
-    if c_ids:
-        all_hist = supabase.table("price_history").select("caza_id, price").in_("caza_id", c_ids).execute()
-        hist_map: dict[int, list[float]] = {}
-        for h in (all_hist.data or []):
-            cid = h.get("caza_id")
-            if cid:
-                hist_map.setdefault(int(cid), []).append(float(h["price"]))
-    else:
-        hist_map = {}
-
-    for c in cazas_data:
-        cid = int(c["id"])
-        pm = c.get("precio_max") or 0
-        prices = hist_map.get(cid, [])
-        lp = max(prices) if prices else 0
-        if lp > 0 and pm > 0 and lp < pm:
-            ahorro_total += pm - lp
-        if lp > 0:
-            productos_con_precio += 1
-
-    alertas = supabase.table("alertas_enviadas").select("id, created_at").eq("user_id", uid).execute()
-    total_alertas = len(alertas.data or [])
-
-    res_hist = supabase.table("price_history").select("price, checked_at").eq("user_id", uid).order("checked_at", desc=True).limit(5000).execute()
-    prices = [float(h["price"]) for h in (res_hist.data or []) if h.get("price")]
-    precio_promedio = round(sum(prices) / len(prices), 2) if prices else 0
-
-    try:
-        rules = supabase.table("monitor_rules").select("caza_id, alert_config").eq("user_id", uid).eq("is_active", True).execute()
-        reglas_activas = 0
-        for r in (rules.data or []):
-            ac = r.get("alert_config")
-            if ac and (isinstance(ac, list) and len(ac) > 0):
-                reglas_activas += 1
-    except Exception:
-        reglas_activas = 0
-
-    return {
-        "total_cazas": total_cazas,
-        "productos_con_precio": productos_con_precio,
-        "ahorro_total": ahorro_total,
-        "total_alertas": total_alertas,
-        "precio_promedio": precio_promedio,
-        "reglas_activas": reglas_activas,
-    }
-
-@app.get("/api/kpi/seasonality/{caza_id}")
-def get_seasonality(caza_id: int, authorization: str = Header(default="")):
-    get_user_id(authorization)
-    res = supabase.table("price_history").select("price, checked_at").eq("caza_id", caza_id).order("checked_at").limit(200).execute()
-    data = res.data or []
-    from collections import defaultdict
-    day_map = defaultdict(list)
-    for h in data:
-        try:
-            dt = datetime.fromisoformat(h["checked_at"].replace("Z", "+00:00"))
-            day_map[dt.strftime("%A")].append(float(h["price"]))
-        except Exception:
-            pass
-    seasonality = {}
-    for day, prices in day_map.items():
-        if len(prices) >= 2:
-            seasonality[day] = {
-                "avg": round(sum(prices) / len(prices), 2),
-                "min": min(prices),
-                "max": max(prices),
-                "count": len(prices),
-            }
-    return {"seasonality": seasonality}
-
-@app.get("/api/kpi/inflated-prices")
-def get_inflated_prices(authorization: str = Header(default="")):
-    uid = get_user_id(authorization)
-    cazas = supabase.table("cazas").select("id, producto").eq("user_id", uid).execute()
-    caza_ids = [c["id"] for c in (cazas.data or [])]
-    if not caza_ids:
-        return {"inflated": []}
-
-    all_hist = supabase.table("price_history").select("caza_id, price, checked_at").in_("caza_id", caza_ids).order("checked_at").limit(5000).execute()
-    hist_by_caza: dict[int, list[dict]] = {}
-    for h in (all_hist.data or []):
-        cid = h["caza_id"]
-        if cid not in hist_by_caza:
-            hist_by_caza[cid] = []
-        hist_by_caza[cid].append(h)
-
-    inflated = []
-    for cid, hist in hist_by_caza.items():
-        if len(hist) < 5:
-            continue
-        prices = [float(h["price"]) for h in hist if h.get("price")]
-        # Look for a spike (price up >15%) followed by a drop
-        for i in range(1, len(prices) - 2):
-            spike = (prices[i] - prices[i-1]) / prices[i-1] * 100
-            drop = (prices[i+2] - prices[i+1]) / prices[i+1] * 100
-            if spike > 15 and drop < -10:
-                from services.database_service import safe_query
-                caza_info = safe_query("cazas_get", [{"col": "id", "val": cid}])
-                nombre = ""
-                if caza_info:
-                    nombre = caza_info[0].get("producto", "") if isinstance(caza_info, list) else caza_info.get("producto", "")
-                inflated.append({
-                    "caza_id": cid,
-                    "producto": nombre,
-                    "fecha_spike": hist[i]["checked_at"],
-                    "precio_spike": prices[i],
-                    "fecha_drop": hist[i+2]["checked_at"],
-                    "precio_drop": prices[i+2],
-                    "spike_pct": round(spike, 1),
-                    "drop_pct": round(drop, 1),
-                })
-                break
-    return {"inflated": inflated}
 
 # ─── Reportes ────────────────────────────────────────────
 
@@ -1014,56 +698,7 @@ def test_alert_rule(body: TestAlertRuleRequest, authorization: str = Header(defa
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": f"Error: {e}"})
 
-@app.get("/api/reports/pdf")
-def download_pdf_report(authorization: str = Header(default="")):
-    uid = get_user_id(authorization)
-    try:
-        from services.pdf_service import generate_monitor_pdf
 
-        user = supabase.table("profiles").select("username, email").eq("user_id", uid).limit(1).execute()
-        user_name = (user.data or [{}])[0].get("username") or (user.data or [{}])[0].get("email") or "Usuario"
-
-        cazas = supabase.table("cazas").select("id, producto, precio_max").eq("user_id", uid).execute()
-        cazas_data = cazas.data or []
-        rules = supabase.table("monitor_rules").select("*").eq("user_id", uid).execute()
-        rules_map = {str(r["caza_id"]): r for r in (rules.data or [])}
-        price_map = {}
-        for c in cazas_data:
-            row = supabase.table("price_history").select("price").eq("caza_id", c["id"]).order("checked_at", desc=True).limit(1).execute()
-            if row.data:
-                price_map[c["id"]] = float(row.data[0]["price"])
-
-        ahorro_total = 0
-        radar_data = []
-        for c in cazas_data:
-            cid = c["id"]
-            curr = price_map.get(cid, 0)
-            pm = c.get("precio_max") or 0
-            rule = rules_map.get(str(cid))
-            mn = float(rule["min_price_allowed"]) if rule and rule.get("min_price_allowed") else 0
-            mx = float(rule["max_price_allowed"]) if rule and rule.get("max_price_allowed") else 0
-            riesgo = "⚪"
-            if mn > 0 or mx > 0:
-                if curr <= 0: riesgo = "⚪"
-                elif (mn > 0 and curr < mn - 0.01) or (mx > 0 and curr > mx + 0.01): riesgo = "🔴"
-                elif curr == mn or curr == mx: riesgo = "🟠"
-                elif (mn > 0 and curr <= mn * 1.05) or (mx > 0 and curr >= mx * 0.95): riesgo = "🟡"
-                else: riesgo = "🟢"
-            if curr < pm:
-                ahorro_total += pm - curr
-            radar_data.append({"producto": c.get("producto") or f"#{cid}", "precio": curr, "minP": mn, "maxP": mx, "riesgo": riesgo})
-
-        alertas = supabase.table("alertas_enviadas").select("id").eq("user_id", uid).execute()
-        total_alertas = len(alertas.data or [])
-        all_prices = [p["price"] for p in (supabase.table("price_history").select("price").eq("user_id", uid).execute().data or []) if p.get("price")]
-        precio_prom = round(sum(all_prices) / len(all_prices), 2) if all_prices else 0
-
-        kpi = {"total_cazas": len(cazas_data), "productos_con_precio": len(price_map), "ahorro_total": ahorro_total, "total_alertas": total_alertas, "precio_promedio": precio_prom}
-        pdf_bytes = generate_monitor_pdf(uid, user_name, radar_data, kpi)
-
-        return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=howlify_reporte_{datetime.now().strftime('%Y%m%d')}.pdf"})
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"detail": f"Error generando PDF: {e}"})
 
 # ─── Google Sheets Export ─────────────────────────────────
 
@@ -1171,7 +806,7 @@ def push_unsubscribe(authorization: str = Header(default="")):
 @app.post("/api/push/test")
 def push_test(authorization: str = Header(default="")):
     uid = get_user_id(authorization)
-    push_notify_user(uid, "🧪 Prueba", "Si ves esto, las notificaciones push funcionan.", "/monitor")
+    push_notify_user(uid, "🧪 Prueba", "Si ves esto, las notificaciones push funcionan.", "/dashboard")
     return {"message": "Notificación enviada"}
 
 # ─── Mercado Pago / Billing ─────────────────────────────
@@ -1182,8 +817,6 @@ MP_API_BASE = "https://api.mercadopago.com"
 
 MP_PRICES = {
     "pro": int(os.getenv("MP_PRICE_PRO_ARS", "3000")),
-    "business_reseller": int(os.getenv("MP_PRICE_RESELLER_ARS", "8000")),
-    "business_monitor": int(os.getenv("MP_PRICE_MONITOR_ARS", "12000")),
 }
 
 MP_DURATION_DAYS = int(os.getenv("MP_DURATION_DAYS", "30"))
@@ -1202,7 +835,7 @@ def mp_create_preference(data: CreatePreferenceRequest, authorization: str = Hea
     email = profile.data[0].get("email", "")
     username = profile.data[0].get("username", "")
 
-    PLAN_LABEL = {"pro": "Pro", "business_reseller": "Business Reseller", "business_monitor": "Business Monitor"}
+    PLAN_LABEL = {"pro": "Pro"}
     title = f"Howlify - Plan {PLAN_LABEL.get(plan, plan)}"
     base_url = os.getenv("APP_BASE_URL", "http://localhost:5173")
 

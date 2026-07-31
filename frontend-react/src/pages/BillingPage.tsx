@@ -4,7 +4,6 @@ const PLAN_LABELS: Record<string, string> = {
   starter: "Starter",
   pro: "Pro",
   business_reseller: "Business Reseller",
-  business_monitor: "Business Monitor",
 };
 
 export default function BillingPage() {

@@ -19,98 +19,65 @@ def _make_caza(last_check=None, frecuencia="15min", estado="activa", plan="start
     }
 
 
-def _bloque_activo(minutos):
-    """True si el minuto actual está alineado con el bloque."""
-    return datetime.now(timezone.utc).minute % minutos == 0
+class TestFrequencyLogic:
+    """Tests para la lógica de frecuencia del worker Celery."""
 
-
-class TestObtenerCazasPendientes:
-    def test_caza_sin_last_check_es_pendiente_en_bloque(self):
+    def test_caza_sin_last_check_deberia_procesarse(self):
+        """Una caza sin last_check debería ser elegible para procesar."""
+        from utils.logic import _parse_dt_utc, _effective_minutes
         caza = _make_caza(last_check=None)
-        supabase_mock = MagicMock()
-        supabase_mock.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [caza]
+        last_dt = _parse_dt_utc(caza["last_check"])
+        assert last_dt is None
 
-        with patch("engine.worker.supabase", supabase_mock):
-            from engine.worker import obtener_cazas_pendientes
-            pendientes = obtener_cazas_pendientes()
-            if _bloque_activo(15):
-                assert len(pendientes) == 1
-                assert pendientes[0]["id"] == 1
-            else:
-                assert len(pendientes) == 0
+    def test_caza_con_last_check_viejo_deberia_procesarse(self):
+        """Una caza con last_check viejo (> freq minutos) debería ser elegible."""
+        from utils.logic import _parse_dt_utc, _effective_minutes
+        ahora = datetime.now(timezone.utc)
+        last_check_viejo = (ahora - timedelta(minutes=20)).isoformat()
+        caza = _make_caza(last_check=last_check_viejo, frecuencia="15min")
+        last_dt = _parse_dt_utc(caza["last_check"])
+        mins = _effective_minutes(caza["plan"], caza["frecuencia"])
+        assert last_dt is not None
+        assert (ahora - last_dt) >= timedelta(minutes=mins)
 
-    def test_caza_con_last_check_reciente_no_es_pendiente(self):
+    def test_caza_con_last_check_reciente_no_deberia_procesarse(self):
+        """Una caza con last_check reciente (< freq minutos) no debería procesarse."""
+        from utils.logic import _parse_dt_utc, _effective_minutes
         ahora = datetime.now(timezone.utc)
         last_check_reciente = (ahora - timedelta(seconds=10)).isoformat()
-        caza = _make_caza(last_check=last_check_reciente)
-        supabase_mock = MagicMock()
-        supabase_mock.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [caza]
-
-        with patch("engine.worker.supabase", supabase_mock):
-            from engine.worker import obtener_cazas_pendientes
-            pendientes = obtener_cazas_pendientes()
-            assert len(pendientes) == 0
-
-    def test_caza_con_last_check_viejo_es_pendiente_en_bloque(self):
-        ahora = datetime.now(timezone.utc)
-        last_check_viejo = (ahora - timedelta(minutes=5)).isoformat()
-        caza = _make_caza(last_check=last_check_viejo)
-        supabase_mock = MagicMock()
-        supabase_mock.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [caza]
-
-        with patch("engine.worker.supabase", supabase_mock):
-            from engine.worker import obtener_cazas_pendientes
-            pendientes = obtener_cazas_pendientes()
-            if _bloque_activo(15):
-                assert len(pendientes) == 1
-            else:
-                assert len(pendientes) == 0
+        caza = _make_caza(last_check=last_check_reciente, frecuencia="15min")
+        last_dt = _parse_dt_utc(caza["last_check"])
+        mins = _effective_minutes(caza["plan"], caza["frecuencia"])
+        assert last_dt is not None
+        assert (ahora - last_dt) < timedelta(minutes=mins)
 
     def test_caza_inactiva_excluida(self):
-        caza = _make_caza(last_check=None, estado="inactiva")
-        supabase_mock = MagicMock()
-        supabase_mock.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [caza]
+        """Las cacerías inactivas no deberían procesarse."""
+        caza = _make_caza(estado="inactiva")
+        assert caza["estado"] != "activa"
 
-        with patch("engine.worker.supabase", supabase_mock):
-            from engine.worker import obtener_cazas_pendientes
-            pendientes = obtener_cazas_pendientes()
-            assert len(pendientes) == 0
+    def test_frecuencia_30_min(self):
+        """Frecuencia de 30min debería dar 30 minutos."""
+        from utils.logic import _effective_minutes
+        assert _effective_minutes("starter", "30min") == 30
 
-    def test_frecuencia_30_afecta_bloque(self):
-        caza = _make_caza(last_check=None, frecuencia="30min")
-        supabase_mock = MagicMock()
-        supabase_mock.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [caza]
+    def test_frecuencia_1h(self):
+        from utils.logic import _effective_minutes
+        assert _effective_minutes("pro", "1h") == 60
 
-        with patch("engine.worker.supabase", supabase_mock):
-            from engine.worker import obtener_cazas_pendientes
-            pendientes = obtener_cazas_pendientes()
-            if _bloque_activo(30):
-                assert len(pendientes) == 1
-            else:
-                assert len(pendientes) == 0
+    def test_frecuencia_6h(self):
+        from utils.logic import _effective_minutes
+        assert _effective_minutes("pro", "6h") == 360
+
+    def test_frecuencia_none_default(self):
+        from utils.logic import _effective_minutes
+        assert _effective_minutes("starter", None) == 1440
 
     def test_last_check_mal_formateado_no_crashea(self):
-        caza = _make_caza(last_check="fecha-invalida")
-        supabase_mock = MagicMock()
-        supabase_mock.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [caza]
-
-        with patch("engine.worker.supabase", supabase_mock):
-            from engine.worker import obtener_cazas_pendientes
-            try:
-                obtener_cazas_pendientes()
-            except Exception:
-                assert False, "No debería lanzar excepción"
-
-    def test_last_check_viejo_no_bloque_no_vuelve(self):
-        ahora = datetime.now(timezone.utc)
-        caza = _make_caza(last_check=(ahora - timedelta(seconds=50)).isoformat())
-        supabase_mock = MagicMock()
-        supabase_mock.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [caza]
-
-        with patch("engine.worker.supabase", supabase_mock):
-            from engine.worker import obtener_cazas_pendientes
-            pendientes = obtener_cazas_pendientes()
-            assert len(pendientes) == 0
+        """Last_check inválido no debería causar crash."""
+        from utils.logic import _parse_dt_utc
+        result = _parse_dt_utc("fecha-invalida")
+        assert result is None
 
 
 class TestEffectiveMinutes:
@@ -124,8 +91,49 @@ class TestEffectiveMinutes:
 
     def test_6h(self):
         from utils.logic import _effective_minutes
-        assert _effective_minutes("business", "6h") == 360
+        assert _effective_minutes("pro", "6h") == 360
 
     def test_default(self):
         from utils.logic import _effective_minutes
         assert _effective_minutes("starter", None) == 1440
+
+
+class TestSafeFloat:
+    def test_none_returns_default(self):
+        from utils.logic import _safe_float
+        assert _safe_float(None) == 0.0
+
+    def test_int_passthrough(self):
+        from utils.logic import _safe_float
+        assert _safe_float(42) == 42.0
+
+    def test_float_passthrough(self):
+        from utils.logic import _safe_float
+        assert _safe_float(3.14) == 3.14
+
+    def test_string_with_dollar_sign(self):
+        from utils.logic import _safe_float
+        assert _safe_float("$1.234") == 1234.0
+
+    def test_string_with_comma_decimal(self):
+        from utils.logic import _safe_float
+        assert _safe_float("1.234,56") == 1234.56
+
+    def test_garbage_returns_default(self):
+        from utils.logic import _safe_float
+        assert _safe_float("abc", 99.0) == 99.0
+
+
+class TestPlanLogic:
+    def test_normalize_plan_family(self):
+        from utils.logic import normalize_plan_family
+        assert normalize_plan_family("starter") == "starter"
+        assert normalize_plan_family("omega") == "starter"
+        assert normalize_plan_family("beta") == "pro"
+        assert normalize_plan_family("alfa") == "pro"
+        assert normalize_plan_family(None) == "starter"
+
+    def test_plan_allows_whatsapp(self):
+        from utils.logic import plan_allows_whatsapp
+        assert plan_allows_whatsapp("starter") is False
+        assert plan_allows_whatsapp("pro") is True

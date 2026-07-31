@@ -46,14 +46,12 @@ def _to_int_price(text: str) -> int | None:
 
 
 def _extraer_precio_desde_html(html: str) -> int | None:
-    """Extrae el primer precio numérico del HTML de una página de ML."""
+    """Extrae el primer precio numerico del HTML de una pagina de ML."""
     soup = BeautifulSoup(html, "html.parser")
-    # Selector típico de ML para el precio
     el = soup.select_one("span.andes-money-amount__fraction")
     if el:
         texto = el.get_text(strip=True)
         return extract_price_from_text(f"${texto}")
-    # Fallback: meta tags
     for meta in soup.select('meta[itemprop="price"], meta[property="product:price:amount"]'):
         content = meta.get("content", "")
         if content:
@@ -61,7 +59,6 @@ def _extraer_precio_desde_html(html: str) -> int | None:
                 return int(float(content))
             except (ValueError, TypeError):
                 pass
-    # Fallback: cualquier texto con $
     body = soup.get_text() if soup.body else ""
     for m in re.finditer(r'\$\s*([\d\.,]+)', body):
         raw = m.group(1).replace(".", "").replace(",", "")
@@ -128,31 +125,45 @@ def _verificar_precio_personalizado(url: str, precio_original: int | None) -> di
         )
 
         if es_personalizado:
-            logger.info(f"🎭 Precio personalizado detectado: ${precio_original} vs ${precio_alt}")
+            logger.info(f"Precio personalizado detectado: ${precio_original} vs ${precio_alt}")
 
         return {
             "precio_personalizado": es_personalizado,
             "precio_alternativo": precio_alt,
         }
     except Exception as e:
-        logger.error(f"⚠️ Error verificando precio personalizado: {e}")
+        logger.error(f"Error verificando precio personalizado: {e}")
         return {"precio_personalizado": False, "precio_alternativo": None}
 
 
 def hunt_offers(url: str, keyword: str, max_price: int, es_pro: bool = False, headless: bool = True, user_id: str = None, caza_id: int = None, plan: str = "starter"):
+    from .rate_limiter import rate_limiter
+    
+    # Aplicar rate limiting
+    rate_limiter.wait(url)
+    
     disfraz = get_random_user_agent()
     apply_human_jitter()
 
     host = _domain(url)
-    logger.info(f"🔍 Host: {host} | URL: {url[:40]}...")
+    logger.info(f"Host: {host} | URL: {url[:40]}...")
 
     vuelos_sites = ["despegar", "almundo", "turismocity", "avantrip", "smiles"]
     if any(site in host for site in vuelos_sites):
         return hunt_despegar_vuelos(url, keyword, max_price, es_pro=es_pro, headless=False, user_agent=disfraz)
 
+    # Try ML API first (more stable than scraping)
+    if "mercadolibre" in host:
+        from .ml_api import hunt_ml_api
+        api_results = hunt_ml_api(url, keyword, max_price)
+        if api_results:
+            logger.info(f"ML API returned {len(api_results)} results")
+            return api_results
+        logger.info("ML API returned no results, falling back to web scraping")
+
     resultados = hunt_generic(url, keyword, max_price)
 
-    # Verificar precio personalizado en ML
+    # Verify personalized pricing for ML (only if using web scraping)
     if "mercadolibre" in host and resultados:
         precio_base = resultados[0].get("price")
         info = _verificar_precio_personalizado(url, precio_base)

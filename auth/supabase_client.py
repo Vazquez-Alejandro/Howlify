@@ -40,5 +40,7 @@ supabase_admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 for client in [supabase_user, supabase_admin]:
     client.postgrest.session = httpx.Client(http2=False)
 
-# Alias por compatibilidad (usa service role por defecto)
+# Alias por compatibilidad: el backend usa service_role para todo,
+# ya que valida user_id via JWT en cada endpoint de la API.
+# El worker (Celery) necesita service_role para acceder a todos los usuarios.
 supabase = supabase_admin
