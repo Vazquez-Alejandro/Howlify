@@ -124,9 +124,9 @@ function CountUp({ target }: { target: number }) {
 export default function LandingPage() {
   return (
     <PageTransition>
-      <div className="min-h-screen bg-gray-950 text-white">
+      <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center">
         {/* ─── Hero ─── */}
-        <div className="relative overflow-hidden">
+        <div className="relative overflow-hidden w-full">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(239,68,68,0.08),transparent_60%)]" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(239,68,68,0.04),transparent_50%)]" />
 
@@ -194,12 +194,12 @@ export default function LandingPage() {
         </div>
 
         {/* ─── Cómo funciona ─── */}
-        <section className="relative z-10 w-full max-w-5xl mx-auto px-6 py-20">
-          <div className="text-center mb-14">
+        <section className="relative z-10 w-full max-w-5xl mx-auto px-6 py-20 text-center">
+          <div className="mb-14">
             <p className="text-sm font-semibold text-red-400 tracking-wider uppercase mb-3">Simple y automático</p>
             <h2 className="text-3xl sm:text-4xl font-bold">Cómo funciona</h2>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mx-auto">
             {STEPS.map((s) => (
               <div key={s.num} className="relative text-center p-6">
                 <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-5">
@@ -213,13 +213,13 @@ export default function LandingPage() {
         </section>
 
         {/* ─── Features ─── */}
-        <section className="relative z-10 w-full max-w-6xl mx-auto px-6 py-20">
-          <div className="text-center mb-14">
+        <section className="relative z-10 w-full max-w-6xl mx-auto px-6 py-20 text-center">
+          <div className="mb-14">
             <p className="text-sm font-semibold text-red-400 tracking-wider uppercase mb-3">Funcionalidades</p>
             <h2 className="text-3xl sm:text-4xl font-bold">Todo lo que necesitás</h2>
             <p className="mt-4 text-gray-400 max-w-xl mx-auto">Monitoreo inteligente, alertas instantáneas, historial de precios. Diseñado para encontrar las mejores ofertas.</p>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mx-auto">
             {FEATURES.map((f) => (
               <div key={f.title} className="group p-6 rounded-2xl bg-gray-900/40 border border-gray-800/60 hover:border-gray-700/60 hover:bg-gray-900/60 transition-all duration-300">
                 <div className="w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 mb-5 group-hover:bg-red-500/15 transition-colors">
@@ -233,8 +233,8 @@ export default function LandingPage() {
         </section>
 
         {/* ─── Pricing ─── */}
-        <section className="relative z-10 w-full max-w-5xl mx-auto px-6 py-20">
-          <div className="text-center mb-14">
+        <section className="relative z-10 w-full max-w-5xl mx-auto px-6 py-20 text-center">
+          <div className="mb-14">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-green-500/10 border border-green-500/20 rounded-full text-sm text-green-400 mb-5">
               7 días gratis · Sin tarjeta de crédito
             </div>
@@ -296,12 +296,12 @@ export default function LandingPage() {
         </section>
 
         {/* ─── FAQ ─── */}
-        <section className="relative z-10 w-full max-w-3xl mx-auto px-6 py-20">
-          <div className="text-center mb-14">
+        <section className="relative z-10 w-full max-w-3xl mx-auto px-6 py-20 text-center">
+          <div className="mb-14">
             <p className="text-sm font-semibold text-red-400 tracking-wider uppercase mb-3">Preguntas frecuentes</p>
             <h2 className="text-3xl sm:text-4xl font-bold">¿Tenés dudas?</h2>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-4 text-left">
             {[
               { q: "¿Qué es una cacería?", a: "Una regla de monitoreo que revisa automáticamente el precio de un producto en una URL que vos definas. Podés configurar el precio objetivo y la frecuencia de revisión." },
               { q: "¿Cómo recibo las alertas?", a: "Según tu plan, podés recibir alertas por email, Telegram o WhatsApp. Configurás tu canal preferido y te avisamos al instante cuando el precio cambie." },
@@ -325,7 +325,7 @@ export default function LandingPage() {
         <section className="relative z-10 w-full max-w-4xl mx-auto px-6 py-20">
           <div className="relative rounded-3xl bg-gradient-to-b from-red-500/10 to-gray-900/80 border border-red-500/20 p-12 text-center overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(239,68,68,0.08),transparent_70%)]" />
-            <div className="relative z-10">
+            <div className="relative z-10 mx-auto max-w-lg">
               <h2 className="text-3xl sm:text-4xl font-bold mb-4">Empezá a ahorrar hoy</h2>
               <p className="text-gray-400 max-w-md mx-auto mb-8">Unite a miles de cazadores de ofertas que ya usan Howlify para no perderse ninguna oportunidad.</p>
               <Link
@@ -340,9 +340,9 @@ export default function LandingPage() {
 
         {/* ─── Footer ─── */}
         <footer className="relative z-10 w-full border-t border-gray-800/50">
-          <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+          <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-500 text-center">
             <span>© 2026 Howlify. Todos los derechos reservados.</span>
-            <div className="flex items-center gap-5">
+            <div className="flex items-center justify-center gap-5">
               <Link to="/terms" className="hover:text-gray-300 transition-colors">Términos</Link>
               <Link to="/privacy" className="hover:text-gray-300 transition-colors">Privacidad</Link>
               <a href="mailto:howlify.app@gmail.com" className="hover:text-gray-300 transition-colors">Contacto</a>
