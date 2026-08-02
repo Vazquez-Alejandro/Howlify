@@ -5,7 +5,7 @@ import hashlib
 import hmac
 import logging
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from dotenv import load_dotenv
 import jwt
@@ -182,7 +182,7 @@ def save_price_history(user_id: str, caza_id, results: list[dict]):
             "title": (r.get("title") or r.get("titulo") or "").strip(),
             "url": (r.get("url") or r.get("link") or "").strip(),
             "source": (r.get("source") or "").strip(),
-            "price": price, "checked_at": "now()",
+            "price": price, "checked_at": datetime.now(timezone.utc).isoformat(),
         })
     if not rows: return
     try: supabase.table("price_history").insert(rows).execute()
@@ -343,7 +343,11 @@ def update_profile(data: ProfileUpdate, authorization: str = Header(default=""))
 
 
 class TestNotificationRequest(BaseModel):
-    channel: str  # "telegram", "whatsapp", "email"
+    channel: str = ""
+    canal: str = ""  # alias frontend sends "canal"
+
+    def get_channel(self) -> str:
+        return self.canal or self.channel
 
 
 @app.post("/api/auth/telegram-bind-token")
@@ -363,23 +367,24 @@ def test_notification(data: TestNotificationRequest, authorization: str = Header
 
     from services.notification_service import enviar_telegram, enviar_whatsapp, enviar_email
     mensaje = "🐺 ¡Howlify funciona correctamente! Esta es una notificación de prueba."
+    canal = data.get_channel()
 
-    if data.channel == "telegram":
+    if canal == "telegram":
         tg_id = profile.get("telegram_id")
         if not tg_id:
             raise HTTPException(status_code=400, detail="No hay Telegram ID configurado")
         ok = enviar_telegram(str(tg_id), mensaje)
         return {"ok": ok, "channel": "telegram"}
 
-    if data.channel == "whatsapp":
+    if canal == "whatsapp":
         num = profile.get("whatsapp_number")
         if not num:
             raise HTTPException(status_code=400, detail="No hay WhatsApp configurado")
         ok = enviar_whatsapp(str(num), mensaje)
         return {"ok": ok, "channel": "whatsapp"}
 
-    if data.channel == "email":
-        email = profile.get("email") or profile.get("user_email")
+    if canal == "email":
+        email = profile.get("email")
         if not email:
             try:
                 user_res = supabase.auth.admin.get_user_by_id(uid)
@@ -400,7 +405,9 @@ def test_notification(data: TestNotificationRequest, authorization: str = Header
 def list_cazas(authorization: str = Header(default="")):
     uid = get_user_id(authorization)
     from db.database import obtener_cazas
-    cazas = obtener_cazas(uid, "starter")
+    profile = supabase.table("profiles").select("plan").eq("user_id", uid).limit(1).execute()
+    plan = profile.data[0]["plan"] if profile.data else "starter"
+    cazas = obtener_cazas(uid, plan)
     return {"cazas": cazas}
 
 @app.post("/api/cazas")
@@ -499,7 +506,9 @@ def hunt_all(authorization: str = Header(default="")):
     uid = get_user_id(authorization)
     rate_limit_hunt(uid)
     from db.database import obtener_cazas
-    cazas = obtener_cazas(uid, "starter")
+    profile = supabase.table("profiles").select("plan").eq("user_id", uid).limit(1).execute()
+    plan = profile.data[0]["plan"] if profile.data else "starter"
+    cazas = obtener_cazas(uid, plan)
     results = {}
     for c in cazas:
         rid = str(c.get("id", ""))
@@ -726,7 +735,9 @@ import csv, io
 def export_csv(authorization: str = Header(default="")):
     uid = get_user_id(authorization)
     from db.database import obtener_cazas
-    cazas = obtener_cazas(uid, "starter")
+    profile = supabase.table("profiles").select("plan").eq("user_id", uid).limit(1).execute()
+    plan = profile.data[0]["plan"] if profile.data else "starter"
+    cazas = obtener_cazas(uid, plan)
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["ID", "Producto", "URL", "Precio Máx", "Último Precio", "Estado", "Creado"])

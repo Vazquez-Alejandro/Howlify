@@ -169,7 +169,8 @@ def evaluar_reglas_alerta(caza_id, user_id):
                 if channel in ("whatsapp", "all"):
                     numero = (contacto.get("whatsapp_number") or "").strip()
                     if numero:
-                        enviar_whatsapp(numero, {"title": title, "price": current, "url": ""}, caza_nombre=title)
+                        msg_wa = f"{title}\n{body}"
+                        enviar_whatsapp(numero, msg_wa)
 
                 if channel in ("telegram", "all"):
                     tid = contacto.get("telegram_id") or ""

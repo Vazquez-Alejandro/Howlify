@@ -175,6 +175,30 @@ export const api = {
     }),
 
   adminUsers: () => request<{ users: Record<string, unknown>[] }>("/api/admin/users"),
+
+  exportCsv: async (): Promise<{ blob?: Blob; error?: string }> => {
+    const token = getToken();
+    try {
+      const res = await fetch(`${API_BASE}/api/export/csv`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.status === 401 && getRefreshToken()) {
+        const refreshed = await tryRefresh();
+        if (refreshed) {
+          const retry = await fetch(`${API_BASE}/api/export/csv`, {
+            headers: { Authorization: `Bearer ${getToken()}` },
+          });
+          if (!retry.ok) return { error: `Error ${retry.status}` };
+          return { blob: await retry.blob() };
+        }
+        return { error: "Sesión expirada. Iniciá sesión de nuevo." };
+      }
+      if (!res.ok) return { error: `Error ${res.status}` };
+      return { blob: await res.blob() };
+    } catch (e: unknown) {
+      return { error: e instanceof Error ? e.message : "Error de red" };
+    }
+  },
 };
 
 export interface Caza {
@@ -184,6 +208,7 @@ export interface Caza {
   link?: string;
   url?: string;
   precio_max: number;
+  frecuencia?: string;
   last_price?: number;
   estado?: string;
   tipo_alerta?: string;

@@ -67,7 +67,8 @@ export default function DashboardPage() {
   const loadCazas = async () => {
     setLoading(true);
     const res = await api.listCazas();
-    if (res.data) setCazas(res.data.cazas);
+    if (res.error) toast(res.error, "error");
+    else if (res.data) setCazas(res.data.cazas);
     setLoading(false);
   };
 
@@ -107,14 +108,16 @@ export default function DashboardPage() {
   const handleHuntAll = async () => {
     setHuntAllLoading(true);
     toast("Olfateando todas las cacerías...", "info");
-    await api.huntAll();
+    const res = await api.huntAll();
     setHuntAllLoading(false);
     await loadCazas();
-    toast("Todas las cacerías actualizadas", "success");
+    if (res.error) toast(res.error, "error");
+    else toast("Todas las cacerías actualizadas", "success");
   };
 
   const handleDelete = async (id: number) => {
-    await api.deleteCaza(id);
+    const res = await api.deleteCaza(id);
+    if (res.error) { toast(res.error, "error"); return; }
     await loadCazas();
   };
 
@@ -219,13 +222,9 @@ export default function DashboardPage() {
                     {showUsd ? "ARS + USD" : "Solo ARS"}
                   </button>
                   <button onClick={async () => {
-                    const token = localStorage.getItem("token");
                     try {
-                      const res = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/export/csv`, {
-                        headers: token ? { Authorization: `Bearer ${token}` } : {},
-                      });
-                      if (!res.ok) throw new Error("Error al exportar");
-                      const blob = await res.blob();
+                      const { blob, error } = await api.exportCsv();
+                      if (error || !blob) { toast(error || "Error al descargar CSV", "error"); return; }
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement("a"); a.href = url; a.download = "howlify_cazas.csv"; a.click();
                       URL.revokeObjectURL(url);

@@ -302,6 +302,7 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                   className="w-full mt-0.5 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm focus:outline-none focus:border-red-500/50">
                   <option value="piso">Por precio</option>
                   <option value="descuento">Por descuento</option>
+                  <option value="grande">Grandes ofertas</option>
                 </select>
               </div>
               <div>
