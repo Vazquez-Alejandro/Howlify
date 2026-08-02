@@ -11,7 +11,7 @@ const PLANS = [
     features: [
       { text: "3 cacerías activas", included: true },
       { text: "Frecuencia cada 1 hora", included: true },
-      { text: "Alertas por email", included: true },
+      { text: "Alertas por email + Telegram", included: true },
       { text: "MercadoLibre + tiendas genéricas", included: true },
       { text: "Historial de precios 7 días", included: true },
       { text: "Exportación CSV", included: false },

@@ -404,6 +404,10 @@ def test_notification(data: TestNotificationRequest, authorization: str = Header
         return {"ok": ok, "channel": "telegram"}
 
     if canal == "whatsapp":
+        from config import PLAN_LIMITS
+        user_plan = profile.get("plan", "starter")
+        if not PLAN_LIMITS.get(user_plan, {}).get("features", {}).get("whatsapp", False):
+            raise HTTPException(status_code=403, detail="WhatsApp no disponible en tu plan. Upgrade a Beta o Alpha.")
         num = profile.get("whatsapp_number")
         if not num:
             raise HTTPException(status_code=400, detail="No hay WhatsApp configurado")
@@ -441,8 +445,13 @@ def list_cazas(authorization: str = Header(default="")):
 def create_caza(caza: CazaCreate, authorization: str = Header(default="")):
     uid = get_user_id(authorization)
     from services.database_service import guardar_caza_supabase
+    from utils.logic import get_effective_plan_rules, _effective_minutes
     profile = supabase.table("profiles").select("plan").eq("user_id", uid).limit(1).execute()
     plan = profile.data[0]["plan"] if profile.data else "starter"
+    rules = get_effective_plan_rules(plan)
+    freq_opts = rules.get("freq_options", ["1h", "6h", "12h", "24h"])
+    if caza.frecuencia not in freq_opts:
+        raise HTTPException(status_code=400, detail=f"Frecuencia '{caza.frecuencia}' no permitida en tu plan. Opciones: {', '.join(freq_opts)}")
     url_limpia = clean_ml_url(caza.url)
     src = infer_source_from_url(url_limpia) or "generic"
     precio_int = parse_price_to_int(caza.precio_max)
@@ -708,6 +717,11 @@ def predict_price(caza_id: int, authorization: str = Header(default="")):
 @app.post("/api/reports/generate")
 def generate_report(body: GenerateReportRequest, authorization: str = Header(default="")):
     uid = get_user_id(authorization)
+    from config import PLAN_LIMITS
+    profile = supabase.table("profiles").select("plan").eq("user_id", uid).limit(1).execute()
+    plan = profile.data[0]["plan"] if profile.data else "starter"
+    if not PLAN_LIMITS.get(plan, {}).get("features", {}).get("reporte_diario", False):
+        raise HTTPException(status_code=403, detail="Reportes no disponibles en tu plan. Upgrade a Beta o Alpha.")
     tipo = body.type
     try:
         from services.database_service import ejecutar_reporte_diario_total, ejecutar_reporte_semanal
@@ -762,8 +776,11 @@ import csv, io
 def export_csv(authorization: str = Header(default="")):
     uid = get_user_id(authorization)
     from db.database import obtener_cazas
+    from config import PLAN_LIMITS
     profile = supabase.table("profiles").select("plan").eq("user_id", uid).limit(1).execute()
     plan = profile.data[0]["plan"] if profile.data else "starter"
+    if not PLAN_LIMITS.get(plan, {}).get("features", {}).get("export_csv", False):
+        raise HTTPException(status_code=403, detail="Exportación CSV no disponible en tu plan. Upgrade a Beta o Alpha.")
     cazas = obtener_cazas(uid, plan)
     output = io.StringIO()
     writer = csv.writer(output)
