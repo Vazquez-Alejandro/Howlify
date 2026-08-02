@@ -27,7 +27,20 @@ from pywebpush import webpush, WebPushException
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("howlify")
 
-# ─── Rate limiter (in-memory) ───────────────────────────
+# ─── Rate limiter (Redis con fallback a in-memory) ──────
+import redis as redis_lib
+
+_redis_client = None
+_redis_url = os.getenv("REDIS_URL", "")
+if _redis_url:
+    try:
+        _redis_client = redis_lib.from_url(_redis_url, decode_responses=True)
+        _redis_client.ping()
+        logger.info("Rate limiter: usando Redis")
+    except Exception:
+        _redis_client = None
+        logger.warning("Rate limiter: Redis no disponible, usando in-memory")
+
 _rate_limit_lock = threading.Lock()
 _rate_limit_store: dict[str, list[float]] = {}
 _RATE_WINDOW = float(os.getenv("RATE_WINDOW_SECONDS", "30"))
@@ -35,14 +48,28 @@ _RATE_MAX = int(os.getenv("RATE_MAX_REQUESTS", "2"))
 
 def rate_limit_hunt(uid: str):
     now = time.time()
-    with _rate_limit_lock:
-        timestamps = _rate_limit_store.get(uid, [])
-        timestamps = [t for t in timestamps if now - t < _RATE_WINDOW]
-        if len(timestamps) >= _RATE_MAX:
-            retry_after = int(_RATE_WINDOW - (now - timestamps[0]))
-            raise HTTPException(status_code=429, detail=f"Demasiadas solicitudes. Esperá {retry_after}s.")
-        timestamps.append(now)
-        _rate_limit_store[uid] = timestamps
+
+    if _redis_client:
+        key = f"rl:{uid}"
+        pipe = _redis_client.pipeline()
+        pipe.zremrangebyscore(key, 0, now - _RATE_WINDOW)
+        pipe.zadd(key, {str(now): now})
+        pipe.zcard(key)
+        pipe.expire(key, int(_RATE_WINDOW) + 1)
+        results = pipe.execute()
+        count = results[2]
+        if count > _RATE_MAX:
+            _redis_client.delete(key)
+            raise HTTPException(status_code=429, detail=f"Demasiadas solicitudes. Esperá {_RATE_WINDOW:.0f}s.")
+    else:
+        with _rate_limit_lock:
+            timestamps = _rate_limit_store.get(uid, [])
+            timestamps = [t for t in timestamps if now - t < _RATE_WINDOW]
+            if len(timestamps) >= _RATE_MAX:
+                retry_after = int(_RATE_WINDOW - (now - timestamps[0]))
+                raise HTTPException(status_code=429, detail=f"Demasiadas solicitudes. Esperá {retry_after}s.")
+            timestamps.append(now)
+            _rate_limit_store[uid] = timestamps
 
 app = FastAPI(title="Howlify API", version="1.0.0")
 

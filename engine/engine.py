@@ -24,17 +24,19 @@ VAPID_CLAIM = os.getenv("VAPID_CLAIM_EMAIL", "mailto:howlify@example.com")
 
 
 def _obtener_precio_referencia(caza_id):
-    """Obtiene el precio promedio histórico como referencia para detectar descuentos fuertes."""
+    """Obtiene el precio más bajo histórico como referencia para detectar descuentos reales.
+    Usa min() de los últimos 30 registros en vez de avg() de los últimos 5,
+    para evitar trucos de vendedores que inflan precios y los 'bajan'."""
     try:
         res = supabase.table("price_history") \
             .select("price") \
             .eq("caza_id", caza_id) \
             .order("checked_at", desc=True) \
-            .limit(5) \
+            .limit(30) \
             .execute()
         prices = [float(p["price"]) for p in (res.data or []) if float(p["price"]) > 0]
         if prices:
-            return sum(prices) / len(prices)
+            return min(prices)
     except Exception as e:
         logger.error(f"⚠ error obteniendo precio referencia para caza {caza_id}: {e}")
     return None
