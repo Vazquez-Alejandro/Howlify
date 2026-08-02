@@ -17,8 +17,9 @@ import PushNotifToggle from "../components/PushNotifToggle";
 type View = "rastreadores" | "perfil" | "admin" | "facturacion";
 
 const PLAN_INFO: Record<string, { label: string; max: number }> = {
-  starter: { label: "Starter", max: 5 },
-  pro: { label: "Pro", max: 15 },
+  starter: { label: "Omega", max: 3 },
+  pro: { label: "Beta", max: 15 },
+  alpha: { label: "Alpha", max: 999 },
 };
 
 export default function DashboardPage() {

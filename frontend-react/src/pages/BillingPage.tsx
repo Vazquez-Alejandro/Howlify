@@ -1,8 +1,9 @@
 import PageTransition from "../components/PageTransition";
 
 const PLAN_LABELS: Record<string, string> = {
-  starter: "Starter",
-  pro: "Pro",
+  starter: "Omega",
+  pro: "Beta",
+  alpha: "Alpha",
 };
 
 export default function BillingPage() {

@@ -5,15 +5,15 @@ import Logo from "../components/Logo";
 
 const PLANS = [
   {
-    name: "Starter",
-    price: 9,
-    desc: "Para empezar a monitorear",
+    name: "Omega",
+    price: 5,
+    desc: "Para empezar a olfatear",
     features: [
-      { text: "5 cacerías activas", included: true },
+      { text: "3 cacerías activas", included: true },
       { text: "Frecuencia cada 1 hora", included: true },
       { text: "Alertas por email", included: true },
       { text: "MercadoLibre + tiendas genéricas", included: true },
-      { text: "Historial de precios", included: true },
+      { text: "Historial de precios 7 días", included: true },
       { text: "Exportación CSV", included: false },
       { text: "Alertas WhatsApp", included: false },
       { text: "API MercadoLibre", included: false },
@@ -22,22 +22,39 @@ const PLANS = [
     href: "/register",
   },
   {
-    name: "Pro",
+    name: "Beta",
     price: 15,
     desc: "Para cazadores seriales",
     features: [
       { text: "15 cacerías activas", included: true },
       { text: "Frecuencia cada 15 minutos", included: true },
-      { text: "Alertas por email", included: true },
+      { text: "Alertas por email + WhatsApp", included: true },
       { text: "MercadoLibre + tiendas genéricas", included: true },
-      { text: "Historial de precios", included: true },
+      { text: "Historial de precios ilimitado", included: true },
       { text: "Exportación CSV", included: true },
-      { text: "Alertas WhatsApp", included: true },
+      { text: "Reportes periódicos", included: true },
       { text: "API MercadoLibre oficial", included: true },
     ],
     cta: "Empezar gratis",
     href: "/register",
     popular: true,
+  },
+  {
+    name: "Alpha",
+    price: 29,
+    desc: "Líder del pack",
+    features: [
+      { text: "Cacerías ilimitadas", included: true },
+      { text: "Frecuencia cada 5 minutos", included: true },
+      { text: "Alertas por email + WhatsApp + Telegram", included: true },
+      { text: "Todas las plataformas + vuelos + alojamientos", included: true },
+      { text: "Historial de precios ilimitado", included: true },
+      { text: "Exportación CSV + Sheets", included: true },
+      { text: "Reportes prioritarios", included: true },
+      { text: "Soporte prioritario", included: true },
+    ],
+    cta: "Empezar gratis",
+    href: "/register",
   },
 ];
 
@@ -196,10 +213,10 @@ export default function LandingPage() {
               <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.375rem 1rem", background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: "9999px", fontSize: "0.875rem", color: "#4ade80", marginBottom: "1.25rem" }}>
                 7 días gratis · Sin tarjeta de crédito
               </div>
-              <h2 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: "1rem" }}>Planes para todos</h2>
+              <h2 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: "1rem" }}>Elegí tu rango en la manada</h2>
               <p style={{ color: "#9ca3af" }}>Empezá gratis, escalá cuando lo necesites.</p>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1.5rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.5rem" }}>
               {PLANS.map((p) => (
                 <div key={p.name} style={{
                   position: "relative", borderRadius: "1rem", padding: "2rem", display: "flex", flexDirection: "column",

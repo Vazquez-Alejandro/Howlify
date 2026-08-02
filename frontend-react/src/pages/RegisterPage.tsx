@@ -15,8 +15,9 @@ interface Plan {
 }
 
 const plans: Plan[] = [
-  { value: "starter", label: "Starter", price: "USD 9/mes", features: ["5 cacerías activas", "C/1 hora o más", "Alertas email", "Tiendas ML + genéricas"] },
-  { value: "pro", label: "Pro", price: "USD 15/mes", features: ["15 cacerías activas", "C/15 min o más", "Alertas WhatsApp", "Export CSV"], popular: true },
+  { value: "starter", label: "Omega", price: "USD 5/mes", features: ["3 cacerías activas", "C/1 hora o más", "Alertas email", "Tiendas ML + genéricas"] },
+  { value: "pro", label: "Beta", price: "USD 15/mes", features: ["15 cacerías activas", "C/15 min o más", "Alertas WhatsApp + email", "Export CSV"], popular: true },
+  { value: "alpha", label: "Alpha", price: "USD 29/mes", features: ["Cacerías ilimitadas", "C/5 min o más", "Todas las alertas", "Soporte prioritario"] },
 ];
 
 export default function RegisterPage() {

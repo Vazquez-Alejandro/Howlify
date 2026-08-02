@@ -73,11 +73,13 @@ PLAN_ALIAS = {
     "revendedor": "pro",
     "empresa": "pro",
     "pro": "pro",
+    "alpha": "alpha",
 }
 
 PLAN_RULES = {
-    "starter": {"max_cazas_activas": 5, "freq_options": ["12h", "24h"], "plan_key": "starter"},
-    "pro": {"max_cazas_activas": 15, "freq_options": ["1h", "6h", "12h", "24h"], "plan_key": "pro"},
+    "starter": {"max_cazas_activas": 3, "freq_options": ["1h", "6h", "12h", "24h"], "plan_key": "starter"},
+    "pro": {"max_cazas_activas": 15, "freq_options": ["15min", "1h", "6h", "12h", "24h"], "plan_key": "pro"},
+    "alpha": {"max_cazas_activas": 999, "freq_options": ["5min", "15min", "1h", "6h", "12h", "24h"], "plan_key": "alpha"},
 }
 
 def normalize_plan_family(plan: str) -> str:
@@ -86,11 +88,16 @@ def normalize_plan_family(plan: str) -> str:
 
 
 def plan_allows_whatsapp(plan: str) -> bool:
-    return normalize_plan_family(plan) == "pro"
+    return normalize_plan_family(plan) in ("pro", "alpha")
 
 
 def plan_min_interval(plan: str) -> int:
-    return 60 if normalize_plan_family(plan) == "starter" else 15
+    family = normalize_plan_family(plan)
+    if family == "alpha":
+        return 5
+    if family == "pro":
+        return 15
+    return 60
 
 
 def _domain_from_url(url: str) -> str:

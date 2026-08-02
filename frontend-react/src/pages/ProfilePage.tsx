@@ -7,8 +7,9 @@ import PageTransition from "../components/PageTransition";
 import TermsModal from "../components/TermsModal";
 
 const PLAN_LABELS: Record<string, string> = {
-  starter: "Starter",
-  pro: "Pro",
+  starter: "Omega",
+  pro: "Beta",
+  alpha: "Alpha",
 };
 
 const DAY_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];

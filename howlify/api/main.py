@@ -854,7 +854,8 @@ MP_WEBHOOK_SECRET = os.getenv("MP_WEBHOOK_SECRET", "")
 MP_API_BASE = "https://api.mercadopago.com"
 
 MP_PRICES = {
-    "pro": int(os.getenv("MP_PRICE_PRO_ARS", "3000")),
+    "pro": int(os.getenv("MP_PRICE_PRO_ARS", "6500")),
+    "alpha": int(os.getenv("MP_PRICE_ALPHA_ARS", "12500")),
 }
 
 MP_DURATION_DAYS = int(os.getenv("MP_DURATION_DAYS", "30"))
