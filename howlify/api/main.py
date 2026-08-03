@@ -154,7 +154,6 @@ class SignupRequest(BaseModel):
     email: str
     password: str
     username: str
-    plan: str = "starter"
 
 class ForgotPasswordRequest(BaseModel):
     email: str
@@ -259,7 +258,8 @@ def health_detailed(authorization: str = ""):
     }
 
 @app.get("/api/health/scraper")
-def scraper_health():
+def scraper_health(authorization: str = Header(...)):
+    get_user_id(authorization)
     from scraper.scraper_pro import _domain
     test_url = "https://www.mercadolibre.com.ar/"
     domain = _domain(test_url)
@@ -289,7 +289,7 @@ def login(req: LoginRequest):
 @app.post("/api/auth/signup")
 def signup(req: SignupRequest):
     from auth.auth_supabase import supa_signup
-    user, err = supa_signup(req.email, req.password, req.password, req.username, req.plan)
+    user, err = supa_signup(req.email, req.password, req.password, req.username, "starter")
     if err:
         raise HTTPException(status_code=400, detail=err)
     return {"user": {"id": user.id, "email": user.email} if user else None, "message": "Cuenta creada. Revisá tu email."}

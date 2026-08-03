@@ -1,6 +1,9 @@
 # Env / secrets
 .env
+.env.*
 *.env
+credenciales.json
+token.json
 
 # Git
 .git
