@@ -112,19 +112,19 @@ export default function LandingPage() {
   const [mobileMenu, setMobileMenu] = useState(false);
   return (
     <PageTransition>
-      <div style={{ minHeight: "100vh", background: "#030712", color: "#f3f4f6" }}>
+      <div className="min-h-screen bg-gray-950 text-gray-100">
 
         {/* NAV */}
-        <nav style={{ position: "relative", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", maxWidth: "72rem", marginLeft: "auto", marginRight: "auto", padding: "1.25rem 1.5rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        <nav className="relative z-10 flex items-center justify-between max-w-7xl mx-auto px-6 py-5">
+          <div className="flex items-center gap-3">
             <Logo size="md" />
-            <span style={{ fontSize: "1.25rem", fontWeight: 700 }}>Howlify</span>
+            <span className="text-xl font-bold">Howlify</span>
           </div>
-          <div className="landing-nav-links" style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <Link to="/login" style={{ padding: "0.5rem 1rem", fontSize: "0.875rem", fontWeight: 500, color: "#9ca3af" }}>Iniciar Sesión</Link>
-            <Link to="/register" style={{ padding: "0.625rem 1.25rem", fontSize: "0.875rem", fontWeight: 600, background: "#fff", color: "#030712", borderRadius: "0.75rem" }}>Empezar gratis</Link>
+          <div className="hidden md:flex items-center gap-3">
+            <Link to="/login" className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors">Iniciar Sesión</Link>
+            <Link to="/register" className="px-5 py-2.5 text-sm font-semibold bg-white text-gray-950 rounded-xl hover:bg-gray-100 transition-colors">Empezar gratis</Link>
           </div>
-          <button className="landing-nav-mobile-btn" onClick={() => setMobileMenu(!mobileMenu)} style={{ display: "none", background: "none", border: "none", color: "#f3f4f6", cursor: "pointer", padding: "0.5rem" }}>
+          <button onClick={() => setMobileMenu(!mobileMenu)} className="md:hidden p-2 text-gray-100" aria-label="Menú">
             {mobileMenu ? (
               <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             ) : (
@@ -133,65 +133,65 @@ export default function LandingPage() {
           </button>
         </nav>
         {mobileMenu && (
-          <div style={{ position: "relative", zIndex: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem", padding: "1rem 1.5rem 1.5rem", maxWidth: "72rem", marginLeft: "auto", marginRight: "auto" }}>
-            <Link to="/login" onClick={() => setMobileMenu(false)} style={{ padding: "0.75rem 1.5rem", fontSize: "0.875rem", fontWeight: 500, color: "#9ca3af", width: "100%", textAlign: "center", borderRadius: "0.75rem", border: "1px solid rgba(75,85,99,0.3)" }}>Iniciar Sesión</Link>
-            <Link to="/register" onClick={() => setMobileMenu(false)} style={{ padding: "0.75rem 1.5rem", fontSize: "0.875rem", fontWeight: 600, background: "#fff", color: "#030712", borderRadius: "0.75rem", width: "100%", textAlign: "center" }}>Empezar gratis</Link>
+          <div className="md:hidden relative z-10 flex flex-col items-center gap-3 px-6 pb-5 max-w-7xl mx-auto">
+            <Link to="/login" onClick={() => setMobileMenu(false)} className="w-full text-center py-3 text-sm font-medium text-gray-400 rounded-xl border border-gray-700/30">Iniciar Sesión</Link>
+            <Link to="/register" onClick={() => setMobileMenu(false)} className="w-full text-center py-3 text-sm font-semibold bg-white text-gray-950 rounded-xl">Empezar gratis</Link>
           </div>
         )}
 
         {/* HERO */}
-        <section className="landing-hero" style={{ position: "relative", zIndex: 10, maxWidth: "56rem", marginLeft: "auto", marginRight: "auto", padding: "5rem 1.5rem 6rem", textAlign: "center" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.375rem 1rem", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "9999px", fontSize: "0.875rem", color: "#f87171", marginBottom: "2rem" }}>
-            <span style={{ width: "0.5rem", height: "0.5rem", borderRadius: "50%", background: "#ef4444" }} />
+        <section className="relative z-10 max-w-3xl mx-auto px-6 pt-12 pb-16 sm:pt-20 sm:pb-24 text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-red-500/10 border border-red-500/20 rounded-full text-sm text-red-400 mb-8">
+            <span className="w-2 h-2 rounded-full bg-red-500" />
             Monitoreo de precios en tiempo real
           </div>
-          <h1 style={{ fontSize: "clamp(2.5rem, 6vw, 4.5rem)", fontWeight: 800, lineHeight: 1.1, letterSpacing: "-0.02em" }}>
+          <h1 className="text-4xl sm:text-5xl lg:text-7xl font-extrabold leading-tight tracking-tight">
             Nunca más te pierdas{" "}
-            <span style={{ background: "linear-gradient(to right, #f87171, #dc2626)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>una oferta</span>
+            <span className="bg-gradient-to-r from-red-400 to-red-600 bg-clip-text text-transparent">una oferta</span>
           </h1>
-          <p style={{ marginTop: "1.75rem", fontSize: "1.125rem", color: "#9ca3af", maxWidth: "40rem", marginLeft: "auto", marginRight: "auto", lineHeight: 1.7 }}>
+          <p className="mt-7 text-lg sm:text-xl text-gray-400 max-w-xl mx-auto leading-relaxed">
             Howlify monitorea precios 24/7 en MercadoLibre y tiendas online.
             Recibí alertas al instante cuando haya ofertas o el precio que buscás.
           </p>
-          <div style={{ marginTop: "2.5rem", display: "flex", justifyContent: "center", gap: "1rem", flexWrap: "wrap" }}>
-            <Link to="/register" style={{ padding: "1rem 2rem", background: "#fff", color: "#030712", borderRadius: "0.75rem", fontWeight: 600, fontSize: "1rem" }}>
+          <div className="mt-10 flex flex-wrap justify-center gap-4">
+            <Link to="/register" className="px-8 py-4 bg-white text-gray-950 rounded-xl font-semibold text-base hover:bg-gray-100 transition-colors">
               Empezar gratis — 7 días
             </Link>
-            <Link to="/login" style={{ padding: "1rem 2rem", background: "rgba(31,41,55,0.6)", border: "1px solid rgba(75,85,99,0.5)", color: "#d1d5db", borderRadius: "0.75rem", fontWeight: 600, fontSize: "1rem" }}>
+            <Link to="/login" className="px-8 py-4 bg-gray-800/60 border border-gray-700/50 text-gray-300 rounded-xl font-semibold text-base hover:bg-gray-800 transition-colors">
               Ya tengo cuenta
             </Link>
           </div>
-          <div className="landing-hero-stats" style={{ marginTop: "4rem", display: "flex", justifyContent: "center", gap: "3rem", fontSize: "0.875rem", color: "#6b7280" }}>
-            <div style={{ textAlign: "center" }}>
-              <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "#fff" }}><CountUp target={1200} />+</p>
-              <p style={{ marginTop: "0.25rem" }}>Cacerías activas</p>
+          <div className="mt-16 flex flex-wrap justify-center gap-6 sm:gap-12 text-sm text-gray-500">
+            <div className="text-center">
+              <p className="text-2xl font-bold text-white"><CountUp target={1200} />+</p>
+              <p className="mt-1">Cacerías activas</p>
             </div>
-            <div className="stat-divider" style={{ width: "1px", background: "#1f2937" }} />
-            <div style={{ textAlign: "center" }}>
-              <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "#fff" }}><CountUp target={50} />K+</p>
-              <p style={{ marginTop: "0.25rem" }}>Alertas enviadas</p>
+            <div className="hidden sm:block w-px bg-gray-800" />
+            <div className="text-center">
+              <p className="text-2xl font-bold text-white"><CountUp target={50} />K+</p>
+              <p className="mt-1">Alertas enviadas</p>
             </div>
-            <div className="stat-divider" style={{ width: "1px", background: "#1f2937" }} />
-            <div style={{ textAlign: "center" }}>
-              <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "#fff" }}>24/7</p>
-              <p style={{ marginTop: "0.25rem" }}>Monitoreo activo</p>
+            <div className="hidden sm:block w-px bg-gray-800" />
+            <div className="text-center">
+              <p className="text-2xl font-bold text-white">24/7</p>
+              <p className="mt-1">Monitoreo activo</p>
             </div>
           </div>
         </section>
 
         {/* CÓMO FUNCIONA */}
-        <section style={{ padding: "5rem 0" }}>
-          <div className="landing-section-md" style={{ textAlign: "center" }}>
-            <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#f87171", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.75rem" }}>Simple y automático</p>
-            <h2 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: "3.5rem" }}>Cómo funciona</h2>
-            <div className="landing-steps-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "2rem" }}>
+        <section className="py-20">
+          <div className="landing-section-md text-center">
+            <p className="text-sm font-semibold text-red-400 uppercase tracking-widest mb-3">Simple y automático</p>
+            <h2 className="text-3xl font-bold mb-14">Cómo funciona</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
               {STEPS.map((s) => (
-                <div key={s.num} style={{ textAlign: "center" }}>
-                  <div style={{ width: "3rem", height: "3rem", borderRadius: "1rem", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem" }}>
-                    <span style={{ color: "#f87171", fontWeight: 700, fontSize: "1.125rem" }}>{s.num}</span>
+                <div key={s.num} className="text-center">
+                  <div className="w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-5">
+                    <span className="text-red-400 font-bold text-lg">{s.num}</span>
                   </div>
-                  <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "0.5rem" }}>{s.title}</h3>
-                  <p style={{ fontSize: "0.875rem", color: "#6b7280", lineHeight: 1.6 }}>{s.desc}</p>
+                  <h3 className="text-base font-semibold mb-2">{s.title}</h3>
+                  <p className="text-sm text-gray-500 leading-relaxed">{s.desc}</p>
                 </div>
               ))}
             </div>
@@ -199,21 +199,21 @@ export default function LandingPage() {
         </section>
 
         {/* FEATURES */}
-        <section style={{ padding: "5rem 0", borderTop: "1px solid rgba(31,41,55,0.5)" }}>
+        <section className="py-20 border-t border-gray-800/50">
           <div className="landing-section">
-            <div style={{ textAlign: "center", marginBottom: "3.5rem" }}>
-              <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#f87171", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.75rem" }}>Funcionalidades</p>
-              <h2 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: "1rem" }}>Todo lo que necesitás</h2>
-              <p style={{ color: "#9ca3af", maxWidth: "36rem", marginLeft: "auto", marginRight: "auto" }}>Monitoreo inteligente, alertas instantáneas, historial de precios.</p>
+            <div className="text-center mb-14">
+              <p className="text-sm font-semibold text-red-400 uppercase tracking-widest mb-3">Funcionalidades</p>
+              <h2 className="text-3xl font-bold mb-4">Todo lo que necesitás</h2>
+              <p className="text-gray-400 max-w-lg mx-auto">Monitoreo inteligente, alertas instantáneas, historial de precios.</p>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem" }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {FEATURES.map((f) => (
-                <div key={f.title} style={{ padding: "1.5rem", borderRadius: "1rem", background: "rgba(17,24,39,0.4)", border: "1px solid rgba(31,41,55,0.6)" }}>
-                  <div style={{ width: "2.75rem", height: "2.75rem", borderRadius: "0.75rem", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", display: "flex", alignItems: "center", justifyContent: "center", color: "#f87171", marginBottom: "1.25rem" }}>
+                <div key={f.title} className="p-6 rounded-xl bg-gray-900/40 border border-gray-800/60">
+                  <div className="w-11 h-11 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 mb-5">
                     {ICONS[f.icon]}
                   </div>
-                  <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "0.5rem" }}>{f.title}</h3>
-                  <p style={{ fontSize: "0.875rem", color: "#6b7280", lineHeight: 1.6 }}>{f.desc}</p>
+                  <h3 className="text-base font-semibold mb-2">{f.title}</h3>
+                  <p className="text-sm text-gray-500 leading-relaxed">{f.desc}</p>
                 </div>
               ))}
             </div>
@@ -221,51 +221,42 @@ export default function LandingPage() {
         </section>
 
         {/* PRICING */}
-        <section style={{ padding: "5rem 0", borderTop: "1px solid rgba(31,41,55,0.5)" }}>
+        <section className="py-20 border-t border-gray-800/50">
           <div className="landing-section-md">
-            <div style={{ textAlign: "center", marginBottom: "3.5rem" }}>
-              <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.375rem 1rem", background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: "9999px", fontSize: "0.875rem", color: "#4ade80", marginBottom: "1.25rem" }}>
+            <div className="text-center mb-14">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-green-500/10 border border-green-500/20 rounded-full text-sm text-green-400 mb-5">
                 7 días gratis · Sin tarjeta de crédito
               </div>
-              <h2 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: "1rem" }}>Elegí tu rango en la manada</h2>
-              <p style={{ color: "#9ca3af" }}>Empezá gratis, escalá cuando lo necesites.</p>
+              <h2 className="text-3xl font-bold mb-4">Elegí tu rango en la manada</h2>
+              <p className="text-gray-400">Empezá gratis, escalá cuando lo necesites.</p>
             </div>
-            <div className="landing-pricing-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.5rem" }}>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {PLANS.map((p) => (
-                <div key={p.name} style={{
-                  position: "relative", borderRadius: "1rem", padding: "2rem", display: "flex", flexDirection: "column",
-                  border: p.popular ? "1px solid rgba(239,68,68,0.3)" : "1px solid rgba(31,41,55,0.6)",
-                  background: p.popular ? "linear-gradient(to bottom, rgba(239,68,68,0.08), rgba(17,24,39,0.8))" : "rgba(17,24,39,0.4)",
-                }}>
+                <div key={p.name} className={`relative rounded-xl p-8 flex flex-col ${p.popular ? "border border-red-500/30 bg-gradient-to-b from-red-500/8 to-gray-900/80" : "border border-gray-800/60 bg-gray-900/40"}`}>
                   {p.popular && (
-                    <div style={{ position: "absolute", top: "-0.75rem", left: "50%", transform: "translateX(-50%)", padding: "0.25rem 1rem", background: "linear-gradient(to right, #ef4444, #dc2626)", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 600, color: "#fff", whiteSpace: "nowrap" }}>
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-red-500 to-red-600 rounded-full text-xs font-semibold text-white whitespace-nowrap">
                       Más popular
                     </div>
                   )}
-                  <h3 style={{ fontSize: "1.25rem", fontWeight: 700 }}>{p.name}</h3>
-                  <p style={{ fontSize: "0.875rem", color: "#6b7280", marginTop: "0.25rem" }}>{p.desc}</p>
-                  <div style={{ marginTop: "1.5rem", marginBottom: "2rem" }}>
-                    <span style={{ fontSize: "3rem", fontWeight: 800 }}>${p.price}</span>
-                    <span style={{ color: "#6b7280", fontSize: "0.875rem", marginLeft: "0.25rem" }}>/mes</span>
+                  <h3 className="text-xl font-bold">{p.name}</h3>
+                  <p className="text-sm text-gray-500 mt-1">{p.desc}</p>
+                  <div className="mt-6 mb-8">
+                    <span className="text-5xl font-extrabold">${p.price}</span>
+                    <span className="text-gray-500 text-sm ml-1">/mes</span>
                   </div>
-                  <ul style={{ listStyle: "none", padding: 0, margin: "0 0 2rem 0", flex: 1 }}>
+                  <ul className="list-none p-0 m-0 mb-8 flex-1">
                     {p.features.map((f) => (
-                      <li key={f.text} style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "0.875rem", marginBottom: "0.75rem" }}>
+                      <li key={f.text} className="flex items-center gap-3 text-sm mb-3">
                         {f.included ? (
                           <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#4ade80" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
                         ) : (
                           <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#374151" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                         )}
-                        <span style={{ color: f.included ? "#d1d5db" : "#4b5563" }}>{f.text}</span>
+                        <span className={f.included ? "text-gray-300" : "text-gray-600"}>{f.text}</span>
                       </li>
                     ))}
                   </ul>
-                  <Link to={p.href} style={{
-                    display: "block", textAlign: "center", padding: "0.875rem", borderRadius: "0.75rem", fontWeight: 600, fontSize: "0.875rem",
-                    background: p.popular ? "linear-gradient(to right, #ef4444, #dc2626)" : "rgba(31,41,55,0.6)",
-                    color: p.popular ? "#fff" : "#d1d5db",
-                    border: p.popular ? "none" : "1px solid rgba(75,85,99,0.3)",
-                  }}>
+                  <Link to={p.href} className={`block text-center py-3.5 rounded-xl font-semibold text-sm transition-colors ${p.popular ? "bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-400 hover:to-red-500" : "bg-gray-800/60 text-gray-300 border border-gray-700/30 hover:bg-gray-800"}`}>
                     {p.cta}
                   </Link>
                 </div>
@@ -275,22 +266,22 @@ export default function LandingPage() {
         </section>
 
         {/* FAQ */}
-        <section style={{ padding: "5rem 0", borderTop: "1px solid rgba(31,41,55,0.5)" }}>
+        <section className="py-20 border-t border-gray-800/50">
           <div className="landing-section-sm">
-            <div style={{ textAlign: "center", marginBottom: "3.5rem" }}>
-              <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#f87171", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.75rem" }}>Preguntas frecuentes</p>
-              <h2 style={{ fontSize: "2rem", fontWeight: 700 }}>¿Tenés dudas?</h2>
+            <div className="text-center mb-14">
+              <p className="text-sm font-semibold text-red-400 uppercase tracking-widest mb-3">Preguntas frecuentes</p>
+              <h2 className="text-3xl font-bold">¿Tenés dudas?</h2>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <div className="flex flex-col gap-3">
               {FAQ.map((item) => (
-                <details key={item.q} style={{ borderRadius: "1rem", background: "rgba(17,24,39,0.4)", border: "1px solid rgba(31,41,55,0.6)", overflow: "hidden" }}>
-                  <summary style={{ padding: "1.25rem 1.5rem", cursor: "pointer", fontSize: "0.875rem", fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "space-between", listStyle: "none" }}>
+                <details key={item.q} className="rounded-xl bg-gray-900/40 border border-gray-800/60 overflow-hidden">
+                  <summary className="px-6 py-5 cursor-pointer text-sm font-medium flex items-center justify-between list-none hover:bg-gray-800/30 transition-colors">
                     {item.q}
-                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#6b7280" strokeWidth="2" style={{ flexShrink: 0, marginLeft: "1rem" }}>
+                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#6b7280" strokeWidth="2" className="shrink-0 ml-4">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                     </svg>
                   </summary>
-                  <div style={{ padding: "0 1.5rem 1.25rem", fontSize: "0.875rem", color: "#9ca3af", lineHeight: 1.6 }}>{item.a}</div>
+                  <div className="px-6 pb-5 text-sm text-gray-400 leading-relaxed">{item.a}</div>
                 </details>
               ))}
             </div>
@@ -298,12 +289,12 @@ export default function LandingPage() {
         </section>
 
         {/* CTA */}
-        <section style={{ padding: "5rem 0" }}>
+        <section className="py-20">
           <div className="landing-section-md">
-            <div className="landing-cta-box" style={{ borderRadius: "1.5rem", background: "linear-gradient(to bottom, rgba(239,68,68,0.1), rgba(17,24,39,0.8))", border: "1px solid rgba(239,68,68,0.2)", padding: "4rem 2rem", textAlign: "center" }}>
-              <h2 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: "1rem" }}>Empezá a ahorrar hoy</h2>
-              <p style={{ color: "#9ca3af", maxWidth: "28rem", marginLeft: "auto", marginRight: "auto", marginBottom: "2rem" }}>Unite a miles de cazadores de ofertas que ya usan Howlify.</p>
-              <Link to="/register" style={{ display: "inline-block", padding: "1rem 2.5rem", background: "#fff", color: "#030712", borderRadius: "0.75rem", fontWeight: 600, fontSize: "1rem" }}>
+            <div className="rounded-2xl bg-gradient-to-b from-red-500/10 to-gray-900/80 border border-red-500/20 py-12 sm:py-16 px-6 sm:px-8 text-center">
+              <h2 className="text-3xl font-bold mb-4">Empezá a ahorrar hoy</h2>
+              <p className="text-gray-400 max-w-md mx-auto mb-8">Unite a miles de cazadores de ofertas que ya usan Howlify.</p>
+              <Link to="/register" className="inline-block px-10 py-4 bg-white text-gray-950 rounded-xl font-semibold text-base hover:bg-gray-100 transition-colors">
                 Crear cuenta gratis
               </Link>
             </div>
@@ -311,13 +302,13 @@ export default function LandingPage() {
         </section>
 
         {/* FOOTER */}
-        <footer style={{ borderTop: "1px solid rgba(31,41,55,0.5)" }}>
-          <div style={{ maxWidth: "72rem", marginLeft: "auto", marginRight: "auto", padding: "2rem 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", fontSize: "0.875rem", color: "#6b7280" }}>
+        <footer className="border-t border-gray-800/50">
+          <div className="max-w-7xl mx-auto px-6 py-8 flex flex-wrap items-center justify-between gap-4 text-sm text-gray-500">
             <span>© 2026 Howlify. Todos los derechos reservados.</span>
-            <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
-              <Link to="/terms">Términos</Link>
-              <Link to="/privacy">Privacidad</Link>
-              <a href="mailto:howlify.app@gmail.com">Contacto</a>
+            <div className="flex items-center gap-5">
+              <Link to="/terms" className="hover:text-white transition-colors">Términos</Link>
+              <Link to="/privacy" className="hover:text-white transition-colors">Privacidad</Link>
+              <a href="mailto:howlify.app@gmail.com" className="hover:text-white transition-colors">Contacto</a>
             </div>
           </div>
         </footer>

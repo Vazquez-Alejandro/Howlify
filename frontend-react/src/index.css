@@ -49,26 +49,3 @@ a { color: inherit; text-decoration: none; }
 
 .text-center { text-align: center; }
 .mx-auto { margin-left: auto; margin-right: auto; }
-
-/* Landing responsive overrides */
-@media (max-width: 640px) {
-  .landing-hero { padding: 3rem 1.25rem 4rem !important; }
-  .landing-hero-stats { gap: 1rem !important; }
-  .landing-hero-stats .stat-divider { display: none !important; }
-  .landing-steps-grid { grid-template-columns: 1fr !important; gap: 2rem !important; }
-  .landing-pricing-grid { grid-template-columns: 1fr !important; }
-  .landing-cta-box { padding: 2.5rem 1.25rem !important; }
-  .landing-nav-links { display: none !important; }
-  .landing-nav-mobile-btn { display: flex !important; }
-}
-@media (min-width: 641px) and (max-width: 768px) {
-  .landing-steps-grid { grid-template-columns: repeat(2, 1fr) !important; }
-  .landing-pricing-grid { grid-template-columns: 1fr !important; }
-  .landing-nav-links { display: flex !important; }
-  .landing-nav-mobile-btn { display: none !important; }
-}
-@media (min-width: 769px) {
-  .landing-nav-links { display: flex !important; }
-  .landing-nav-mobile-btn { display: none !important; }
-}
-.landing-nav-mobile-btn { display: none; }
