@@ -251,12 +251,12 @@ export default function ProfilePage() {
               {/* Días */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-300">Días de envío</label>
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2">
                   {DAY_LABELS.map((label, i) => (
                     <button
                       key={i}
                       onClick={() => toggleDay(i)}
-                      className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl text-xs font-medium transition-all ${
+                      className={`w-10 h-10 rounded-xl text-xs font-medium transition-all ${
                         reportDays.includes(i)
                           ? "bg-red-500/20 text-red-400 border border-red-500/30"
                           : "bg-gray-800/50 text-gray-500 border border-gray-700/50 hover:border-gray-600"
