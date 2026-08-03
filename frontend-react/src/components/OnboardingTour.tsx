@@ -99,7 +99,7 @@ export default function OnboardingTour() {
       <div className="fixed inset-0 z-[10000] flex items-center justify-center p-5">
         <div
           className="bg-gray-900 rounded-2xl shadow-2xl pointer-events-auto overflow-hidden border border-gray-700/40"
-          style={{ width: "380px" }}
+          style={{ width: "min(380px, calc(100vw - 2.5rem))" }}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Top progress bar */}

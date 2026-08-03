@@ -109,6 +109,7 @@ function CountUp({ target }: { target: number }) {
 }
 
 export default function LandingPage() {
+  const [mobileMenu, setMobileMenu] = useState(false);
   return (
     <PageTransition>
       <div style={{ minHeight: "100vh", background: "#030712", color: "#f3f4f6" }}>
@@ -119,14 +120,27 @@ export default function LandingPage() {
             <Logo size="md" />
             <span style={{ fontSize: "1.25rem", fontWeight: 700 }}>Howlify</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div className="landing-nav-links" style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <Link to="/login" style={{ padding: "0.5rem 1rem", fontSize: "0.875rem", fontWeight: 500, color: "#9ca3af" }}>Iniciar Sesión</Link>
             <Link to="/register" style={{ padding: "0.625rem 1.25rem", fontSize: "0.875rem", fontWeight: 600, background: "#fff", color: "#030712", borderRadius: "0.75rem" }}>Empezar gratis</Link>
           </div>
+          <button className="landing-nav-mobile-btn" onClick={() => setMobileMenu(!mobileMenu)} style={{ display: "none", background: "none", border: "none", color: "#f3f4f6", cursor: "pointer", padding: "0.5rem" }}>
+            {mobileMenu ? (
+              <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            ) : (
+              <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+            )}
+          </button>
         </nav>
+        {mobileMenu && (
+          <div style={{ position: "relative", zIndex: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem", padding: "1rem 1.5rem 1.5rem", maxWidth: "72rem", marginLeft: "auto", marginRight: "auto" }}>
+            <Link to="/login" onClick={() => setMobileMenu(false)} style={{ padding: "0.75rem 1.5rem", fontSize: "0.875rem", fontWeight: 500, color: "#9ca3af", width: "100%", textAlign: "center", borderRadius: "0.75rem", border: "1px solid rgba(75,85,99,0.3)" }}>Iniciar Sesión</Link>
+            <Link to="/register" onClick={() => setMobileMenu(false)} style={{ padding: "0.75rem 1.5rem", fontSize: "0.875rem", fontWeight: 600, background: "#fff", color: "#030712", borderRadius: "0.75rem", width: "100%", textAlign: "center" }}>Empezar gratis</Link>
+          </div>
+        )}
 
         {/* HERO */}
-        <section style={{ position: "relative", zIndex: 10, maxWidth: "56rem", marginLeft: "auto", marginRight: "auto", padding: "5rem 1.5rem 6rem", textAlign: "center" }}>
+        <section className="landing-hero" style={{ position: "relative", zIndex: 10, maxWidth: "56rem", marginLeft: "auto", marginRight: "auto", padding: "5rem 1.5rem 6rem", textAlign: "center" }}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.375rem 1rem", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "9999px", fontSize: "0.875rem", color: "#f87171", marginBottom: "2rem" }}>
             <span style={{ width: "0.5rem", height: "0.5rem", borderRadius: "50%", background: "#ef4444" }} />
             Monitoreo de precios en tiempo real
@@ -147,17 +161,17 @@ export default function LandingPage() {
               Ya tengo cuenta
             </Link>
           </div>
-          <div style={{ marginTop: "4rem", display: "flex", justifyContent: "center", gap: "3rem", fontSize: "0.875rem", color: "#6b7280" }}>
+          <div className="landing-hero-stats" style={{ marginTop: "4rem", display: "flex", justifyContent: "center", gap: "3rem", fontSize: "0.875rem", color: "#6b7280" }}>
             <div style={{ textAlign: "center" }}>
               <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "#fff" }}><CountUp target={1200} />+</p>
               <p style={{ marginTop: "0.25rem" }}>Cacerías activas</p>
             </div>
-            <div style={{ width: "1px", background: "#1f2937" }} />
+            <div className="stat-divider" style={{ width: "1px", background: "#1f2937" }} />
             <div style={{ textAlign: "center" }}>
               <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "#fff" }}><CountUp target={50} />K+</p>
               <p style={{ marginTop: "0.25rem" }}>Alertas enviadas</p>
             </div>
-            <div style={{ width: "1px", background: "#1f2937" }} />
+            <div className="stat-divider" style={{ width: "1px", background: "#1f2937" }} />
             <div style={{ textAlign: "center" }}>
               <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "#fff" }}>24/7</p>
               <p style={{ marginTop: "0.25rem" }}>Monitoreo activo</p>
@@ -170,7 +184,7 @@ export default function LandingPage() {
           <div className="landing-section-md" style={{ textAlign: "center" }}>
             <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#f87171", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.75rem" }}>Simple y automático</p>
             <h2 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: "3.5rem" }}>Cómo funciona</h2>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "2rem" }}>
+            <div className="landing-steps-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "2rem" }}>
               {STEPS.map((s) => (
                 <div key={s.num} style={{ textAlign: "center" }}>
                   <div style={{ width: "3rem", height: "3rem", borderRadius: "1rem", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem" }}>
@@ -216,7 +230,7 @@ export default function LandingPage() {
               <h2 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: "1rem" }}>Elegí tu rango en la manada</h2>
               <p style={{ color: "#9ca3af" }}>Empezá gratis, escalá cuando lo necesites.</p>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.5rem" }}>
+            <div className="landing-pricing-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.5rem" }}>
               {PLANS.map((p) => (
                 <div key={p.name} style={{
                   position: "relative", borderRadius: "1rem", padding: "2rem", display: "flex", flexDirection: "column",
@@ -286,7 +300,7 @@ export default function LandingPage() {
         {/* CTA */}
         <section style={{ padding: "5rem 0" }}>
           <div className="landing-section-md">
-            <div style={{ borderRadius: "1.5rem", background: "linear-gradient(to bottom, rgba(239,68,68,0.1), rgba(17,24,39,0.8))", border: "1px solid rgba(239,68,68,0.2)", padding: "4rem 2rem", textAlign: "center" }}>
+            <div className="landing-cta-box" style={{ borderRadius: "1.5rem", background: "linear-gradient(to bottom, rgba(239,68,68,0.1), rgba(17,24,39,0.8))", border: "1px solid rgba(239,68,68,0.2)", padding: "4rem 2rem", textAlign: "center" }}>
               <h2 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: "1rem" }}>Empezá a ahorrar hoy</h2>
               <p style={{ color: "#9ca3af", maxWidth: "28rem", marginLeft: "auto", marginRight: "auto", marginBottom: "2rem" }}>Unite a miles de cazadores de ofertas que ya usan Howlify.</p>
               <Link to="/register" style={{ display: "inline-block", padding: "1rem 2.5rem", background: "#fff", color: "#030712", borderRadius: "0.75rem", fontWeight: 600, fontSize: "1rem" }}>
