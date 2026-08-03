@@ -228,7 +228,10 @@ def health():
     return {"status": "ok", "timestamp": datetime.now().isoformat()}
 
 @app.get("/api/health/detailed")
-def health_detailed():
+def health_detailed(authorization: str = ""):
+    uid = get_user_id(authorization)
+    if not uid:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     checks = {}
     all_ok = True
 
