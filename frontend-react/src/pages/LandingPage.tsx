@@ -118,9 +118,7 @@ export default function LandingPage() {
           .lp-hamburger { display: flex !important; }
           .lp-hero { padding: 2rem 1rem 3rem !important; }
           .lp-hero-badge { margin-bottom: 1.25rem !important; }
-          .lp-hero-stats { gap: 0.5rem !important; flex-wrap: wrap !important; }
-          .lp-hero-stats > div:nth-child(3) { display: none !important; }
-          .lp-hero-stats > div:nth-child(5) { display: none !important; }
+          .lp-hero-stats { gap: 1.25rem !important; flex-direction: column !important; align-items: center !important; }
           .lp-steps { grid-template-columns: 1fr !important; gap: 2rem !important; }
           .lp-pricing { grid-template-columns: 1fr !important; }
           .lp-cta-box { padding: 2.5rem 1.25rem !important; }
