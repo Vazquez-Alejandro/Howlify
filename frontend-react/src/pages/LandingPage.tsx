@@ -246,7 +246,7 @@ export default function LandingPage() {
             <div className="lp-pricing" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.5rem" }}>
               {PLANS.map((p) => (
                 <div key={p.name} style={{
-                  position: "relative", borderRadius: "1rem", padding: "2rem", display: "flex", flexDirection: "column",
+                  position: "relative", borderRadius: "1rem", padding: "1.5rem", display: "flex", flexDirection: "column",
                   border: p.popular ? "1px solid rgba(239,68,68,0.3)" : "1px solid rgba(31,41,55,0.6)",
                   background: p.popular ? "linear-gradient(to bottom, rgba(239,68,68,0.08), rgba(17,24,39,0.8))" : "rgba(17,24,39,0.4)",
                 }}>
@@ -257,13 +257,13 @@ export default function LandingPage() {
                   )}
                   <h3 style={{ fontSize: "1.25rem", fontWeight: 700 }}>{p.name}</h3>
                   <p style={{ fontSize: "0.875rem", color: "#6b7280", marginTop: "0.25rem" }}>{p.desc}</p>
-                  <div style={{ marginTop: "1.5rem", marginBottom: "2rem" }}>
-                    <span style={{ fontSize: "3rem", fontWeight: 800 }}>${p.price}</span>
+                  <div style={{ marginTop: "1rem", marginBottom: "1.25rem" }}>
+                    <span style={{ fontSize: "2.5rem", fontWeight: 800 }}>${p.price}</span>
                     <span style={{ color: "#6b7280", fontSize: "0.875rem", marginLeft: "0.25rem" }}>/mes</span>
                   </div>
-                  <ul style={{ listStyle: "none", padding: 0, margin: "0 0 2rem 0", flex: 1 }}>
+                  <ul style={{ listStyle: "none", padding: 0, margin: "0 0 1.25rem 0", flex: 1 }}>
                     {p.features.map((f) => (
-                      <li key={f.text} style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "0.875rem", marginBottom: "0.75rem" }}>
+                      <li key={f.text} style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "0.875rem", marginBottom: "0.5rem" }}>
                         {f.included ? (
                           <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#4ade80" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
                         ) : (
