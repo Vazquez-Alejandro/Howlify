@@ -110,6 +110,8 @@ if _HAS_REACT:
             response.headers["X-Frame-Options"] = "DENY"
             response.headers["X-XSS-Protection"] = "1; mode=block"
             response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+            response.headers["Content-Security-Policy"] = "default-src 'self'"
             if request.url.path.startswith("/api/"):
                 response.headers["Cache-Control"] = "no-store"
             return response
@@ -492,7 +494,7 @@ def delete_caza(caza_id: int, authorization: str = Header(default="")):
 def hunt_single(caza_id: int, authorization: str = Header(default="")):
     uid = get_user_id(authorization)
     rate_limit_hunt(uid)
-    res = supabase.table("cazas").select("*").eq("id", caza_id).limit(1).execute()
+    res = supabase.table("cazas").select("*").eq("id", caza_id).eq("user_id", uid).limit(1).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Cacería no encontrada")
 
@@ -619,7 +621,7 @@ def hunt_all_async(authorization: str = Header(default="")):
 
 @app.get("/api/task/{task_id}")
 def get_task_status(task_id: str, authorization: str = Header(default="")):
-    get_user_id(authorization)
+    uid = get_user_id(authorization)
     try:
         from howlify.celery_app import celery_app
         result = celery_app.AsyncResult(task_id)
@@ -642,6 +644,7 @@ def get_history(caza_id: int, authorization: str = Header(default="")):
     res = supabase.table("price_history") \
         .select("checked_at, price, title, url") \
         .eq("caza_id", caza_id) \
+        .eq("user_id", uid) \
         .order("checked_at", desc=True) \
         .limit(50) \
         .execute()
@@ -674,6 +677,7 @@ def predict_price(caza_id: int, authorization: str = Header(default="")):
     res = supabase.table("price_history") \
         .select("checked_at, price") \
         .eq("caza_id", caza_id) \
+        .eq("user_id", uid) \
         .order("checked_at", desc=False) \
         .limit(30) \
         .execute()
@@ -938,6 +942,11 @@ def mp_create_preference(data: CreatePreferenceRequest, authorization: str = Hea
 @app.post("/api/mp/webhook")
 async def mp_webhook(request: Request):
     """IPN webhook - Mercado Pago nos avisa cuando un pago se concreta."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
     # Verify X-Signature if webhook secret is configured
     if MP_WEBHOOK_SECRET:
         x_signature = request.headers.get("X-Signature", "")
@@ -954,7 +963,7 @@ async def mp_webhook(request: Request):
             v1 = parts.get("v1", "")
             if not ts or not v1:
                 raise ValueError("Missing ts or v1")
-            verification_str = f"id:{request.query_params.get('data.id', '')};request-id:{request.query_params.get('data.request_id', '')};ts:{ts};"
+            verification_str = f"id:{body.get('data', {}).get('id', '')};request-id:{request.headers.get('x-request-id', '')};ts:{ts};"
             expected = hmac.new(MP_WEBHOOK_SECRET.encode(), verification_str.encode(), hashlib.sha256).hexdigest()
             if not hmac.compare_digest(expected, v1):
                 logger.warning("MP webhook: invalid signature")
@@ -962,11 +971,6 @@ async def mp_webhook(request: Request):
         except Exception as e:
             logger.warning("MP webhook: signature verification error: %s", e)
             return JSONResponse(status_code=401, content={"error": "Signature verification failed"})
-
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
 
     topic = request.query_params.get("topic", "") or body.get("topic", "")
     payment_id = request.query_params.get("id", "") or body.get("id", "") or request.query_params.get("data.id", "")
