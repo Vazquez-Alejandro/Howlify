@@ -42,6 +42,118 @@ def _obtener_precio_referencia(caza_id):
     return None
 
 
+def _ultimos_precios(caza_id, n=14):
+    """Devuelve las últimas n precios (ordenados de más reciente a más viejo)."""
+    try:
+        res = supabase.table("price_history") \
+            .select("price, stock") \
+            .eq("caza_id", caza_id) \
+            .order("checked_at", desc=True) \
+            .limit(n) \
+            .execute()
+        return res.data or []
+    except Exception as e:
+        logger.error(f"⚠ error obteniendo últimos precios caza {caza_id}: {e}")
+        return []
+
+
+def _evaluar_restock(rows):
+    """
+    Evalúa restock con stock real si está disponible; fallback a precio (<=0).
+    rows viene ordenado del más reciente al más viejo.
+    """
+    try:
+        curr = rows[0] if rows else None
+        if not curr:
+            return False, ""
+        stock_curr = curr.get("stock")
+        price_curr = _safe_float(curr.get("price"), 0)
+        if isinstance(stock_curr, (int, float)) and stock_curr > 0:
+            for prev in rows[1:]:
+                sp = prev.get("stock")
+                if isinstance(sp, (int, float)):
+                    if sp <= 0:
+                        return True, "Producto nuevamente disponible"
+                    break
+        if len(rows) >= 2:
+            prev_price = _safe_float(rows[1].get("price"), 0)
+            if price_curr > 0 and prev_price <= 0:
+                return True, "Producto nuevamente disponible"
+        return False, ""
+    except Exception:
+        return False, ""
+
+
+def detectar_inflado(caza_id):
+    """
+    Detecta un 'descuento falso': el vendedor infló el precio hace poco y después
+    lo 'bajó' a un nivel que en realidad es su precio normal histórico.
+    → True si hubo spike >15% reciente y el precio actual NO está por debajo del
+    mínimo histórico (i.e., el 'descuento' no es real).
+    """
+    try:
+        rows = _ultimos_precios(caza_id, n=14)
+        prices = [float(r["price"]) for r in rows if r.get("price")]
+        if len(prices) < 4:
+            return None
+        current = prices[0]
+        if current <= 0:
+            return None
+        ref = _obtener_precio_referencia(caza_id)
+        if not ref or ref <= 0:
+            return None
+        max_window = max(prices)
+        spike = max_window > current * 1.15
+        descuento_real = current <= ref * 0.95
+        return bool(spike and not descuento_real)
+    except Exception as e:
+        logger.error(f"⚠ error detectar_inflado caza {caza_id}: {e}")
+        return None
+
+
+def detectar_restock(caza_id, results=None):
+    """
+    Detecta si un producto volvió a estar disponible: el registro anterior tenía
+    stock 0 (o precio 0) y el actual tiene stock > 0.
+    Retorna True/False o None si no hay datos suficientes.
+    """
+    try:
+        rows = _ultimos_precios(caza_id, n=3)
+        stock_actual = None
+        stock_prev = None
+        if results:
+            for r in results:
+                s = r.get("stock")
+                if isinstance(s, (int, float)) and s > 0:
+                    stock_actual = int(s)
+                    break
+        if stock_actual is None:
+            for r in rows:
+                s = r.get("stock")
+                if isinstance(s, (int, float)):
+                    stock_actual = int(s)
+                    break
+        if len(rows) >= 2:
+            prev = rows[1]
+            sp = prev.get("stock")
+            if isinstance(sp, (int, float)):
+                stock_prev = int(sp)
+        if stock_actual is not None and stock_actual > 0:
+            if stock_prev is not None and stock_prev <= 0:
+                return True
+        prices = [r.get("price") for r in rows]
+        if len(prices) >= 2 and prices[0] and prices[1] is not None:
+            try:
+                if float(prices[0]) > 0 and float(prices[1]) <= 0:
+                    return True
+            except Exception:
+                pass
+        return None
+    except Exception as e:
+        logger.error(f"⚠ error detectar_restock caza {caza_id}: {e}")
+        return None
+
+
 def _obtener_contacto(user_id):
     """Obtiene datos de contacto del usuario para notificaciones."""
     try:
@@ -75,7 +187,7 @@ def evaluar_reglas_alerta(caza_id, user_id):
             alert_config = json.loads(alert_config)
 
         history = supabase.table("price_history") \
-            .select("price, checked_at") \
+            .select("price, checked_at, stock") \
             .eq("caza_id", caza_id) \
             .order("checked_at", desc=True) \
             .limit(10) \
@@ -140,8 +252,19 @@ def evaluar_reglas_alerta(caza_id, user_id):
                         match = True
                         detail = f"Nuevo mínimo histórico: ${current:.0f}"
             elif rtype == "restock":
-                match = current > 0 and prices[-1] <= 0 if len(prices) >= 2 else False
-                detail = "Producto nuevamente disponible"
+                match, detail = _evaluar_restock(history.data or [])
+            elif rtype == "inflado":
+                det = detectar_inflado(caza_id)
+                match = det is True
+                detail = "Posible descuento falso: el precio se infló antes de bajar"
+            elif rtype == "margen":
+                sale_price = float(r.get("threshold", 0))
+                min_margin = float(r.get("min_margin", 15))
+                if sale_price > 0 and current > 0:
+                    margen = ((sale_price - current) / sale_price) * 100
+                    if margen >= min_margin:
+                        match = True
+                        detail = f"Margen {margen:.0f}% (venta ${sale_price:.0f} → compra ${current:.0f})"
 
             if match:
                 channel = r.get("channel", "push")

@@ -36,10 +36,47 @@ def obtener_cazas(user_id: str, plan: str):
     try:
         if not user_id: return []
         res = supabase.table("cazas").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
-        return getattr(res, "data", []) or []
+        cazas = getattr(res, "data", []) or []
+        _enriquecer_precio_venta(cazas)
+        return cazas
     except Exception as e:
         logger.error(f"[obtener_cazas] error: {e}")
         return []
+
+
+def _enriquecer_precio_venta(cazas: list[dict]):
+    """Agrega precio_venta a cada caza leyendo la regla 'margen' de monitor_rules."""
+    if not cazas:
+        return
+    ids = [c.get("id") for c in cazas if c.get("id")]
+    if not ids:
+        return
+    try:
+        import json
+        res = supabase.table("monitor_rules") \
+            .select("caza_id, alert_config") \
+            .in_("caza_id", ids) \
+            .execute()
+        for row in (res.data or []):
+            cfg = row.get("alert_config")
+            if isinstance(cfg, str):
+                try:
+                    cfg = json.loads(cfg)
+                except Exception:
+                    cfg = None
+            sale = 0
+            if isinstance(cfg, list):
+                for r in cfg:
+                    if isinstance(r, dict) and r.get("type") == "margen":
+                        sale = int(r.get("threshold") or 0)
+                        break
+            if sale > 0:
+                for c in cazas:
+                    if c.get("id") == row.get("caza_id"):
+                        c["precio_venta"] = sale
+                        break
+    except Exception as e:
+        logger.error(f"[_enriquecer_precio_venta] error: {e}")
 
 # --- FUNCIONES DE PERFIL (CORREGIDAS) ---
 def get_user_profile(user_id: str):

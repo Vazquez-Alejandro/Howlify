@@ -1,14 +1,77 @@
 from __future__ import annotations
 
+import ipaddress
 import json
 import re
 import os
+import socket
 import time
 from pathlib import Path
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from utils.logger import get_logger
 logger = get_logger("generic")
+
+
+def _normalize_ip(host: str) -> str:
+    host = host.strip().strip("[]")
+    host = host.lower()
+    if host.startswith("0x") or (host and all(c in "0123456789abcdefx" for c in host) and "x" in host):
+        try:
+            return str(ipaddress.ip_address(int(host, 16)))
+        except Exception:
+            pass
+    if host and all(c in "0123456789" for c in host):
+        try:
+            return str(ipaddress.ip_address(int(host)))
+        except Exception:
+            pass
+    if host.count(".") == 3 and host.replace(".", "").isdigit():
+        try:
+            parts = [int(p) for p in host.split(".")]
+            if all(0 <= p <= 255 for p in parts):
+                ip_num = (parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]
+                return str(ipaddress.ip_address(ip_num))
+        except Exception:
+            pass
+    return host
+
+
+def is_safe_url(url: str) -> bool:
+    """Bloquea URLS de intranet/metadata (SSRF) antes de navegar con Playwright/requests."""
+    if not url:
+        return False
+    if not isinstance(url, str):
+        return False
+    if "@" in url:
+        return False
+    try:
+        if "://" in url:
+            scheme = url.split("://", 1)[0].strip().lower()
+            if scheme not in ("http", "https"):
+                return False
+            parsed = urlparse(url)
+        else:
+            parsed = urlparse(f"http://{url}")
+    except Exception:
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    host = parsed.hostname or ""
+    if not host:
+        return False
+    host = _normalize_ip(host)
+    if host in ("localhost", "metadata", "metadata.google.internal", "instance-data"):
+        return False
+    if host.endswith((".local", ".internal", ".nip.io", ".xip.io", ".sslip.io", ".localtest.me")):
+        return False
+    try:
+        ip = ipaddress.ip_address(host)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+            return False
+    except ValueError:
+        pass
+    return True
 
 
 CACHE_DIR = Path(__file__).resolve().parents[1] / ".scraper_cache"
@@ -60,6 +123,30 @@ def extract_price_from_text(text: str) -> int | None:
             return int(raw)
         except ValueError:
             pass
+    return None
+
+
+def extract_stock_from_soup(soup: BeautifulSoup, url: str) -> int | None:
+    """Intenta extraer stock disponible de una página (ML: 'Disponible X unidades')."""
+    try:
+        if "mercadolibre" in url.lower():
+            el = soup.select_one(".ui-pdp-buybox__quantity__available")
+            if el:
+                m = re.search(r'([\d\.]+)', el.get_text(strip=True))
+                if m:
+                    return int(m.group(1).replace(".", ""))
+        for meta in soup.select('meta[itemprop="availability"], meta[property="product:availability"]'):
+            content = (meta.get("content") or meta.get("itemprop") or "").lower()
+            if "out" in content or "sold" in content:
+                return 0
+            if "in" in content:
+                return None
+        body = soup.get_text() if soup.body else ""
+        m = re.search(r'(?:solo|quedan)\s+([\d\.]+)\s+(?:unidades|disponibles)', body, re.IGNORECASE)
+        if m:
+            return int(m.group(1).replace(".", ""))
+    except Exception:
+        return None
     return None
 
 
@@ -244,7 +331,8 @@ def hunt_generic(url: str, keyword: str, max_price: int) -> list[dict]:
 
     # 1. Try direct URL
     results = []
-    if url and "http" in url:
+    soup = None
+    if url and is_safe_url(url):
         html = _playwright_get(url)
         if html:
             soup = BeautifulSoup(html, "html.parser")
@@ -259,6 +347,9 @@ def hunt_generic(url: str, keyword: str, max_price: int) -> list[dict]:
 
     if results:
         results = results[:5]
+        stock = extract_stock_from_soup(soup, url) if soup is not None and url and "http" in url else None
+        for r in results:
+            r["stock"] = stock
         _cache_set(ck, results)
     else:
         _cache_set(ck, [])

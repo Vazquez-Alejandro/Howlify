@@ -29,18 +29,20 @@ def _save_price_history(caza_id: int, user_id: str, results: list[dict]):
         p = _safe_float(r.get("price"))
         if p <= 0:
             continue
-        rows.append({
+        stock = r.get("stock")
+        row = {
             "caza_id": caza_id, "user_id": user_id,
             "title": r.get("title"), "price": p,
             "url": r.get("url"), "source": r.get("source"),
             "product_id": _extract_product_id(r.get("url")),
             "checked_at": datetime.now(timezone.utc).isoformat(),
-        })
+        }
+        if isinstance(stock, (int, float)):
+            row["stock"] = int(stock)
+        rows.append(row)
     if rows:
-        try:
-            supabase.table("price_history").insert(rows).execute()
-        except Exception as e:
-            logger.error(f"[tasks] error saving price history: {e}")
+        from utils.logic import insert_price_history_rows
+        insert_price_history_rows(rows)
 
 
 def _enviar_alerta(profile: dict, producto: str, oferta: dict, precio: float):
@@ -82,7 +84,7 @@ def hunt_single_task(self, caza_id: int, user_id: str):
     """Busca ofertas para una cacería específica."""
     if not supabase:
         raise RuntimeError("Supabase no configurado")
-    res = supabase.table("cazas").select("*").eq("id", caza_id).limit(1).execute()
+    res = supabase.table("cazas").select("*").eq("id", caza_id).eq("user_id", user_id).limit(1).execute()
     if not res.data:
         return {"error": "Cacería no encontrada"}
     caza = res.data[0]

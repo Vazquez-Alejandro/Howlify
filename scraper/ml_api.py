@@ -114,6 +114,7 @@ def get_price_from_url(url: str) -> dict | None:
         "item_id": item_id,
         "condition": item.get("condition", ""),
         "seller_id": item.get("seller_id"),
+        "stock": int(item.get("available_quantity") or 0),
     }
 
 
@@ -169,6 +170,7 @@ def hunt_ml_api(url: str, keyword: str = "", max_price: int = 0) -> list[dict]:
                     "url": item_data.get("permalink", ""),
                     "source": "mercadolibre_api",
                     "item_id": item_data.get("id", ""),
+                    "stock": int(item_data.get("available_quantity") or 0),
                 })
 
     return results

@@ -179,6 +179,7 @@ class CazaCreate(BaseModel):
     tipo: str = "piso"
     source: str = "generic"
     etiqueta: str = ""
+    precio_venta: int = 0
 
 class GenerateReportRequest(BaseModel):
     type: str = "daily"
@@ -205,16 +206,20 @@ def save_price_history(user_id: str, caza_id, results: list[dict]):
         try: price = int(r.get("price") or r.get("precio") or 0)
         except Exception: price = 0
         if price <= 0: continue
-        rows.append({
+        row = {
             "caza_id": caza_id, "user_id": user_id,
             "title": (r.get("title") or r.get("titulo") or "").strip(),
             "url": (r.get("url") or r.get("link") or "").strip(),
             "source": (r.get("source") or "").strip(),
             "price": price, "checked_at": datetime.now(timezone.utc).isoformat(),
-        })
+        }
+        stock = r.get("stock")
+        if isinstance(stock, (int, float)):
+            row["stock"] = int(stock)
+        rows.append(row)
     if not rows: return
-    try: supabase.table("price_history").insert(rows).execute()
-    except Exception as e: logger.error("save_price_history error: %s", e)
+    from utils.logic import insert_price_history_rows
+    insert_price_history_rows(rows)
 
 # ─── Endpoints ──────────────────────────────────────────
 
@@ -458,17 +463,30 @@ def create_caza(caza: CazaCreate, authorization: str = Header(default="")):
     if caza.frecuencia not in freq_opts:
         raise HTTPException(status_code=400, detail=f"Frecuencia '{caza.frecuencia}' no permitida en tu plan. Opciones: {', '.join(freq_opts)}")
     url_limpia = clean_ml_url(caza.url)
+    if url_limpia:
+        from scraper.generic import is_safe_url
+        if not is_safe_url(url_limpia):
+            raise HTTPException(status_code=400, detail="URL inválida o no permitida (SSRF)")
     src = infer_source_from_url(url_limpia) or "generic"
     precio_int = parse_price_to_int(caza.precio_max)
     ok = guardar_caza_supabase(uid, caza.keyword, url_limpia, precio_int, caza.frecuencia, caza.tipo, plan, src)
     if ok is not True:
         raise HTTPException(status_code=400, detail=str(ok))
+    if caza.precio_venta and caza.precio_venta > 0:
+        from utils.logic import set_margen_rule
+        row = supabase.table("cazas").select("id").eq("user_id", uid).order("created_at", desc=True).limit(1).execute()
+        if row.data:
+            set_margen_rule(uid, row.data[0]["id"], caza.precio_venta)
     return {"message": "Cacería creada"}
 
 @app.put("/api/cazas/{caza_id}")
 def update_caza(caza_id: int, data: CazaCreate, authorization: str = Header(default="")):
     uid = get_user_id(authorization)
     url_limpia = clean_ml_url(data.url)
+    if url_limpia:
+        from scraper.generic import is_safe_url
+        if not is_safe_url(url_limpia):
+            raise HTTPException(status_code=400, detail="URL inválida o no permitida (SSRF)")
     src = infer_source_from_url(url_limpia) or "generic"
     precio_int = parse_price_to_int(data.precio_max)
     supabase.table("cazas").update({
@@ -480,6 +498,9 @@ def update_caza(caza_id: int, data: CazaCreate, authorization: str = Header(defa
         "source": src,
         "etiqueta": data.etiqueta,
     }).eq("id", caza_id).eq("user_id", uid).execute()
+    if data.precio_venta is not None:
+        from utils.logic import set_margen_rule
+        set_margen_rule(uid, caza_id, data.precio_venta)
     return {"message": "Cacería actualizada"}
 
 @app.delete("/api/cazas/{caza_id}")
@@ -515,6 +536,9 @@ def hunt_single(caza_id: int, authorization: str = Header(default="")):
     if resultados:
         save_price_history(uid, caza_id, resultados)
         from utils.logic import detectar_price_error
+        from engine.engine import _obtener_precio_referencia, detectar_inflado, detectar_restock
+        ref = _obtener_precio_referencia(caza_id)
+        inflado = detectar_inflado(caza_id) if ref else None
         for r in resultados:
             precio_r = r.get("price") or 0
             if precio_r > 0:
@@ -523,17 +547,21 @@ def hunt_single(caza_id: int, authorization: str = Header(default="")):
                     r["price_error"] = True
                     r["price_avg"] = prom
                 if tipo_alerta == "descuento":
-                    from engine.engine import _obtener_precio_referencia
-                    ref = _obtener_precio_referencia(caza_id) or precio_r
-                    descuento = int((1 - precio_r / ref) * 100) if ref > 0 else 0
+                    refx = ref or precio_r
+                    descuento = int((1 - precio_r / refx) * 100) if refx > 0 else 0
                     r["descuento"] = descuento
                     r["match_descuento"] = descuento >= max(precio_max_raw, 0)
                 if tipo_alerta == "grande":
-                    from engine.engine import _obtener_precio_referencia
-                    ref = _obtener_precio_referencia(caza_id) or precio_r
-                    drop_pct = int((1 - precio_r / ref) * 100) if ref > 0 else 0
+                    refx = ref or precio_r
+                    drop_pct = int((1 - precio_r / refx) * 100) if refx > 0 else 0
                     r["drop_pct"] = drop_pct
                     r["match_grande"] = drop_pct >= 25
+            if inflado:
+                r["inflado_detectado"] = True
+        restock = detectar_restock(caza_id, resultados)
+        if restock is not None:
+            for r in resultados:
+                r["restock_detectado"] = restock
     if resultados:
         try:
             from services.seller_service import enrich_results_with_sellers
@@ -568,6 +596,9 @@ def hunt_all(authorization: str = Header(default="")):
             if res:
                 save_price_history(uid, c.get("id"), res)
                 from utils.logic import detectar_price_error
+                from engine.engine import _obtener_precio_referencia, detectar_inflado, detectar_restock
+                ref = _obtener_precio_referencia(c.get("id"))
+                inflado = detectar_inflado(c.get("id")) if ref else None
                 for r in res:
                     precio_r = r.get("price") or 0
                     if precio_r > 0:
@@ -576,17 +607,21 @@ def hunt_all(authorization: str = Header(default="")):
                             r["price_error"] = True
                             r["price_avg"] = prom
                         if tipo_alerta == "descuento":
-                            from engine.engine import _obtener_precio_referencia
-                            ref = _obtener_precio_referencia(c.get("id")) or precio_r
-                            descuento = int((1 - precio_r / ref) * 100) if ref > 0 else 0
+                            refx = ref or precio_r
+                            descuento = int((1 - precio_r / refx) * 100) if refx > 0 else 0
                             r["descuento"] = descuento
                             r["match_descuento"] = descuento >= max(precio_max_raw, 0)
                         if tipo_alerta == "grande":
-                            from engine.engine import _obtener_precio_referencia
-                            ref = _obtener_precio_referencia(c.get("id")) or precio_r
-                            drop_pct = int((1 - precio_r / ref) * 100) if ref > 0 else 0
+                            refx = ref or precio_r
+                            drop_pct = int((1 - precio_r / refx) * 100) if refx > 0 else 0
                             r["drop_pct"] = drop_pct
                             r["match_grande"] = drop_pct >= 25
+                    if inflado:
+                        r["inflado_detectado"] = True
+                restock = detectar_restock(c.get("id"), res)
+                if restock is not None:
+                    for r in res:
+                        r["restock_detectado"] = restock
             results[rid] = res
         except Exception as e:
             results[rid] = {"error": str(e)}
@@ -599,6 +634,9 @@ def hunt_all(authorization: str = Header(default="")):
 def hunt_single_async(caza_id: int, authorization: str = Header(default="")):
     uid = get_user_id(authorization)
     rate_limit_hunt(uid)
+    res = supabase.table("cazas").select("id").eq("id", caza_id).eq("user_id", uid).limit(1).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Cacería no encontrada")
     try:
         from howlify.tasks import hunt_single_task
         task = hunt_single_task.delay(caza_id, uid)

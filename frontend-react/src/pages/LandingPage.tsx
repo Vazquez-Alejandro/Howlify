@@ -67,6 +67,12 @@ const FEATURES = [
   { icon: "download", title: "Exportación de datos", desc: "Exportá precios, historial y alertas a CSV para análisis en Excel o Google Sheets." },
 ];
 
+const RESELLER_FEATURES = [
+  { icon: "refresh", title: "Radar de restock", desc: "Enterate al instante cuando reponen un producto que se agota. Aviso por WhatsApp antes que tu competencia." },
+  { icon: "alert", title: "Detector de descuentos falsos", desc: "Vendedores inflan el precio y después lo 'bajan' a precio normal. Howlify te avisa si el descuento es real o un truco." },
+  { icon: "calc", title: "Margen automático", desc: "Cargá tu precio de venta y te avisamos cuando el margen de compra supere tu objetivo. Comprá solo cuando el número cierre." },
+];
+
 const ICONS: Record<string, React.ReactNode> = {
   bag: <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>,
   bell: <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>,
@@ -74,6 +80,9 @@ const ICONS: Record<string, React.ReactNode> = {
   sparkle: <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>,
   globe: <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" /></svg>,
   download: <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>,
+  refresh: <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.8-4.312m-3.048 3.129l3.048-3.129M3.965 9.16a8.25 8.25 0 0013.8-4.312M12 8.25V4.5m0 0l-1.5 1.5m1.5-1.5L13.5 6" /></svg>,
+  alert: <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.28 5.55a1.5 1.5 0 001.29 2.4h13.98a1.5 1.5 0 001.29-2.4l-6.99-12a1.5 1.5 0 00-2.58 0l-6.99 12zM12 18.75h.008v.008H12v-.008z" /></svg>,
+  calc: <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 15.75l-2.25 2.25m0 0l-2.25-2.25m2.25 2.25V11m3 3.75h.008v.008h-.008v-.008zM6 6.75h12v3H6v-3zM6 19.5h6m2 0h.008v.008h-.008V19.5zM6 15.75h.008v.008H6v-.008zM10.5 15.75H10.5v.008h.008v-.008zM15 19.5h.008v.008H15V19.5zM15 15.75h.008v.008H15v-.008z" /></svg>,
 };
 
 const STEPS = [
@@ -205,6 +214,30 @@ export default function LandingPage() {
                   </div>
                   <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "0.5rem" }}>{s.title}</h3>
                   <p style={{ fontSize: "0.875rem", color: "#6b7280", lineHeight: 1.6 }}>{s.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* PARA REVENDEDORES */}
+        <section style={{ padding: "5rem 0", borderTop: "1px solid rgba(31,41,55,0.5)", background: "rgba(16,24,39,0.5)" }}>
+          <div className="landing-section">
+            <div style={{ textAlign: "center", marginBottom: "3.5rem" }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.375rem 1rem", background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: "9999px", fontSize: "0.875rem", color: "#4ade80", marginBottom: "1.25rem" }}>
+                Para revendedores y micro-negocios
+              </div>
+              <h2 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: "1rem" }}>Comprá al precio justo, siempre</h2>
+              <p style={{ color: "#9ca3af", maxWidth: "36rem", marginLeft: "auto", marginRight: "auto" }}>Tu margen depende de comprar en el momento exacto. Howlify lo vigila por vos, 24/7.</p>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem" }}>
+              {RESELLER_FEATURES.map((f) => (
+                <div key={f.title} style={{ padding: "1.5rem", borderRadius: "1rem", background: "rgba(17,24,39,0.4)", border: "1px solid rgba(34,197,94,0.15)" }}>
+                  <div style={{ width: "2.75rem", height: "2.75rem", borderRadius: "0.75rem", background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)", display: "flex", alignItems: "center", justifyContent: "center", color: "#4ade80", marginBottom: "1.25rem" }}>
+                    {ICONS[f.icon]}
+                  </div>
+                  <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "0.5rem" }}>{f.title}</h3>
+                  <p style={{ fontSize: "0.875rem", color: "#6b7280", lineHeight: 1.6 }}>{f.desc}</p>
                 </div>
               ))}
             </div>

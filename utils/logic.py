@@ -1,5 +1,6 @@
 import re
 import os
+import json
 import random
 import time
 import requests
@@ -211,6 +212,55 @@ def upsert_monitor_rule(user_id, caza_id, product_name, product_url, source, tar
         logger.error(f"Error en upsert_monitor_rule: {e}")
         return False
 
+
+def set_margen_rule(user_id, caza_id, precio_venta, min_margin=15):
+    """
+    Activa/desactiva la regla de margen para un revendedor.
+    precio_venta > 0 → upsert regla 'margen' en monitor_rules.alert_config (sin tocar esquema).
+    precio_venta <= 0 → elimina la regla de margen del alert_config.
+    """
+    try:
+        owns = supabase.table("cazas").select("id").eq("id", caza_id).eq("user_id", user_id).limit(1).execute()
+        if not owns.data:
+            logger.warning("set_margen_rule: caza %s no pertenece al user, ignorado", caza_id)
+            return False
+        existing = []
+        try:
+            res = supabase.table("monitor_rules") \
+                .select("alert_config") \
+                .eq("user_id", user_id) \
+                .eq("caza_id", caza_id) \
+                .limit(1) \
+                .execute()
+            if res.data and res.data[0].get("alert_config"):
+                existing = res.data[0]["alert_config"]
+                if isinstance(existing, str):
+                    existing = json.loads(existing)
+        except Exception:
+            existing = []
+
+        rules = existing if isinstance(existing, list) else []
+        rules = [r for r in rules if r.get("type") != "margen"]
+
+        if precio_venta and int(precio_venta) > 0:
+            rules.append({
+                "type": "margen",
+                "threshold": int(precio_venta),
+                "min_margin": min_margin,
+                "channel": "whatsapp",
+                "enabled": True,
+            })
+
+        data = {
+            "user_id": user_id, "caza_id": caza_id,
+            "alert_config": rules,
+        }
+        supabase.table("monitor_rules").upsert(data, on_conflict="caza_id").execute()
+        return True
+    except Exception as e:
+        logger.error(f"Error en set_margen_rule: {e}")
+        return False
+
 # ==========================================================
 # 6. VALIDACIONES DE INTEGRIDAD
 # ==========================================================
@@ -229,6 +279,29 @@ def insertar_price_history(caza_id: int, payload: dict):
         supabase.table("price_history").insert(payload).execute()
     else:
         logger.warning(f"⚠️ caza_id {caza_id} no existe en cazas, se saltea")
+
+
+def insert_price_history_rows(rows: list[dict]):
+    """
+    Inserta filas en price_history de forma resiliente a la columna `stock`.
+    Si la insert con stock falla (columna aún no migrada), reintenta sin stock.
+    """
+    if not rows or not supabase:
+        return
+    try:
+        supabase.table("price_history").insert(rows).execute()
+        return
+    except Exception as e:
+        logger.warning(f"price_history insert (con stock) falló: {e}; reintento sin stock")
+    fallback = []
+    for r in rows:
+        rr = dict(r)
+        rr.pop("stock", None)
+        fallback.append(rr)
+    try:
+        supabase.table("price_history").insert(fallback).execute()
+    except Exception as e:
+        logger.error(f"price_history insert sin stock también falló: {e}")
 
 def insertar_infraccion(caza_id: int, payload: dict):
     """Inserta en infracciones_log solo si el caza_id existe."""

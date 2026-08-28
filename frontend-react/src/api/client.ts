@@ -109,14 +109,14 @@ export const api = {
 
   createCaza: (data: {
     keyword: string; url: string; precio_max: number;
-    frecuencia?: string; tipo?: string; source?: string; etiqueta?: string;
+    frecuencia?: string; tipo?: string; source?: string; etiqueta?: string; precio_venta?: number;
   }) => request<{ message: string }>("/api/cazas", {
     method: "POST", body: JSON.stringify(data),
   }),
 
   updateCaza: (id: number, data: {
     keyword: string; url: string; precio_max: number;
-    frecuencia?: string; tipo?: string; etiqueta?: string;
+    frecuencia?: string; tipo?: string; etiqueta?: string; precio_venta?: number;
   }) => request<{ message: string }>(`/api/cazas/${id}`, {
     method: "PUT", body: JSON.stringify(data),
   }),
@@ -215,6 +215,7 @@ export interface Caza {
   created_at?: string;
   updated_at?: string;
   etiqueta?: string;
+  precio_venta?: number;
 }
 
 export interface HuntResult {
@@ -225,6 +226,9 @@ export interface HuntResult {
   score?: number;
   price_error?: boolean;
   price_avg?: number;
+  stock?: number;
+  inflado_detectado?: boolean;
+  restock_detectado?: boolean;
   seller?: {
     seller_id: number;
     nickname: string;

@@ -14,7 +14,7 @@ interface Props {
 
 export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
   const { toast } = useToast();
-  const [results, setResults] = useState<{ title: string; price: number; url: string; price_error?: boolean; price_avg?: number; descuento?: number; match_descuento?: boolean; drop_pct?: number; match_grande?: boolean; precio_personalizado?: boolean; precio_alternativo?: number; seller?: { seller_id: number; nickname: string; reputation: string; reputation_label: string; total_sales: number; completed_sales: number; positive_ratio: string | null; permalink: string } }[] | null>(null);
+  const [results, setResults] = useState<{ title: string; price: number; url: string; price_error?: boolean; price_avg?: number; descuento?: number; match_descuento?: boolean; drop_pct?: number; match_grande?: boolean; precio_personalizado?: boolean; precio_alternativo?: number; stock?: number; inflado_detectado?: boolean; restock_detectado?: boolean; seller?: { seller_id: number; nickname: string; reputation: string; reputation_label: string; total_sales: number; completed_sales: number; positive_ratio: string | null; permalink: string } }[] | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [loadingResults, setLoadingResults] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -30,6 +30,7 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
     precio_max: caza.precio_max,
     tipo_alerta: caza.tipo_alerta || "piso",
     etiqueta: caza.etiqueta || "",
+    precio_venta: caza.precio_venta || 0,
   });
 
   const kw = (caza.producto || caza.keyword || "Sin nombre").toUpperCase();
@@ -74,6 +75,7 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
       precio_max: editForm.precio_max,
       tipo: editForm.tipo_alerta || "piso",
       etiqueta: editForm.etiqueta,
+      precio_venta: editForm.precio_venta || 0,
     });
     if (res.error) {
       toast(traducirError(res.error), "error");
@@ -161,6 +163,7 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                   precio_max: caza.precio_max || 0,
                   tipo_alerta: caza.tipo_alerta || "piso",
                   etiqueta: caza.etiqueta || "",
+                  precio_venta: caza.precio_venta || 0,
                 });
                 setShowEdit(true);
               }}
@@ -225,6 +228,21 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                     {r.seller && (
                       <span className="shrink-0 text-[10px] text-gray-500 flex items-center gap-0.5" title={`${r.seller.nickname} — ${r.seller.completed_sales} ventas`}>
                         {r.seller.reputation_label?.split(" ")[0] || "⚪"} {r.seller.nickname?.slice(0, 12)}
+                      </span>
+                    )}
+                    {r.restock_detectado && (
+                      <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-bold bg-cyan-500/20 text-cyan-400 rounded border border-cyan-500/30 animate-pulse">
+                        🔄 ¡REPUSIERON STOCK!
+                      </span>
+                    )}
+                    {r.inflado_detectado && (
+                      <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-bold bg-rose-500/20 text-rose-400 rounded border border-rose-500/30" title="El vendedor infló el precio antes de la 'baja'">
+                        🚫 Descuento falso
+                      </span>
+                    )}
+                    {typeof r.stock === "number" && r.stock > 0 && !r.restock_detectado && (
+                      <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-bold bg-emerald-500/20 text-emerald-400 rounded border border-emerald-500/30">
+                        {r.stock} en stock
                       </span>
                     )}
                     {r.price_error && (
@@ -315,6 +333,14 @@ export default function CazaCard({ caza, onDelete, onUpdate }: Props) {
                 <input value={editForm.etiqueta} onChange={e => setEditForm(f => ({ ...f, etiqueta: e.target.value }))} placeholder="Ej: Regalo mamá, Para revender"
                   className="w-full mt-0.5 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-red-500/50" />
               </div>
+              {editForm.tipo_alerta === "piso" && (
+                <div>
+                  <label className="text-xs text-gray-400 ml-1 uppercase">Precio de venta (revendedor)</label>
+                  <input type="number" value={editForm.precio_venta || ""} onChange={e => setEditForm(f => ({ ...f, precio_venta: Number(e.target.value) }))} placeholder="Ej: 1500000 — te avisamos tu margen"
+                    className="w-full mt-0.5 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-emerald-500/50" />
+                  <p className="text-[11px] text-gray-500 ml-1 mt-1">Howlify te avisa cuando el margen sobre este precio de venta supere el 15%.</p>
+                </div>
+              )}
             </div>
             <div className="flex gap-2 mt-5">
               <button onClick={() => setShowEdit(false)} className="flex-1 py-2 bg-gray-800 text-gray-400 rounded-lg text-sm font-medium hover:bg-gray-700 transition-all">Cancelar</button>
